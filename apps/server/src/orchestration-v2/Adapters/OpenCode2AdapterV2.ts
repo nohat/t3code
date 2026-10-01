@@ -589,12 +589,18 @@ type ModelRef = ReturnType<typeof Model.Ref.make>;
 
 /**
  * The user message ids T3 prompts under. OpenCode takes a client id (it must
- * start with `msg_`) and answers a repeat of one with the item it already has,
- * so a retried request never queues a second message, and a turn knows the
- * message fork and rollback cut at before OpenCode answers.
+ * start with `msg_`) and answers a repeat of one in the same session with the
+ * item it already has, so a retried request never queues a second message,
+ * and a turn knows the message fork and rollback cut at before OpenCode
+ * answers. The id is unique across the whole server, which refuses it in any
+ * other session (409), so it names the session: another T3 database or
+ * environment on the same server repeats thread ids and run ordinals, never
+ * session ids. A turn keeps its id in `nativeTurnRef`.
  */
-const turnPromptId = (attemptId: string) => SessionMessage.ID.make(`msg_t3_turn_${attemptId}`);
-const steerPromptId = (messageId: string) => SessionMessage.ID.make(`msg_t3_steer_${messageId}`);
+const turnPromptId = (sessionId: string, attemptId: string) =>
+  SessionMessage.ID.make(`msg_t3_turn_${sessionId}:${attemptId}`);
+const steerPromptId = (sessionId: string, messageId: string) =>
+  SessionMessage.ID.make(`msg_t3_steer_${sessionId}:${messageId}`);
 
 /**
  * The user message a turn prompted with. Turns from before T3 chose prompt ids
@@ -2465,18 +2471,26 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       return state;
     };
 
-    /** Takes back steers a finished turn left in OpenCode's inbox. */
+    /**
+     * Takes back steers a finished turn left in OpenCode's inbox. One whose
+     * cancel fails may still be there, so it is tried again before the next prompt.
+     */
     const cancelStrandedSteers = Effect.fnUntraced(function* (state: ThreadState) {
       const sessionID = Session.ID.make(state.sessionId);
-      yield* Effect.forEach(
-        state.strandedSteers,
-        (inboxID) =>
-          client.session.inbox
-            .cancel({ sessionID, inboxID: SessionMessage.ID.make(inboxID) })
-            .pipe(Effect.timeout(REQUEST_REPLY_TIMEOUT), Effect.ignore({ log: true })),
-        { discard: true },
-      );
-      state.strandedSteers.clear();
+      // A snapshot: a cancelled steer leaves the set.
+      for (const inboxID of Array.from(state.strandedSteers)) {
+        const cancelled = yield* client.session.inbox
+          .cancel({ sessionID, inboxID: SessionMessage.ID.make(inboxID) })
+          .pipe(
+            Effect.timeout(REQUEST_REPLY_TIMEOUT),
+            Effect.tapCause((cause) =>
+              Effect.logWarning("Could not take back an OpenCode steer.", cause),
+            ),
+            Effect.exit,
+            Effect.map(Exit.isSuccess),
+          );
+        if (cancelled) state.strandedSteers.delete(inboxID);
+      }
     });
 
     /**
@@ -2624,7 +2638,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           nativeTurnRef: ref(
             isContinuation(turnInput)
               ? wakeTurnId(state.sessionId, turnInput.attemptId)
-              : turnPromptId(turnInput.attemptId),
+              : turnPromptId(state.sessionId, turnInput.attemptId),
             "weak",
           ),
           ordinal: turnInput.providerTurnOrdinal,
@@ -2983,7 +2997,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           yield* client.session
             .prompt({
               sessionID: Session.ID.make(sessionId),
-              id: turnPromptId(turnInput.attemptId),
+              id: turnPromptId(state.sessionId, turnInput.attemptId),
               text: prompt(turnInput),
             })
             .pipe(
@@ -3047,7 +3061,7 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
               detail: `OpenCode turn ${steerInput.providerTurnId} is not active`,
             });
           }
-          const inboxID = steerPromptId(steerInput.message.messageId);
+          const inboxID = steerPromptId(sessionId, steerInput.message.messageId);
           // A retried steer that already reached the model is not sent again.
           if (turn.settledInbox.has(inboxID)) return;
           turn.steers.add(inboxID);
@@ -3278,7 +3292,18 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           const { providerThread, target } = rollbackInput;
           const sessionId = yield* sessionIdOf(providerThread);
           const state = threads.get(sessionId);
-          if (state?.active !== undefined || (state !== undefined && hasBackground(state))) {
+          // A run a timed-out Stop or an unanswered request left behind may
+          // still be going, and a cut made meanwhile would race it, so the
+          // server is asked first. Its end may still be on the stream either
+          // way, so the flag stays for the next turn to skip it.
+          const stillStopping =
+            state?.unsettled === true &&
+            sessionId in
+              (yield* client.session.active().pipe(Effect.timeout(ACTIVE_CHECK_TIMEOUT)));
+          if (
+            state !== undefined &&
+            (state.active !== undefined || stillStopping || hasBackground(state))
+          ) {
             return yield* new ProviderAdapter.ProviderAdapterProtocolError({
               driver: OPENCODE_PROVIDER,
               detail: `Cannot roll back OpenCode session ${sessionId} while it is still working`,
@@ -3295,6 +3320,12 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           );
           if (boundary !== null) {
             yield* rollBackTo(sessionId, SessionMessage.ID.make(boundary));
+          }
+          // The turns after the target left the history with their messages.
+          const keptOrdinal = target.type === "provider_turn" ? target.providerTurn.ordinal : 0;
+          const loaded = threads.get(sessionId);
+          for (const [id, turn] of loaded?.providerTurns ?? []) {
+            if (turn.ordinal > keptOrdinal) loaded?.providerTurns.delete(id);
           }
           // The snapshot's head is the last user message OpenCode kept.
           return yield* snapshotOf(providerThread, sessionId);
