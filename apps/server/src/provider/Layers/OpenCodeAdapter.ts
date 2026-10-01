@@ -8,6 +8,9 @@ import {
   type ProviderSession,
   RuntimeItemId,
   RuntimeRequestId,
+  RuntimeTaskId,
+  type RuntimeTaskStatus,
+  type RuntimeTaskUsage,
   ThreadId,
   type ToolLifecycleItemType,
   type TurnTokenUsage,
@@ -336,6 +339,16 @@ type OpenCodeTextPartState = Pick<OpenCodeTextPart, "id" | "messageID" | "type" 
 
 type OpenCodeStepUsage = Pick<Extract<Part, { readonly type: "step-finish" }>, "id" | "tokens">;
 
+interface OpenCodeChildAgentSeed {
+  title: string | undefined;
+  role: string | undefined;
+  model: string | undefined;
+}
+
+interface OpenCodeChildAgentState extends OpenCodeChildAgentSeed {
+  parentAgentId: string | undefined;
+}
+
 interface OpenCodeSessionContext {
   session: ProviderSession;
   readonly client: OpencodeClient;
@@ -343,6 +356,9 @@ interface OpenCodeSessionContext {
   readonly directory: string;
   openCodeSessionId: string;
   readonly relatedSessionIds: Set<string>;
+  readonly childAgents: Map<string, OpenCodeChildAgentState>;
+  readonly liveChildIds: Set<string>;
+  readonly pendingChildSeeds: Map<string, OpenCodeChildAgentSeed>;
   readonly resolvedRequestIds: Set<string>;
   readonly autoRepliedRequestIds: Set<string>;
   readonly emittedTerminalRequestIds: Set<string>;
@@ -350,9 +366,10 @@ interface OpenCodeSessionContext {
   readonly pendingPermissions: Map<string, PermissionRequest>;
   readonly pendingQuestions: Map<string, QuestionRequest>;
   readonly messageRoleById: Map<string, "user" | "assistant">;
+  readonly textPartsByMessageId: Map<string, Map<string, OpenCodeTextPartState>>;
   // OpenCode permits edits to completed parts. Keep text for snapshot comparison
   // until native removal or session teardown, but do not retain other part payloads.
-  readonly textPartsByMessageId: Map<string, Map<string, OpenCodeTextPartState>>;
+  readonly emittedChildTaskStarts: Set<string>;
   turnTokenUsage: OpenCodeTurnTokenUsageAccumulator | undefined;
   activeTurnId: TurnId | undefined;
   activeAgent: string | undefined;
@@ -685,6 +702,67 @@ function messageRoleForPart(
     return known;
   }
   return part.type === "tool" ? "assistant" : undefined;
+}
+
+/**
+ * Subtask-seed (launch-time name/role) → the remembered child-agent
+ * identity. The seed arrives on the parent conversation as a `subtask`
+ * part before the child session is known; it is matched to the child on
+ * its `session.created`.
+ */
+function openCodeChildSeedFromSubtask(
+  part: Extract<Part, { readonly type: "subtask" }>,
+): OpenCodeChildAgentSeed {
+  const title = trimText(part.description);
+  const role = trimText(part.agent);
+  const model =
+    part.model !== undefined &&
+    trimText(part.model.providerID) !== undefined &&
+    trimText(part.model.modelID) !== undefined
+      ? `${part.model.providerID.trim()}/${part.model.modelID.trim()}`
+      : undefined;
+  return { title, role, model };
+}
+
+/** Step-finish tokens → the typed contract usage shape (cumulative per session). */
+function normalizeOpenCodeTaskUsage(tokens: unknown): RuntimeTaskUsage | undefined {
+  if (typeof tokens !== "object" || tokens === null) {
+    return undefined;
+  }
+  const record = tokens as Record<string, unknown>;
+  const count = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0
+      ? Math.floor(value)
+      : undefined;
+  const cache =
+    typeof record.cache === "object" && record.cache !== null
+      ? (record.cache as Record<string, unknown>)
+      : undefined;
+  const cachedInputTokens = cache !== undefined ? count(cache.read) : undefined;
+  const inputTokens = count(record.input);
+  const outputTokens = count(record.output);
+  const reasoningOutputTokens = count(record.reasoning);
+  const total =
+    count(record.total) ??
+    (inputTokens !== undefined ||
+    outputTokens !== undefined ||
+    reasoningOutputTokens !== undefined ||
+    cachedInputTokens !== undefined
+      ? (inputTokens ?? 0) +
+        (outputTokens ?? 0) +
+        (reasoningOutputTokens ?? 0) +
+        (cachedInputTokens ?? 0)
+      : undefined);
+  if (total === undefined) {
+    return undefined;
+  }
+  return {
+    totalTokens: total,
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
+  };
 }
 
 function detailFromToolPart(part: Extract<Part, { type: "tool" }>): string | undefined {
@@ -1667,12 +1745,109 @@ export function makeOpenCodeAdapter(
     // Records a child session of this thread. A child seen during a live turn
     // means that turn used subagents, whether the relation came from a
     // `session.created` event or a later ancestry lookup after reconnect.
+    // Returns true when this is the first observation of the session.
     const addRelatedOpenCodeSession = (context: OpenCodeSessionContext, sessionId: string) => {
+      const firstSeen = !context.relatedSessionIds.has(sessionId);
       context.relatedSessionIds.add(sessionId);
       if (context.activeTurnId && context.turnTokenUsage) {
         context.turnTokenUsage.hasSubagents = true;
       }
+      return firstSeen;
     };
+
+    /**
+     * Linkage bundle repeated on every task.* payload for a child session.
+     * Rows must stay self-describing after the start row ages out of
+     * activity retention, so identity is read from the remembered registry
+     * (cf. Claude's `taskLinkageFor`, Codex's `linkage`).
+     */
+    const childTaskLinkageFor = (context: OpenCodeSessionContext, sessionId: string) => {
+      const agent = context.childAgents.get(sessionId);
+      if (!agent) {
+        return { taskType: "subagent", timelineBypass: true } as const;
+      }
+      return {
+        taskType: "subagent",
+        ...(agent.title !== undefined ? { title: agent.title } : {}),
+        ...(agent.role !== undefined ? { role: agent.role } : {}),
+        ...(agent.model !== undefined ? { model: agent.model } : {}),
+        ...(agent.parentAgentId !== undefined ? { parentAgentId: agent.parentAgentId } : {}),
+        timelineBypass: true,
+      } as const;
+    };
+
+    /**
+     * Emits one child-agent task.* event for `sessionId`. `task.started` is
+     * idempotent per session: a second observation (late adoption, duplicate
+     * stream delivery) is metadata-only and must never reopen a settled run
+     * (mirrors the client fold's late-start guard).
+     */
+    const emitChildTaskEvent = Effect.fn("emitChildTaskEvent")(function* (
+      context: OpenCodeSessionContext,
+      sessionId: string,
+      type: "task.started" | "task.updated",
+      status?: RuntimeTaskStatus,
+      raw?: unknown,
+      extraPayload?: Record<string, never>,
+    ) {
+      const taskId = RuntimeTaskId.make(sessionId);
+      const linkage = childTaskLinkageFor(context, sessionId);
+      const title = context.childAgents.get(sessionId)?.title;
+      if (type === "task.started") {
+        const firstStart = !context.emittedChildTaskStarts.has(sessionId);
+        context.emittedChildTaskStarts.add(sessionId);
+        if (!firstStart) {
+          yield* emit({
+            ...(yield* buildEventBase({
+              threadId: context.session.threadId,
+              ...(raw !== undefined ? { raw } : {}),
+            })),
+            type: "task.updated",
+            payload: { taskId, ...linkage },
+          });
+          return;
+        }
+        context.liveChildIds.add(sessionId);
+        yield* emit({
+          ...(yield* buildEventBase({
+            threadId: context.session.threadId,
+            ...(raw !== undefined ? { raw } : {}),
+          })),
+          type: "task.started",
+          payload: {
+            taskId,
+            ...(title !== undefined ? { description: title, title } : {}),
+            ...linkage,
+          },
+        });
+        return;
+      }
+      if (status !== undefined) {
+        if (
+          status === "completed" ||
+          status === "failed" ||
+          status === "cancelled" ||
+          status === "interrupted"
+        ) {
+          context.liveChildIds.delete(sessionId);
+        } else {
+          context.liveChildIds.add(sessionId);
+        }
+      }
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          ...(raw !== undefined ? { raw } : {}),
+        })),
+        type: "task.updated",
+        payload: {
+          taskId,
+          ...(status !== undefined ? { status } : {}),
+          ...linkage,
+          ...(extraPayload !== undefined ? extraPayload : {}),
+        },
+      });
+    });
 
     const isRelatedOpenCodeSession = Effect.fn("isRelatedOpenCodeSession")(function* (
       context: OpenCodeSessionContext,
