@@ -2,7 +2,7 @@
  * `t3 triage` - hand a misbehaving install to the user's own coding agent.
  *
  * The command is deliberately thin: it writes a `context.md` with machine facts
- * (version, paths, server liveness), then launches claude or codex
+ * (version, paths, server liveness), then launches claude, codex, or opencode
  * interactively, seeded with the playbook from `triagePrompt.ts`. The agent
  * asks the user what went wrong, investigates, and files the issue; the
  * harness's own permission prompts gate anything it wants to run. With no
@@ -40,14 +40,30 @@ import {
 } from "./triagePrompt.ts";
 
 interface TriageAgent {
-  readonly id: "claude" | "codex";
+  readonly id: "claude" | "codex" | "opencode";
   readonly command: string;
   readonly label: string;
+  readonly buildArgs: (launchPrompt: string, model: string | undefined) => ReadonlyArray<string>;
 }
 
+const buildPositionalArgs = (launchPrompt: string, model: string | undefined) => [
+  ...(model === undefined ? [] : ["--model", model]),
+  launchPrompt,
+];
+
+// `opencode run` exits once the first turn completes, so triage launches the
+// TUI instead: `opencode --prompt` auto-sends the seed prompt and keeps the
+// session open for the interactive triage conversation.
+const buildOpencodeArgs = (launchPrompt: string, model: string | undefined) => [
+  ...(model === undefined ? [] : ["--model", model]),
+  "--prompt",
+  launchPrompt,
+];
+
 const TRIAGE_AGENTS: ReadonlyArray<TriageAgent> = [
-  { id: "claude", command: "claude", label: "Claude Code" },
-  { id: "codex", command: "codex", label: "Codex" },
+  { id: "claude", command: "claude", label: "Claude Code", buildArgs: buildPositionalArgs },
+  { id: "codex", command: "codex", label: "Codex", buildArgs: buildPositionalArgs },
+  { id: "opencode", command: "opencode", label: "OpenCode", buildArgs: buildOpencodeArgs },
 ];
 
 export class TriageAgentUnavailableError extends Schema.TaggedError<TriageAgentUnavailableError>()(
@@ -64,7 +80,7 @@ export class TriageAgentChoiceRequiredError extends Schema.TaggedError<TriageAge
   {},
 ) {
   override get message(): string {
-    return "Both claude and codex are installed and there is no terminal to ask which to use. Re-run with --agent claude or --agent codex.";
+    return "More than one supported agent CLI is installed and there is no terminal to ask which to use. Re-run with --agent claude, --agent codex, or --agent opencode.";
   }
 }
 
@@ -143,7 +159,7 @@ const runInteractiveSession = (input: {
     child.once("exit", (code, signal) => resume(Effect.succeed(code ?? (signal === null ? 0 : 1))));
   });
 
-const agentFlag = Flag.Literals("agent", ["claude", "codex"]).pipe(
+const agentFlag = Flag.Literals("agent", ["claude", "codex", "opencode"]).pipe(
   Flag.withDescription("Agent CLI to use. Default: ask when both are installed."),
   Flag.optional,
 );
@@ -159,7 +175,7 @@ export const triageCommand = Command.make("triage", {
   model: modelFlag,
 }).pipe(
   Command.withDescription(
-    "Investigate a T3 Code problem on this machine with claude or codex, and help file a good issue.",
+    "Investigate a T3 Code problem on this machine with claude, codex, or opencode, and help file a good issue.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {
@@ -252,7 +268,7 @@ export const triageCommand = Command.make("triage", {
       if (selected === undefined) {
         yield* Console.log(
           [
-            "No supported agent CLI (claude, codex) was found on this machine.",
+            "No supported agent CLI (claude, codex, opencode) was found on this machine.",
             "",
             "The triage prompt and machine context were written to:",
             `  ${promptFilePath}`,
@@ -265,10 +281,10 @@ export const triageCommand = Command.make("triage", {
       }
 
       const model = Option.getOrUndefined(flags.model);
-      const spawnSpec = yield* resolveSpawnCommand(selected.command, [
-        ...(model === undefined ? [] : ["--model", model]),
-        buildTriageLaunchPrompt(promptFilePath),
-      ]);
+      const spawnSpec = yield* resolveSpawnCommand(
+        selected.command,
+        selected.buildArgs(buildTriageLaunchPrompt(promptFilePath), model),
+      );
       yield* Console.log(`Starting ${selected.label}. It will ask what went wrong.\n`);
       const exitCode = yield* runInteractiveSession({ ...spawnSpec, cwd: scratchDir });
       if (exitCode !== 0) {

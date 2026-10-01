@@ -76,6 +76,7 @@ import {
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
+  type ServerProvider,
   WS_METHODS,
   WsRpcGroup,
   WORKTREE_SETUP_ACTIVITY_KIND,
@@ -119,6 +120,7 @@ import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
 import { makeProviderInstallation } from "./provider/providerInstallation.ts";
+import { attachModelPricing } from "./provider/modelPricing.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -2020,13 +2022,33 @@ const makeWsRpcLayer = (
 
       // Only clients that answer /usage-limits themselves see it in the catalogs;
       // an older client would send the injected command to the provider.
+      /**
+       * Project usage rates onto provider snapshots at the transport edge.
+       * The registry stores unpriced snapshots (rates would go stale on
+       * disk), so every client-facing emission prices models against the
+       * current cached table. Total: a failed rates read degrades to
+       * unpriced models rather than failing the emission.
+       */
+      const withModelPricing = (
+        providers: ReadonlyArray<ServerProvider>,
+      ): Effect.Effect<ReadonlyArray<ServerProvider>> =>
+        Effect.gen(function* () {
+          const modelRates = yield* usage.readModelRates;
+          return providers.map((provider) => ({
+            ...provider,
+            models: attachModelPricing(provider.models, modelRates),
+          }));
+        });
+
       const loadServerConfig = (options: { readonly usageLimitsCommand: boolean }) =>
         Effect.gen(function* () {
           const keybindingsConfig = yield* keybindings.loadConfigState;
           const currentProviders = yield* providerRegistry.getProviders;
-          const providers = options.usageLimitsCommand
-            ? withUsageLimitsCommands(currentProviders, yield* usageLimitSources.current)
-            : currentProviders;
+          const providers = yield* withModelPricing(
+            options.usageLimitsCommand
+              ? withUsageLimitsCommands(currentProviders, yield* usageLimitSources.current)
+              : currentProviders,
+          );
           const settings = ServerSettings.redactServerSettingsForClient(
             yield* serverSettings.getSettings,
           );
@@ -3875,7 +3897,11 @@ const makeWsRpcLayer = (
                 // repeats the snapshot the client already holds. Compare against that
                 // snapshot rather than dropping blindly: a refresh that landed between
                 // the snapshot and the subscription still goes out.
-                (updates) => Stream.concat(Stream.make(config.providers), updates),
+                (updates) =>
+                  Stream.concat(
+                    Stream.make(config.providers),
+                    updates.pipe(Stream.mapEffect((providers) => withModelPricing(providers))),
+                  ),
                 Stream.changesWith(
                   (previous, next) => JSON.stringify(previous) === JSON.stringify(next),
                 ),

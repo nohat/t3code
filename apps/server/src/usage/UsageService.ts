@@ -119,8 +119,25 @@ export class UsageService extends Context.Service<
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
     /** Refetches the rate table ahead of its TTL. See `ensureRates`. */
     readonly refreshRates: Effect.Effect<UsagePricing>;
+    /**
+     * Rate tables for projecting prices onto provider snapshots. Loads
+     * through the same cached path as scans (`ensureRates(false)`), so a
+     * gateway emission never pays for a fetch when the table is fresh.
+     */
+    readonly readModelRates: Effect.Effect<ModelRatesSnapshot>;
   }
 >()("t3/usage/UsageService") {}
+
+/**
+ * Everything a caller needs to price models without scanning transcripts:
+ * the LiteLLM table, the custom override table (both per-token rates), and
+ * the table fetch time for staleness display. Empty tables mean unpriced.
+ */
+export interface ModelRatesSnapshot {
+  readonly rates: RateTable;
+  readonly overrides: RateTable;
+  readonly fetchedAt: string | null;
+}
 
 const EMPTY_PRICING: UsagePricing = {
   status: "unavailable",
@@ -146,6 +163,7 @@ export const layerTest = Layer.succeed(
         scanDurationMs: 0,
       }),
     refreshRates: Effect.succeed(EMPTY_PRICING),
+    readModelRates: Effect.succeed({ rates: new Map(), overrides: new Map(), fetchedAt: null }),
   }),
 );
 
@@ -892,7 +910,21 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(deferred);
   });
 
-  return { readSummary, refreshRates } as const;
+  const readModelRates: UsageService["Service"]["readModelRates"] = Effect.gen(function* () {
+    // A settings failure here must behave like missing overrides, not fail
+    // the provider snapshot the gateway is assembling.
+    const settings = yield* settingsService.getSettings.pipe(
+      Effect.catchCause(() => Effect.succeed({ usagePriceOverrides: {} })),
+    );
+    yield* ensureRates(false);
+    return {
+      rates,
+      overrides: createOverrideRateTable(settings.usagePriceOverrides),
+      fetchedAt: pricing().fetchedAt,
+    } satisfies ModelRatesSnapshot;
+  }).pipe(Effect.withSpan("UsageService.readModelRates"));
+
+  return { readSummary, refreshRates, readModelRates } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);
