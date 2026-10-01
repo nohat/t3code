@@ -1,5 +1,6 @@
 import type {
   ServerProvider,
+  ServerProviderModel,
   ServerProviderSkill,
   ServerProviderSlashCommand,
 } from "@t3tools/contracts";
@@ -104,7 +105,7 @@ export function resolveProviderSkillSourceKind(
 }
 
 function resolveProviderWorkspaceSnapshot(
-  provider: ServerProvider,
+  provider: Pick<ServerProvider, "workspaceSnapshots">,
   cwd: string | null | undefined,
 ) {
   if (!cwd) return undefined;
@@ -123,4 +124,55 @@ export function resolveProviderSlashCommandsForCwd(
   cwd: string | null | undefined,
 ): ServerProvider["slashCommands"] {
   return resolveProviderWorkspaceSnapshot(provider, cwd)?.slashCommands ?? provider.slashCommands;
+}
+
+/**
+ * Models with the workspace `agent` roster applied. Directory-scoped agents
+ * (e.g. a project's `.opencode/agents` primaries) arrive on the workspace
+ * snapshot, not the machine-wide models — without this the agent picker
+ * only ever offers the base roster. Falls back to the base models when no
+ * snapshot or no roster exists for the cwd; the reasoning descriptors are
+ * never touched.
+ */
+export function resolveProviderModelsForCwd(
+  provider: Pick<ServerProvider, "models" | "workspaceSnapshots">,
+  cwd: string | null | undefined,
+): ReadonlyArray<ServerProviderModel> {
+  const snapshot = resolveProviderWorkspaceSnapshot(provider, cwd);
+  const agents = snapshot?.agents;
+  if (!agents || agents.length === 0) {
+    return provider.models;
+  }
+  return provider.models.map((model) => {
+    const descriptors = model.capabilities?.optionDescriptors;
+    if (!descriptors) {
+      return model;
+    }
+    let replaced = false;
+    const optionDescriptors = descriptors.map((descriptor) => {
+      if (descriptor.id !== "agent" || descriptor.type !== "select") {
+        return descriptor;
+      }
+      replaced = true;
+      return {
+        ...descriptor,
+        options: agents.map((agent) => ({
+          id: agent.id,
+          label: agent.label,
+          ...(agent.isDefault !== undefined ? { isDefault: agent.isDefault } : {}),
+        })),
+        ...(snapshot.agentCurrentValue ? { currentValue: snapshot.agentCurrentValue } : {}),
+      };
+    });
+    if (!replaced) {
+      return model;
+    }
+    return {
+      ...model,
+      capabilities: {
+        ...model.capabilities,
+        optionDescriptors,
+      },
+    };
+  });
 }

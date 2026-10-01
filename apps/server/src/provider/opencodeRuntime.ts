@@ -271,6 +271,9 @@ export interface OpenCodeRuntimeShape {
   readonly loadOpenCodeInventory: (
     client: OpencodeClient,
   ) => Effect.Effect<OpenCodeInventory, OpenCodeRuntimeError>;
+  readonly loadOpenCodeAgents: (
+    client: OpencodeClient,
+  ) => Effect.Effect<ReadonlyArray<Agent>, OpenCodeRuntimeError>;
   readonly loadOpenCodeSkills: (
     client: OpencodeClient,
   ) => Effect.Effect<ReadonlyArray<OpenCodeSkill>, OpenCodeRuntimeError>;
@@ -922,6 +925,14 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       Effect.orElseSucceed((): ReadonlyArray<Agent> => []),
     );
 
+  // Directory-scoped agent roster for a single workspace. The SDK client
+  // carries the session's project directory (query/header), so unlike the
+  // machine-wide provider inventory this resolves project `.opencode/agents`
+  // definitions. Degrades to [] so a failed agent lookup never breaks the
+  // per-cwd snapshot (skills/commands still apply).
+  const loadOpenCodeAgents: OpenCodeRuntimeShape["loadOpenCodeAgents"] = (client) =>
+    loadAgents(client);
+
   const loadOpenCodeSkills: OpenCodeRuntimeShape["loadOpenCodeSkills"] = (client) =>
     runOpenCodeSdk("app.skills", (signal) => client.app.skills(undefined, { signal })).pipe(
       Effect.map((result) =>
@@ -1081,6 +1092,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
     runOpenCodeCommand,
     createOpenCodeSdkClient,
     loadOpenCodeInventory,
+    loadOpenCodeAgents,
     loadOpenCodeSkills,
     loadInventoryFromCli,
     loadSkillsFromCli,

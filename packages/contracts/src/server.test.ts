@@ -7,10 +7,17 @@ import {
   ServerConfig,
   ServerObservability,
   ServerProvider,
+  ServerProviderModel,
   ServerProviders,
+  ServerProviderWorkspaceSnapshot,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
 import { ServerSettings } from "./settings.ts";
+
+const decodeServerProviderModel = Schema.decodeUnknownSync(ServerProviderModel);
+const encodeServerProviderModel = Schema.encodeSync(ServerProviderModel);
+const decodeWorkspaceSnapshot = Schema.decodeUnknownSync(ServerProviderWorkspaceSnapshot);
+const encodeWorkspaceSnapshot = Schema.encodeSync(ServerProviderWorkspaceSnapshot);
 
 const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);
 const decodeServerProviders = Schema.decodeUnknownSync(ServerProviders);
@@ -119,6 +126,111 @@ describe("ServerProvider", () => {
     });
 
     expect(parsed.models[0]?.isLegacy).toBe(true);
+  });
+});
+
+describe("ServerProviderWorkspaceSnapshot.agents", () => {
+  const baseSnapshot = {
+    cwd: "/workspace/project",
+    checkedAt: "2026-04-10T00:00:00.000Z",
+    slashCommands: [],
+    skills: [],
+  };
+
+  it("defaults agents for snapshots written before the roster field", () => {
+    const parsed = decodeWorkspaceSnapshot(baseSnapshot);
+
+    expect(parsed.agents).toEqual([]);
+    expect(parsed.agentCurrentValue).toBeUndefined();
+  });
+
+  it("round-trips a directory-scoped agent roster", () => {
+    const parsed = decodeWorkspaceSnapshot({
+      ...baseSnapshot,
+      agents: [
+        { id: "build", label: "Build", isDefault: true },
+        { id: "orchestrator", label: "Orchestrator" },
+      ],
+      agentCurrentValue: "build",
+    });
+
+    expect(encodeWorkspaceSnapshot(parsed)).toEqual({
+      ...baseSnapshot,
+      agents: [
+        { id: "build", label: "Build", isDefault: true },
+        { id: "orchestrator", label: "Orchestrator" },
+      ],
+      agentCurrentValue: "build",
+    });
+  });
+});
+
+describe("ServerProviderModel.pricing", () => {
+  const bareModel = {
+    slug: "gpt-5.4",
+    name: "GPT-5.4",
+    isCustom: false,
+    capabilities: null,
+  };
+
+  it("decodes models without pricing as unpriced", () => {
+    const parsed = decodeServerProviderModel(bareModel);
+
+    expect(parsed.pricing).toBeUndefined();
+  });
+
+  it("decodes full pricing and round-trips through encoding", () => {
+    const parsed = decodeServerProviderModel({
+      ...bareModel,
+      pricing: {
+        inputCostPerMillionTokens: 15,
+        outputCostPerMillionTokens: 75,
+        cacheReadCostPerMillionTokens: 1.5,
+        cacheWriteCostPerMillionTokens: 18.75,
+        costSource: "modelPriced",
+        fetchedAt: "2026-10-01T00:00:00.000Z",
+      },
+    });
+
+    expect(parsed.pricing).toEqual({
+      inputCostPerMillionTokens: 15,
+      outputCostPerMillionTokens: 75,
+      cacheReadCostPerMillionTokens: 1.5,
+      cacheWriteCostPerMillionTokens: 18.75,
+      costSource: "modelPriced",
+      fetchedAt: "2026-10-01T00:00:00.000Z",
+    });
+    expect(decodeServerProviderModel(encodeServerProviderModel(parsed))).toEqual(parsed);
+  });
+
+  it("decodes partial pricing without cache rates or fetchedAt", () => {
+    const parsed = decodeServerProviderModel({
+      ...bareModel,
+      pricing: {
+        inputCostPerMillionTokens: 3,
+        outputCostPerMillionTokens: 15,
+        costSource: "providerReported",
+      },
+    });
+
+    expect(parsed.pricing).toEqual({
+      inputCostPerMillionTokens: 3,
+      outputCostPerMillionTokens: 15,
+      costSource: "providerReported",
+    });
+  });
+
+  it("rejects negative rates", () => {
+    expect(() =>
+      decodeServerProviderModel({
+        ...bareModel,
+        pricing: {
+          inputCostPerMillionTokens: -1,
+          outputCostPerMillionTokens: 15,
+          costSource: "modelPriced",
+        },
+      }),
+    ).toThrow();
   });
 });
 

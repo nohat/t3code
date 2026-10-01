@@ -296,6 +296,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
                     checkedAt: updatedAt,
                     slashCommands: workspace?.slashCommands ?? draft.slashCommands,
                     skills: workspace?.skills ?? discoveredSkills.get(cwd) ?? [],
+                    agents: [],
                   },
                 ].slice(-MAX_WORKSPACE_SNAPSHOTS),
               }
@@ -340,6 +341,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
                       state.draft.workspaceSnapshots?.find((entry) => entry.cwd === cwd)?.skills ??
                       discoveredSkills.get(cwd) ??
                       [],
+                    agents: [],
                   },
                 ].slice(-MAX_WORKSPACE_SNAPSHOTS),
               }

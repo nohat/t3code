@@ -111,6 +111,41 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
     }),
   );
 
+  it.effect("loads directory-scoped agents for the session project", () =>
+    Effect.gen(function* () {
+      const runtime = yield* OpenCodeRuntime;
+      const requests: Request[] = [];
+      const client = createOpencodeClient({
+        baseUrl: "http://opencode.test",
+        directory: "/workspace/project",
+        fetch: Object.assign(
+          async (input: string | Request | URL) => {
+            const request = input instanceof Request ? input : new Request(input.toString());
+            requests.push(request);
+            return Response.json([
+              { name: "build", mode: "primary", permission: {}, options: {} },
+              { name: "orchestrator", mode: "primary", permission: {}, options: {} },
+            ]);
+          },
+          { preconnect: () => undefined },
+        ),
+      });
+      const agents = yield* runtime.loadOpenCodeAgents(client);
+      NodeAssert.deepEqual(
+        agents.map((agent) => agent.name),
+        ["build", "orchestrator"],
+      );
+      NodeAssert.equal(requests.length, 1);
+      const request = requests[0]!;
+      NodeAssert.equal(new URL(request.url).pathname, "/agent");
+      NodeAssert.equal(
+        new URL(request.url).searchParams.get("directory") ??
+          decodeURIComponent(request.headers.get("x-opencode-directory") ?? ""),
+        "/workspace/project",
+      );
+    }),
+  );
+
   it.effect("keeps provider inventory when agent discovery fails", () =>
     Effect.gen(function* () {
       const runtime = yield* OpenCodeRuntime;

@@ -81,6 +81,7 @@ export const makeCursorCommandCatalog = Effect.fn("makeCursorCommandCatalog")(fu
             entries.find((entry) => entry.cwd === cwd)?.slashCommands ??
             machineSnapshot.slashCommands,
           skills,
+          agents: [],
         },
       ].slice(-16),
     );
@@ -121,7 +122,7 @@ export const makeCursorCommandCatalog = Effect.fn("makeCursorCommandCatalog")(fu
     yield* SubscriptionRef.update(workspaces, (entries) =>
       [
         ...entries.filter((entry) => entry.cwd !== cwd),
-        { cwd, checkedAt, slashCommands, skills },
+        { cwd, checkedAt, slashCommands, skills, agents: [] },
       ].slice(-16),
     );
   });

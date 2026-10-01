@@ -23,6 +23,7 @@ import {
 } from "./keybindings.ts";
 import { EditorId, FileManagerRevealKind, RemoteOpenTarget } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
+import { UsageCostSource } from "./usage.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
 import { ServerSettings } from "./settings.ts";
@@ -68,6 +69,30 @@ export const ServerProviderAuth = Schema.Struct({
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
+const ServerProviderModelPrice = Schema.Number.check(
+  Schema.isFinite(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+
+/**
+ * Estimated rates for one provider model, in USD per million tokens.
+ *
+ * Field names match {@link UsageModelPriceOverride} so overrides and estimates
+ * stay comparable. A model without `pricing` is unpriced: clients render it
+ * without a cost badge. `costSource` reuses the usage provenance vocabulary;
+ * `unpriced` never appears here because the struct itself is absent then.
+ */
+export const ServerProviderModelPricing = Schema.Struct({
+  inputCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
+  outputCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
+  cacheReadCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
+  cacheWriteCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
+  costSource: UsageCostSource,
+  /** When the backing rate table was fetched, so the UI can show staleness. */
+  fetchedAt: Schema.optional(IsoDateTime),
+});
+export type ServerProviderModelPricing = typeof ServerProviderModelPricing.Type;
+
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -79,6 +104,7 @@ export const ServerProviderModel = Schema.Struct({
   isDefault: Schema.optional(Schema.Boolean),
   isLegacy: Schema.optional(Schema.Boolean),
   capabilities: Schema.NullOr(ModelCapabilities),
+  pricing: Schema.optional(ServerProviderModelPricing),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 
@@ -117,11 +143,28 @@ export const ServerProviderSkill = Schema.Struct({
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
 
+/**
+ * One directory-scoped agent choice for the model picker's `agent` option.
+ * The roster is model-independent (every model of the instance shares it),
+ * so the workspace snapshot carries it once instead of repeating full
+ * model entries per directory.
+ */
+export const ServerProviderWorkspaceAgent = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  isDefault: Schema.optional(Schema.Boolean),
+});
+export type ServerProviderWorkspaceAgent = typeof ServerProviderWorkspaceAgent.Type;
+
 export const ServerProviderWorkspaceSnapshot = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   checkedAt: IsoDateTime,
   slashCommands: Schema.Array(ServerProviderSlashCommand),
   skills: Schema.Array(ServerProviderSkill),
+  agents: Schema.Array(ServerProviderWorkspaceAgent).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  agentCurrentValue: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderWorkspaceSnapshot = typeof ServerProviderWorkspaceSnapshot.Type;
 

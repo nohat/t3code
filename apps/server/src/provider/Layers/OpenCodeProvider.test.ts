@@ -24,6 +24,7 @@ import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
 import {
   checkOpenCodeProviderStatus,
   openCodeCommandsToServerProviderSlashCommands,
+  openCodeModelsWithAgents,
 } from "./OpenCodeProvider.ts";
 import type { OpenCodeInventory } from "../opencodeRuntime.ts";
 import { readOpenCodeGoUsageLimits } from "./openCodeUsageLimits.ts";
@@ -282,6 +283,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       : Effect.succeed(runtimeMock.state.inventory as OpenCodeInventory);
   },
   loadOpenCodeSkills: () => Effect.succeed([]),
+  loadOpenCodeAgents: () => Effect.succeed([]),
   loadSkillsFromCli: () => Effect.succeed([]),
 };
 
@@ -303,6 +305,74 @@ it("keeps native and MCP commands while preserving compaction and separate skill
       { name: "mcp:search", input: { hint: "query" } },
     ],
   );
+});
+
+it("re-scopes model agent options to the directory-scoped roster", () => {
+  const base = {
+    slug: "openai/gpt-test",
+    name: "GPT Test",
+    isCustom: false,
+    capabilities: {
+      optionDescriptors: [
+        {
+          id: "variant",
+          label: "Reasoning",
+          type: "select" as const,
+          options: [{ id: "medium", label: "Medium" }],
+          currentValue: "medium",
+        },
+        {
+          id: "agent",
+          label: "Agent",
+          type: "select" as const,
+          options: [{ id: "build", label: "Build", isDefault: true }],
+          currentValue: "build",
+        },
+      ],
+    },
+  };
+  const scoped = openCodeModelsWithAgents(
+    [base],
+    [
+      { name: "build", mode: "primary", permission: [], options: {} },
+      { name: "orchestrator", mode: "primary", permission: [], options: {} },
+      { name: "worker", mode: "subagent", permission: [], options: {} },
+      { name: "compaction", mode: "primary", hidden: true, permission: [], options: {} },
+    ],
+  );
+  const agentDescriptor = scoped[0]?.capabilities?.optionDescriptors?.find(
+    (descriptor) => descriptor.id === "agent",
+  );
+  NodeAssert.deepEqual(
+    agentDescriptor?.type === "select" ? agentDescriptor.options.map(({ id }) => id) : [],
+    ["build", "orchestrator"],
+  );
+  NodeAssert.equal(
+    agentDescriptor?.type === "select" ? agentDescriptor.currentValue : undefined,
+    "build",
+  );
+  // The reasoning descriptor is untouched.
+  NodeAssert.equal(scoped[0]?.capabilities?.optionDescriptors?.length, 2);
+});
+
+it("keeps base agent options when the scoped roster is empty", () => {
+  const base = {
+    slug: "openai/gpt-test",
+    name: "GPT Test",
+    isCustom: false,
+    capabilities: {
+      optionDescriptors: [
+        {
+          id: "agent",
+          label: "Agent",
+          type: "select" as const,
+          options: [{ id: "build", label: "Build", isDefault: true }],
+          currentValue: "build",
+        },
+      ],
+    },
+  };
+  NodeAssert.deepEqual(openCodeModelsWithAgents([base], []), [base]);
 });
 
 const testLayer = Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble).pipe(

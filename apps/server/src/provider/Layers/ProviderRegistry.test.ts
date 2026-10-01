@@ -621,6 +621,59 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             checkedAt: scopedSnapshot.checkedAt,
             slashCommands: scopedSnapshot.slashCommands,
             skills: scopedSnapshot.skills,
+            agents: [],
+          },
+        ]);
+      });
+
+      it("carries the scoped agent roster on the workspace snapshot", () => {
+        const base = {
+          instanceId: ProviderInstanceId.make("opencode"),
+          driver: ProviderDriverKind.make("opencode"),
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-03-25T00:00:00.000Z",
+          version: "1.18.34",
+          models: [],
+          slashCommands: [{ name: "global" }],
+          skills: [],
+        } satisfies ServerProvider;
+        const scopedSnapshot = {
+          ...base,
+          checkedAt: "2026-03-25T00:01:00.000Z",
+          models: [
+            {
+              slug: "openai/gpt-test",
+              name: "GPT Test",
+              isCustom: false,
+              capabilities: createModelCapabilities({
+                optionDescriptors: [
+                  selectDescriptor("agent", "Agent", [
+                    { id: "build", label: "Build", isDefault: true },
+                    { id: "orchestrator", label: "Orchestrator" },
+                  ]),
+                ],
+              }),
+            },
+          ],
+        } satisfies ServerProvider;
+
+        const result = upsertProviderWorkspaceSnapshot(base, "/project", scopedSnapshot);
+
+        assert.deepStrictEqual(result.models, []);
+        assert.deepStrictEqual(result.workspaceSnapshots, [
+          {
+            cwd: "/project",
+            checkedAt: scopedSnapshot.checkedAt,
+            slashCommands: scopedSnapshot.slashCommands,
+            skills: scopedSnapshot.skills,
+            agents: [
+              { id: "build", label: "Build", isDefault: true },
+              { id: "orchestrator", label: "Orchestrator" },
+            ],
+            agentCurrentValue: "build",
           },
         ]);
       });

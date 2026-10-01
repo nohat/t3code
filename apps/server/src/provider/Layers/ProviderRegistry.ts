@@ -82,6 +82,38 @@ const hasModelCapabilities = (model: ServerProvider["models"][number]): boolean 
 
 const MAX_WORKSPACE_SNAPSHOTS_PER_PROVIDER = 16;
 
+/**
+ * Extract the shared `agent` option roster from a directory-scoped snapshot.
+ * Every model of an instance carries the same roster, so the first `agent`
+ * select descriptor found stands for all of them. Returns undefined when
+ * the scoped snapshot carries no agent options (e.g. a failed agent lookup
+ * that kept the base models) so callers fall back to the base roster.
+ */
+function scopedWorkspaceAgents(
+  scopedSnapshot: ServerProvider,
+):
+  | Pick<NonNullable<ServerProvider["workspaceSnapshots"]>[number], "agents" | "agentCurrentValue">
+  | undefined {
+  const agentDescriptor = scopedSnapshot.models
+    .flatMap((model) => model.capabilities?.optionDescriptors ?? [])
+    .find((descriptor) => descriptor.id === "agent" && descriptor.type === "select");
+  if (
+    !agentDescriptor ||
+    agentDescriptor.type !== "select" ||
+    agentDescriptor.options.length === 0
+  ) {
+    return undefined;
+  }
+  return {
+    agents: agentDescriptor.options.map((option) => ({
+      id: option.id,
+      label: option.label,
+      ...(option.isDefault !== undefined ? { isDefault: option.isDefault } : {}),
+    })),
+    ...(agentDescriptor.currentValue ? { agentCurrentValue: agentDescriptor.currentValue } : {}),
+  };
+}
+
 export function upsertProviderWorkspaceSnapshot(
   provider: ServerProvider,
   cwd: string,
@@ -92,6 +124,7 @@ export function upsertProviderWorkspaceSnapshot(
     checkedAt: scopedSnapshot.checkedAt,
     slashCommands: scopedSnapshot.slashCommands,
     skills: scopedSnapshot.skills,
+    ...(scopedWorkspaceAgents(scopedSnapshot) ?? { agents: [] }),
   } satisfies NonNullable<ServerProvider["workspaceSnapshots"]>[number];
   return {
     ...provider,

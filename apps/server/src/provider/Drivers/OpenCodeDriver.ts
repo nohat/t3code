@@ -33,6 +33,7 @@ import {
   makePendingOpenCodeProvider,
   openCodeSkillsToServerProviderSkills,
   openCodeCommandsToServerProviderSlashCommands,
+  openCodeModelsWithAgents,
 } from "../Layers/OpenCodeProvider.ts";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers.ts";
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
@@ -184,6 +185,14 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
               Effect.timeout("10 seconds"),
               Effect.orElseSucceed(() => []),
             ),
+            // Project `.opencode/agents` definitions are directory-scoped:
+            // the machine-wide inventory backing the base snapshot resolves
+            // against the server cwd, so custom agents never appear in the
+            // picker unless re-queried here with the session directory.
+            agents: openCodeRuntime.loadOpenCodeAgents(client).pipe(
+              Effect.timeout("10 seconds"),
+              Effect.orElseSucceed(() => []),
+            ),
           },
           { concurrency: "unbounded" },
         );
@@ -272,8 +281,9 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
                 snapshot.getSnapshot,
                 loadWorkspaceForCwd(cwd).pipe(Effect.timeout("20 seconds")),
               ]).pipe(
-                Effect.map(([machineSnapshot, { skills, commands }]) => ({
+                Effect.map(([machineSnapshot, { skills, commands, agents }]) => ({
                   ...machineSnapshot,
+                  models: openCodeModelsWithAgents(machineSnapshot.models, agents),
                   skills: openCodeSkillsToServerProviderSkills(skills),
                   slashCommands: openCodeCommandsToServerProviderSlashCommands(commands),
                 })),
@@ -282,7 +292,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
                     new ProviderDriverError({
                       driver: DRIVER_KIND,
                       instanceId,
-                      detail: `Failed to probe OpenCode commands and skills for '${cwd}'`,
+                      detail: `Failed to probe OpenCode agents, commands and skills for '${cwd}'`,
                       cause,
                     }),
                 ),
