@@ -4408,6 +4408,75 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
+  it.effect("emits tool.denied alongside request.resolved on permission reject", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-permission-denied");
+      const permissionDenied = promiseWithResolvers<unknown>();
+      const sessionId = "http://127.0.0.1:9999/session";
+      runtimeMock.state.subscribedEvents = [
+        {
+          id: "evt-permission-asked",
+          type: "permission.asked",
+          properties: {
+            id: "per_denied",
+            sessionID: sessionId,
+            permission: "bash",
+            patterns: ["rm -rf /tmp/x"],
+            metadata: {},
+            always: [],
+            tool: { messageID: "msg_denied", callID: "call_denied" },
+          },
+        },
+        permissionDenied.promise,
+      ];
+
+      const openedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "request.opened"),
+        Stream.take(1),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "approval-required",
+      });
+      yield* Fiber.join(openedFiber).pipe(Effect.timeout("1 second"));
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "request.resolved" || event.type === "tool.denied"),
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.respondToRequest(threadId, ApprovalRequestId.make("per_denied"), "decline");
+      permissionDenied.resolve({
+        id: "evt-permission-denied",
+        type: "permission.replied",
+        properties: { sessionID: sessionId, requestID: "per_denied", reply: "reject" },
+      });
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
+      NodeAssert.equal(events.length, 2);
+      const resolved = events.find((event) => event.type === "request.resolved");
+      NodeAssert.equal(resolved?.type, "request.resolved");
+      if (resolved?.type === "request.resolved") {
+        NodeAssert.equal(resolved.payload.decision, "decline");
+      }
+      const denied = events.find((event) => event.type === "tool.denied");
+      NodeAssert.equal(denied?.type, "tool.denied");
+      if (denied?.type === "tool.denied") {
+        NodeAssert.equal(denied.payload.toolName, "bash");
+        NodeAssert.equal(denied.payload.toolUseId, "call_denied");
+      }
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("does not reopen a failed full-access auto-reply after its terminal reply", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
@@ -5894,6 +5963,192 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
+  it.effect("declares promptless continuation and accepts empty continuation turns", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      NodeAssert.equal(adapter.capabilities.promptlessTurnContinuation, true);
+      const threadId = asThreadId("thread-promptless-continuation");
+      const busy = promiseWithResolvers<unknown>();
+      const idle = promiseWithResolvers<unknown>();
+      runtimeMock.state.subscribedEvents = [busy.promise, idle.promise];
+
+      const completedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "turn.completed"),
+        Stream.take(1),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const sendFiber = yield* adapter
+        .sendTurn({
+          threadId,
+          continuation: true,
+          modelSelection: createModelSelection(
+            ProviderInstanceId.make("opencode"),
+            "opencode/kimi-k3",
+          ),
+        })
+        .pipe(Effect.forkChild);
+      busy.resolve({
+        id: "evt-promptless-busy",
+        type: "session.status",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          status: { type: "busy" },
+        },
+      });
+      const turn = yield* Fiber.join(sendFiber);
+      const promptInput = runtimeMock.state.promptCalls[0] as {
+        parts: Array<{ type: string }>;
+      };
+      NodeAssert.deepEqual(promptInput.parts, []);
+      idle.resolve({
+        id: "evt-promptless-idle",
+        type: "session.status",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          status: { type: "idle" },
+        },
+      });
+      const completed = yield* Fiber.join(completedFiber).pipe(Effect.timeout("1 second"));
+      NodeAssert.equal(Option.getOrUndefined(completed)?.turnId, turn.turnId);
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("still rejects empty turns without the continuation flag", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-empty-turn-rejected");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const failure = yield* adapter
+        .sendTurn({
+          threadId,
+          modelSelection: createModelSelection(
+            ProviderInstanceId.make("opencode"),
+            "opencode/kimi-k3",
+          ),
+        })
+        .pipe(Effect.flip);
+      NodeAssert.equal(failure._tag, "ProviderAdapterValidationError");
+      if (failure._tag !== "ProviderAdapterValidationError") {
+        throw new Error("Unexpected error type");
+      }
+      NodeAssert.match(failure.issue, /require text input/);
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls, []);
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("emits thread.token-usage.updated alongside turn completion", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-token-usage-emit");
+      const busy = promiseWithResolvers<unknown>();
+      const assistantMessage = promiseWithResolvers<unknown>();
+      const step = promiseWithResolvers<unknown>();
+      const idle = promiseWithResolvers<unknown>();
+      runtimeMock.state.subscribedEvents = [
+        busy.promise,
+        assistantMessage.promise,
+        step.promise,
+        idle.promise,
+      ];
+
+      const usageFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) => event.threadId === threadId && event.type === "thread.token-usage.updated",
+        ),
+        Stream.take(1),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId,
+        input: "Count these tokens",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode"),
+          "opencode/kimi-k3",
+        ),
+      });
+      const promptMessageId = (runtimeMock.state.promptCalls[0] as { messageID: string }).messageID;
+      busy.resolve({
+        id: "evt-usage-emit-busy",
+        type: "session.status",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          status: { type: "busy" },
+        },
+      });
+      assistantMessage.resolve({
+        id: "evt-usage-emit-assistant",
+        type: "message.updated",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          info: { id: "assistant-usage-emit", role: "assistant", parentID: promptMessageId },
+        },
+      });
+      step.resolve({
+        id: "evt-usage-emit-step",
+        type: "message.part.updated",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          part: {
+            id: "step-usage-emit",
+            sessionID: "http://127.0.0.1:9999/session",
+            messageID: "assistant-usage-emit",
+            type: "step-finish",
+            reason: "stop",
+            cost: 0,
+            tokens: { input: 100, output: 20, reasoning: 5, cache: { read: 40, write: 10 } },
+          },
+        },
+      });
+      idle.resolve({
+        id: "evt-usage-emit-idle",
+        type: "session.status",
+        properties: {
+          sessionID: "http://127.0.0.1:9999/session",
+          status: { type: "idle" },
+        },
+      });
+      const usage = yield* Fiber.join(usageFiber).pipe(Effect.timeout("1 second"));
+      const event = Option.getOrUndefined(usage);
+      NodeAssert.equal(event?.type, "thread.token-usage.updated");
+      if (event?.type === "thread.token-usage.updated") {
+        NodeAssert.deepEqual(event.payload.usage, {
+          usedTokens: 175,
+          inputTokens: 150,
+          cachedInputTokens: 40,
+          outputTokens: 25,
+          lastUsedTokens: 175,
+          lastInputTokens: 150,
+          lastCachedInputTokens: 40,
+          lastOutputTokens: 25,
+          lastReasoningOutputTokens: 5,
+        });
+      }
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("interrupts a turn waiting on cancellation when the session stops", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
@@ -6732,29 +6987,33 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       );
       runtimeMock.state.forkPreservesBoundary = true;
 
-      for (const numTurns of [0, 1, 2, 3]) {
+      for (const numTurns of [1, 2, 3]) {
         yield* adapter.stopSession(threadId);
         yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
         runtimeMock.state.forkCalls.length = 0;
         const snapshot = yield* adapter.rollbackThread(threadId, numTurns);
         NodeAssert.deepEqual(
           runtimeMock.state.forkCalls.map(({ sessionID, messageID }) => ({ sessionID, messageID })),
-          numTurns === 0
-            ? []
-            : [
-                {
-                  sessionID: "http://127.0.0.1:9999/session",
-                  messageID: numTurns === 1 ? "user-2" : "user-1",
-                },
-              ],
+          [
+            {
+              sessionID: "http://127.0.0.1:9999/session",
+              messageID: numTurns === 1 ? "user-2" : "user-1",
+            },
+          ],
         );
         NodeAssert.deepEqual(
           snapshot.turns.map((turn) => turn.id),
-          numTurns === 0
-            ? ["assistant-1", "assistant-2"]
-            : ["assistant-1_fork"].slice(0, Math.max(0, 2 - numTurns)),
+          ["assistant-1_fork"].slice(0, Math.max(0, 2 - numTurns)),
         );
         NodeAssert.deepEqual(runtimeMock.state.revertCalls, []);
+      }
+      for (const numTurns of [0, -1, 1.5, Number.NaN]) {
+        const failure = yield* adapter.rollbackThread(threadId, numTurns).pipe(Effect.flip);
+        NodeAssert.equal(failure._tag, "ProviderAdapterValidationError");
+        if (failure._tag !== "ProviderAdapterValidationError") {
+          throw new Error("Unexpected error type");
+        }
+        NodeAssert.match(failure.issue, /numTurns must be an integer >= 1/);
       }
       yield* adapter.stopSession(threadId);
       yield* adapter.startSession({ threadId, runtimeMode: "full-access" });

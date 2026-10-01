@@ -9,6 +9,7 @@ import {
   RuntimeItemId,
   RuntimeRequestId,
   ThreadId,
+  type ThreadTokenUsageSnapshot,
   type ToolLifecycleItemType,
   type TurnTokenUsage,
   TurnId,
@@ -354,6 +355,10 @@ interface OpenCodeSessionContext {
   // until native removal or session teardown, but do not retain other part payloads.
   readonly textPartsByMessageId: Map<string, Map<string, OpenCodeTextPartState>>;
   turnTokenUsage: OpenCodeTurnTokenUsageAccumulator | undefined;
+  // Running thread-level token totals synthesized from per-turn step-finish
+  // parts. Feeds `thread.token-usage.updated` (C1); per-turn `TurnTokenUsage`
+  // stays in `turn.completed`/`turn.aborted`.
+  threadTokenTotals: OpenCodeThreadTokenTotals | undefined;
   activeTurnId: TurnId | undefined;
   activeAgent: string | undefined;
   activeVariant: string | undefined;
@@ -417,16 +422,63 @@ function makeOpenCodeTurnTokenUsageAccumulator(): OpenCodeTurnTokenUsageAccumula
 }
 
 function accumulateOpenCodeStepUsage(
+  context: OpenCodeSessionContext,
   accumulator: OpenCodeTurnTokenUsageAccumulator,
   part: OpenCodeStepUsage,
 ): void {
   if (accumulator.partIds.has(part.id)) return;
   accumulator.partIds.add(part.id);
-  accumulator.inputTokens += part.tokens.input + part.tokens.cache.read + part.tokens.cache.write;
+  const input = part.tokens.input + part.tokens.cache.read + part.tokens.cache.write;
+  accumulator.inputTokens += input;
   accumulator.cachedInputTokens += part.tokens.cache.read;
   accumulator.cacheCreationTokens += part.tokens.cache.write;
-  accumulator.outputTokens += part.tokens.output + part.tokens.reasoning;
+  const output = part.tokens.output + part.tokens.reasoning;
+  accumulator.outputTokens += output;
   accumulator.reasoningTokens += part.tokens.reasoning;
+  // Thread totals mirror the turn accumulation so `take` clearing the turn
+  // accumulator cannot lose counts. Unresolved/deduped parts flow through the
+  // same gate, so totals stay consistent with the emitted turn usage.
+  const totals = context.threadTokenTotals ?? makeOpenCodeThreadTokenTotals();
+  totals.inputTokens += input;
+  totals.cachedInputTokens += part.tokens.cache.read;
+  totals.outputTokens += output;
+  context.threadTokenTotals = totals;
+}
+
+interface OpenCodeThreadTokenTotals {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
+function makeOpenCodeThreadTokenTotals(): OpenCodeThreadTokenTotals {
+  return { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
+}
+
+function toThreadTokenUsageSnapshot(
+  totals: OpenCodeThreadTokenTotals,
+  lastTurn: TurnTokenUsage | undefined,
+): ThreadTokenUsageSnapshot | undefined {
+  const inputTokens = totals.inputTokens > 0 ? totals.inputTokens : undefined;
+  const cachedInputTokens = totals.cachedInputTokens > 0 ? totals.cachedInputTokens : undefined;
+  const outputTokens = totals.outputTokens > 0 ? totals.outputTokens : undefined;
+  const usedTokens = totals.inputTokens + totals.outputTokens;
+  if (usedTokens <= 0) {
+    return undefined;
+  }
+  return {
+    usedTokens,
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    lastUsedTokens: usedTokens,
+    ...(inputTokens !== undefined ? { lastInputTokens: inputTokens } : {}),
+    ...(cachedInputTokens !== undefined ? { lastCachedInputTokens: cachedInputTokens } : {}),
+    ...(outputTokens !== undefined ? { lastOutputTokens: outputTokens } : {}),
+    ...(lastTurn?.usageStatus === "complete" || lastTurn?.usageStatus === "partial"
+      ? { lastReasoningOutputTokens: lastTurn.reasoningTokens ?? 0 }
+      : {}),
+  };
 }
 
 function takeOpenCodeTurnTokenUsage(
@@ -1109,6 +1161,31 @@ export function makeOpenCodeAdapter(
       }
     });
 
+    const emitThreadTokenUsage = Effect.fn("emitThreadTokenUsage")(function* (
+      context: OpenCodeSessionContext,
+      turnId: TurnId | undefined,
+      lastTurn: TurnTokenUsage | undefined,
+      raw: unknown,
+    ) {
+      const totals = context.threadTokenTotals;
+      if (!totals) {
+        return;
+      }
+      const usage = toThreadTokenUsageSnapshot(totals, lastTurn);
+      if (!usage) {
+        return;
+      }
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          ...(turnId ? { turnId } : {}),
+          raw,
+        })),
+        type: "thread.token-usage.updated",
+        payload: { usage },
+      });
+    });
+
     const completeOpenCodeTurn = Effect.fn("completeOpenCodeTurn")(function* (
       context: OpenCodeSessionContext,
       turnId: TurnId,
@@ -1165,6 +1242,7 @@ export function makeOpenCodeAdapter(
           tokenUsage,
         },
       });
+      yield* emitThreadTokenUsage(context, turnId, tokenUsage, raw);
     });
 
     const scheduleIdleReconciliation = Effect.fn("scheduleIdleReconciliation")(function* (
@@ -1325,6 +1403,12 @@ export function makeOpenCodeAdapter(
           tokenUsage,
         },
       });
+      yield* emitThreadTokenUsage(
+        context,
+        promptAdmission.turnId,
+        tokenUsage,
+        promptAdmission.recoveryRaw,
+      );
       yield* emit({
         ...(yield* buildEventBase({
           threadId: context.session.threadId,
@@ -1548,6 +1632,7 @@ export function makeOpenCodeAdapter(
           tokenUsage,
         },
       });
+      yield* emitThreadTokenUsage(context, turnId, tokenUsage, raw);
       if (cancellation) {
         yield* Deferred.succeed(cancellation.completion, undefined).pipe(Effect.ignore);
       }
@@ -1900,6 +1985,23 @@ export function makeOpenCodeAdapter(
             decision: mapPermissionDecision(event.properties.reply),
           },
         });
+        // A denial is also a timeline fact, not just a dialog close: mirror
+        // Claude's `tool.denied` so the work log shows what was refused.
+        // The permission carries the tool identity in `tool.callID`; fall
+        // back to the permission name so the payload always has a toolName.
+        if (event.properties.reply === "reject") {
+          emitUnsafe({
+            ...base,
+            type: "tool.denied",
+            payload: {
+              toolName: trimText(request?.permission) ?? "unknown",
+              ...(request?.tool?.callID
+                ? { toolUseId: request.tool.callID }
+                : { toolUseId: requestId }),
+              ...(trimText(request?.permission) ? {} : { reason: "Permission denied." }),
+            },
+          });
+        }
         return;
       }
 
@@ -2377,7 +2479,7 @@ export function makeOpenCodeAdapter(
                 const steps = usage.unresolvedStepsByMessageId.get(event.properties.info.id);
                 if (ownership === "owned" && steps) {
                   for (const step of steps.values()) {
-                    accumulateOpenCodeStepUsage(usage, step);
+                    accumulateOpenCodeStepUsage(context, usage, step);
                   }
                 }
                 usage.unresolvedStepsByMessageId.delete(event.properties.info.id);
@@ -2454,7 +2556,7 @@ export function makeOpenCodeAdapter(
             const usage = context.turnTokenUsage;
             const ownership = usage.assistantOwnershipByMessageId.get(part.messageID);
             if (ownership === "owned") {
-              accumulateOpenCodeStepUsage(usage, part);
+              accumulateOpenCodeStepUsage(context, usage, part);
             } else if (
               ownership === "unknown" ||
               (ownership === undefined &&
@@ -3019,6 +3121,7 @@ export function makeOpenCodeAdapter(
           textPartsByMessageId: new Map(),
           messageRoleById: new Map(),
           turnTokenUsage: undefined,
+          threadTokenTotals: undefined,
           activeTurnId: undefined,
           activeAgent: undefined,
           activeVariant: undefined,
@@ -3136,11 +3239,17 @@ export function makeOpenCodeAdapter(
           }),
       });
       if ((!text || text.length === 0) && fileParts.length === 0) {
-        return yield* new ProviderAdapterValidationError({
-          provider: PROVIDER,
-          operation: "sendTurn",
-          issue: "OpenCode turns require text input or at least one attachment.",
-        });
+        // Promptless continuation: ProviderService only routes empty turns
+        // here when the capability flag below is set. Resume generation on
+        // the existing session without a synthetic user message — OpenCode
+        // continues from its own history.
+        if (input.continuation !== true) {
+          return yield* new ProviderAdapterValidationError({
+            provider: PROVIDER,
+            operation: "sendTurn",
+            issue: "OpenCode turns require text input or at least one attachment.",
+          });
+        }
       }
 
       return yield* context.promptSemaphore.withPermit(
@@ -3891,7 +4000,16 @@ export function makeOpenCodeAdapter(
       Effect.sync(() => [...sessions.values()].map((context) => context.session));
 
     const hasSession: OpenCodeAdapterShape["hasSession"] = (threadId) =>
-      Effect.sync(() => sessions.has(threadId));
+      Effect.gen(function* () {
+        const context = sessions.get(threadId);
+        if (!context) {
+          return false;
+        }
+        // `stopSession` keeps zombie map entries until the teardown scope
+        // closes (deleteContextIfCurrent). Report them as gone so the
+        // session reaper does not skip a thread that is already stopping.
+        return !(yield* Ref.get(context.stopped));
+      });
 
     const readThread: OpenCodeAdapterShape["readThread"] = Effect.fn("readThread")(
       function* (threadId) {
@@ -3925,6 +4043,13 @@ export function makeOpenCodeAdapter(
 
     const rollbackThread: OpenCodeAdapterShape["rollbackThread"] = Effect.fn("rollbackThread")(
       function* (threadId, numTurns) {
+        if (!Number.isInteger(numTurns) || numTurns < 1) {
+          return yield* new ProviderAdapterValidationError({
+            provider: PROVIDER,
+            operation: "rollbackThread",
+            issue: "numTurns must be an integer >= 1.",
+          });
+        }
         const context = yield* ensureSessionContext(sessions, threadId);
         const snapshot = yield* readThread(threadId);
         const targetIndex = Math.max(0, snapshot.turns.length - numTurns);
@@ -3989,6 +4114,35 @@ export function makeOpenCodeAdapter(
           context.messageRoleById.clear();
           context.textPartsByMessageId.clear();
           context.turnTokenUsage = undefined;
+          // The fork trims history, so totals from the trimmed turns no
+          // longer describe this thread. Rebuild from retained messages below.
+          context.threadTokenTotals = undefined;
+          for (const entry of forkMessages.data ?? []) {
+            for (const part of entry.parts ?? []) {
+              if (typeof part !== "object" || part === null) continue;
+              const typed = part as { type?: unknown; tokens?: unknown };
+              if (typed.type !== "step-finish" || typeof typed.tokens !== "object") continue;
+              const record = typed.tokens as {
+                input?: unknown;
+                output?: unknown;
+                reasoning?: unknown;
+                cache?: { read?: unknown; write?: unknown };
+              } | null;
+              if (!record) continue;
+              const asPositive = (value: unknown): number =>
+                typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+              const input =
+                asPositive(record.input) +
+                asPositive(record.cache?.read) +
+                asPositive(record.cache?.write);
+              const totals: OpenCodeThreadTokenTotals =
+                context.threadTokenTotals ?? makeOpenCodeThreadTokenTotals();
+              totals.inputTokens += input;
+              totals.cachedInputTokens += asPositive(record.cache?.read);
+              totals.outputTokens += asPositive(record.output) + asPositive(record.reasoning);
+              context.threadTokenTotals = totals;
+            }
+          }
           context.activeTurnId = undefined;
           context.interruptedTurnId = undefined;
           context.reconcileIdleStatus = false;
@@ -4038,6 +4192,7 @@ export function makeOpenCodeAdapter(
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
+        promptlessTurnContinuation: true,
       },
       startSession,
       sendTurn,

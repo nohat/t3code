@@ -291,17 +291,30 @@ beforeEach(() => {
 
 it("keeps native and MCP commands while preserving compaction and separate skills", () => {
   NodeAssert.deepEqual(
-    openCodeCommandsToServerProviderSlashCommands([
-      { name: "review", description: "Review changes", source: "command", hints: ["$ARGUMENTS"] },
-      { name: "review", source: "command", hints: [] },
-      { name: "compact", source: "command", hints: [] },
-      { name: "skill", source: "skill", hints: [] },
-      { name: "mcp:search", source: "mcp", hints: ["query"] },
-    ]).slice(1),
+    openCodeCommandsToServerProviderSlashCommands(
+      [
+        { name: "review", description: "Review changes", source: "command", hints: ["$ARGUMENTS"] },
+        { name: "review", source: "command", hints: [] },
+        { name: "compact", source: "command", hints: [] },
+        { name: "skill", source: "skill", hints: [] },
+        { name: "mcp:search", source: "mcp", hints: ["query"] },
+      ],
+      [{ name: "skill", location: "/skills/skill/SKILL.md" }],
+    ).slice(1),
     [
       { name: "review", description: "Review changes", input: { hint: "$ARGUMENTS" } },
       { name: "mcp:search", input: { hint: "query" } },
     ],
+  );
+});
+
+it("keeps skill-source commands that are not duplicated in the skills list", () => {
+  NodeAssert.deepEqual(
+    openCodeCommandsToServerProviderSlashCommands(
+      [{ name: "plan", description: "Plan it", source: "skill", hints: [] }],
+      [],
+    ).slice(1),
+    [{ name: "plan", description: "Plan it" }],
   );
 });
 

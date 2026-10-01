@@ -318,12 +318,23 @@ export function openCodeSkillsToServerProviderSkills(
 
 export function openCodeCommandsToServerProviderSlashCommands(
   input: OpenCodeInventory["commands"],
+  skills?: OpenCodeInventory["skills"],
 ): ReadonlyArray<ServerProviderSlashCommand> {
   const commands: ServerProviderSlashCommand[] = [COMPACT_SLASH_COMMAND];
   const names = new Set([COMPACT_SLASH_COMMAND.name]);
+  // Skill commands share a name pool with the skills list, so dedupe against
+  // known skill names instead of dropping them outright: a skill invocation
+  // arrives as `/skill-name`, which would otherwise vanish from the composer.
+  const skillNames = new Set(
+    (skills ?? []).flatMap((skill) => {
+      const name = trimOptional(skill.name);
+      return name ? [name] : [];
+    }),
+  );
   for (const command of input ?? []) {
     const name = trimOptional(command.name);
-    if (!name || names.has(name) || command.source === "skill") continue;
+    if (!name || names.has(name)) continue;
+    if (command.source === "skill" && skillNames.has(name)) continue;
     names.add(name);
     const description = trimOptional(command.description);
     const hint = trimOptional(command.hints.join(" "));
@@ -549,6 +560,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     skills,
     slashCommands: openCodeCommandsToServerProviderSlashCommands(
       inventoryExit.value.inventory.commands,
+      inventoryExit.value.inventory.skills,
     ),
     probe: {
       installed: true,
