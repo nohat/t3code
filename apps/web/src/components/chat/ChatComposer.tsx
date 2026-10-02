@@ -947,7 +947,7 @@ import {
   ShieldIcon,
   XIcon,
 } from "lucide-react";
-import { resolveSendBlockedReason } from "./sendBlockedReason";
+import { resolveSendBlockedReason, resolveSendTargetBlockedReason } from "./sendBlockedReason";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { hasProviderSetup } from "./ProviderStatusBanner";
 import {
@@ -1211,6 +1211,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   sendDisabledReason: string | null;
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
+  isEnvironmentDisconnected: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
   onPreviousPendingQuestion: () => void;
@@ -1243,6 +1244,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         sendDisabledReason={props.sendDisabledReason}
         isConnecting={props.isConnecting}
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
+        isEnvironmentDisconnected={props.isEnvironmentDisconnected}
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
         preserveComposerFocusOnPointerDown={props.preserveComposerFocusOnPointerDown ?? false}
@@ -1944,6 +1946,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const sendDisabledReason =
     externalSendDisabledReason ??
+    resolveSendTargetBlockedReason({
+      projectSelectionRequired,
+      noProviderAvailable,
+      providerCatalogKnown,
+    }) ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
     (activePendingProgress
       ? attachmentBlockReason
@@ -6349,6 +6356,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 noProviderAvailable ||
                                 projectSelectionRequired
                               }
+                              isEnvironmentDisconnected={environmentUnavailable !== null}
                               isPreparingWorktree={false}
                               hasSendableContent={false}
                               preserveComposerFocusOnPointerDown
@@ -6986,6 +6994,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         noProviderAvailable ||
                         projectSelectionRequired
                       }
+                      isEnvironmentDisconnected={environmentUnavailable !== null}
                       isPreparingWorktree={false}
                       hasSendableContent={false}
                       preserveComposerFocusOnPointerDown
@@ -7095,6 +7104,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       noProviderAvailable ||
                       projectSelectionRequired
                     }
+                    isEnvironmentDisconnected={environmentUnavailable !== null}
                     isPreparingWorktree={isPreparingWorktree}
                     hasSendableContent={composerSendState.hasSendableContent}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveSendBlockedReason } from "./sendBlockedReason";
+import { resolveSendBlockedReason, resolveSendTargetBlockedReason } from "./sendBlockedReason";
 
 describe("resolveSendBlockedReason", () => {
   it("prefers a lost connection over connecting and the composer reason", () => {
@@ -29,5 +29,40 @@ describe("resolveSendBlockedReason", () => {
       "Preparing worktree",
     );
     expect(resolveSendBlockedReason({ ...base, sendDisabledReason: null })).toBeNull();
+  });
+});
+
+describe("resolveSendTargetBlockedReason", () => {
+  const base = {
+    projectSelectionRequired: false,
+    noProviderAvailable: false,
+    providerCatalogKnown: true,
+  };
+
+  it("is silent when a project and a provider are available", () => {
+    expect(resolveSendTargetBlockedReason(base)).toBeNull();
+  });
+
+  it("names a missing project ahead of a missing provider", () => {
+    expect(
+      resolveSendTargetBlockedReason({
+        ...base,
+        projectSelectionRequired: true,
+        noProviderAvailable: true,
+      }),
+    ).toBe("Choose a project");
+  });
+
+  it("names an unavailable provider, but only calls it loading before the catalog arrives", () => {
+    expect(resolveSendTargetBlockedReason({ ...base, noProviderAvailable: true })).toBe(
+      "Provider unavailable",
+    );
+    expect(
+      resolveSendTargetBlockedReason({
+        ...base,
+        noProviderAvailable: true,
+        providerCatalogKnown: false,
+      }),
+    ).toBe("Loading providers");
   });
 });
