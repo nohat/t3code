@@ -161,3 +161,50 @@ ${envEntries}
 export function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
 }
+
+/**
+ * The command that runs a release's packaged server CLI (`t3 ...`) under Electron's own Node, or
+ * null when the release has no app. The running server's own release is the one to ask: drain mode
+ * lives in that process's memory.
+ */
+export function serverCliCommand(root: string, sha: string): readonly string[] | null {
+  const dir = releaseDir(root, sha);
+  if (!existsSync(dir)) return null;
+  const app = readdirSync(dir).find((name) => name.endsWith(".app"));
+  if (!app) return null;
+  const macOs = join(dir, app, "Contents", "MacOS");
+  const executable = existsSync(macOs) ? readdirSync(macOs)[0] : undefined;
+  if (!executable) return null;
+  return [
+    join(macOs, executable),
+    join(dir, app, "Contents", "Resources", "app.asar", "apps", "server", "dist", "bin.mjs"),
+  ];
+}
+
+export interface DrainStatus {
+  readonly draining: boolean;
+  readonly runningTurns: number;
+}
+
+/** Reads the `t3 drain ... --json` output, or null when it is not a drain status. */
+export function parseDrainStatus(stdout: string): DrainStatus | null {
+  try {
+    const value: unknown = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
+    if (typeof value !== "object" || value === null) return null;
+    const { draining, runningTurns } = value as Record<string, unknown>;
+    return typeof draining === "boolean" && typeof runningTurns === "number"
+      ? { draining, runningTurns }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the running-turn counts say it is safe to swap: the last `required` polls were all zero.
+ * One zero is not proof, because a command that passed the drain guard just before it switched on
+ * can still start a turn.
+ */
+export function isQuiet(polls: readonly number[], required: number): boolean {
+  return polls.length >= required && polls.slice(-required).every((count) => count === 0);
+}
