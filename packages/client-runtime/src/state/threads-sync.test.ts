@@ -37,6 +37,7 @@ import * as RpcSession from "../rpc/session.ts";
 import {
   EMPTY_ENVIRONMENT_THREAD_STATE,
   makeEnvironmentThreadState,
+  requestThreadResync,
   ThreadSnapshotLoader,
   type EnvironmentThreadState,
 } from "./threads.ts";
@@ -1032,6 +1033,54 @@ describe("EnvironmentThreads", () => {
         yield* Effect.yieldNow;
       }
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(3);
+    }),
+  );
+
+  it.effect("reloads from a fresh server snapshot when a resync is requested", () =>
+    Effect.gen(function* () {
+      const freshThread: OrchestrationThread = { ...BASE_THREAD, title: "Fresh from server" };
+      const harness = yield* makeHarness({
+        cached: BASE_THREAD,
+        completionMarker: true,
+        httpSnapshot: Option.some({ snapshotSequence: 20, thread: freshThread }),
+      });
+      yield* Queue.offer(harness.inputs, titleUpdated("Stale title", CACHED_SNAPSHOT_SEQUENCE + 1));
+      yield* Queue.offer(harness.inputs, synchronized());
+      yield* awaitThreadState(
+        harness.observed,
+        (value) =>
+          value.status === "live" &&
+          Option.isSome(value.data) &&
+          value.data.value.title === "Stale title",
+      );
+      expect(yield* Ref.get(harness.loaderCalls)).toBe(0);
+
+      expect(requestThreadResync(TARGET.environmentId, THREAD_ID)).toBe(true);
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(harness.subscriptionCount)) >= 2) break;
+        yield* Effect.yieldNow;
+      }
+
+      // The retained projection was discarded: the snapshot came from the server, and the
+      // subscription restarted from its sequence rather than the last applied event.
+      expect(yield* Ref.get(harness.subscriptionCount)).toBe(2);
+      expect(yield* Ref.get(harness.loaderCalls)).toBe(1);
+      expect(yield* Ref.get(harness.lastSubscribeAfterSequence)).toBe(20);
+      yield* Queue.offer(harness.inputs, synchronized());
+      const reloaded = yield* awaitThreadState(
+        harness.observed,
+        (value) =>
+          value.status === "live" &&
+          Option.isSome(value.data) &&
+          value.data.value.title === "Fresh from server",
+      );
+      expect(Option.getOrThrow(reloaded.data).title).toBe("Fresh from server");
+    }),
+  );
+
+  it.effect("reports no live thread to resync once its state machine is gone", () =>
+    Effect.sync(() => {
+      expect(requestThreadResync(TARGET.environmentId, ThreadId.make("never-opened"))).toBe(false);
     }),
   );
 

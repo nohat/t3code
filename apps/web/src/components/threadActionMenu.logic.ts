@@ -23,6 +23,7 @@ export type ThreadActionMenuId =
   | "rename"
   | "regenerate-title"
   | "mark-unread"
+  | "reload-thread"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -177,6 +178,8 @@ export function buildThreadActionMenuItems(
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
+    // Drops this device's copy of the thread and loads it again, for a thread that looks stale.
+    { id: "reload-thread", label: "Reload thread", icon: "refresh-cw" },
     // Archive removes the thread from the sidebar while keeping its
     // conversation under Settings > Archived threads — distinct from Settle
     // (stays visible in the Settled shelf) and Delete (clears history for

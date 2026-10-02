@@ -151,6 +151,7 @@ import {
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
+import { requestThreadResync } from "@t3tools/client-runtime/state/threads";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { ProjectEnvironmentBadge } from "./ProjectEnvironmentBadge";
@@ -4215,6 +4216,9 @@ export default function Sidebar() {
           }
           case "mark-unread":
             markThreadUnread(threadKey, thread.latestTurn?.completedAt);
+            return;
+          case "reload-thread":
+            requestThreadResync(threadRef.environmentId, threadRef.threadId);
             return;
           case "copy-path":
             if (!threadWorkspacePath) {
