@@ -19,6 +19,7 @@ import {
   EnvironmentResourceNotFoundError,
   type EnvironmentResourceNotFoundReason,
   EnvironmentScopeRequiredError,
+  EnvironmentServerDrainingError,
   EnvironmentAuthenticatedAuth,
   EnvironmentAuthenticatedPrincipal,
 } from "@t3tools/contracts";
@@ -153,6 +154,16 @@ export function failEnvironmentNotFound(reason: EnvironmentResourceNotFoundReaso
   return currentEnvironmentTraceId.pipe(
     Effect.flatMap((traceId) =>
       Effect.fail(new EnvironmentResourceNotFoundError({ code: "not_found", reason, traceId })),
+    ),
+  );
+}
+
+export function failEnvironmentServerDraining(message: string) {
+  return currentEnvironmentTraceId.pipe(
+    Effect.flatMap((traceId) =>
+      Effect.fail(
+        new EnvironmentServerDrainingError({ code: "server_draining", message, traceId }),
+      ),
     ),
   );
 }

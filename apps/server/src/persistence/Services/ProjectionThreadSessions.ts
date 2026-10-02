@@ -62,6 +62,12 @@ export interface ProjectionThreadSessionRepositoryShape {
   ) => Effect.Effect<Option.Option<ProjectionThreadSession>, ProjectionRepositoryError>;
 
   /**
+   * Count sessions with a turn in flight. Drain mode reports this so a deploy
+   * knows when it can restart without cutting a turn short.
+   */
+  readonly countRunning: () => Effect.Effect<number, ProjectionRepositoryError>;
+
+  /**
    * Delete projected thread-session state by thread id.
    */
   readonly deleteByThreadId: (

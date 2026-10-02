@@ -170,6 +170,8 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
+import * as ServerDrainState from "./orchestration/ServerDrainState.ts";
+import { ProjectionThreadSessionRepositoryLive } from "./persistence/Layers/ProjectionThreadSessions.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -524,6 +526,8 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(ProviderRuntimeLayerLive),
   Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, DeviceLayerLive)),
+  // Drain mode: in-memory flag plus the running-turn count it reports.
+  Layer.provideMerge(Layer.mergeAll(ServerDrainState.layer, ProjectionThreadSessionRepositoryLive)),
   Layer.provideMerge(PersistenceLayerLive),
   // Both read a user-owned file out of the state directory and stream changes
   // to clients; neither depends on the other.

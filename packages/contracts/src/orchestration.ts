@@ -2413,6 +2413,11 @@ export class OrchestrationDispatchCommandError extends Schema.TaggedError<Orches
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
     bootstrapThreadDisposition: Schema.optional(Schema.Literals(["deleted", "not-created"])),
+    // Why the server refused the command, when a client may want to react
+    // beyond showing the message. `server-draining` means the server is
+    // about to restart and the same command is safe to send again afterward.
+    // Optional so clients that predate it ignore it.
+    reason: Schema.optional(Schema.Literal("server-draining")),
   },
 ) {}
 
