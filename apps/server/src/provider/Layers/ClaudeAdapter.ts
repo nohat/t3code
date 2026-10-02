@@ -79,6 +79,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
@@ -387,6 +388,13 @@ interface ClaudeTaskAgentState {
 const PENDING_TASK_ENTRY_CAP = 256;
 /** How long Stop waits for Claude to abort a turn before killing the process. */
 const CLAUDE_INTERRUPT_GRACE = "3 seconds";
+/**
+ * How long sendTurn waits for Claude to answer a control request (model or permission mode)
+ * before queuing the message anyway. The request is already on the CLI's stdin ahead of the
+ * message, so Claude still applies it first; waiting longer only holds the user's message
+ * hostage to a CLI that is busy or silent.
+ */
+const CLAUDE_CONTROL_REQUEST_WAIT = "3 seconds";
 
 /**
  * Buffers a value that a later task_started reads by tool_use_id (a racing
@@ -5211,6 +5219,29 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  /**
+   * Issues a control request and waits a bounded time for the answer. A fast failure still
+   * fails the send; a slow answer is logged and the send continues (see
+   * CLAUDE_CONTROL_REQUEST_WAIT).
+   */
+  const issueControlRequest = Effect.fn("issueControlRequest")(function* (
+    threadId: ThreadId,
+    method: string,
+    request: () => Promise<void>,
+  ) {
+    const answered = yield* Effect.tryPromise({
+      try: request,
+      catch: (cause) => toRequestError(threadId, method, cause),
+    }).pipe(Effect.timeoutOption(CLAUDE_CONTROL_REQUEST_WAIT));
+    if (Option.isNone(answered)) {
+      yield* Effect.logWarning("claude.control_request.unanswered", {
+        threadId,
+        method,
+        waitedFor: CLAUDE_CONTROL_REQUEST_WAIT,
+      });
+    }
+  });
+
   const sendTurn: ClaudeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
     const context = yield* requireSession(input.threadId);
     const modelCatalog = yield* modelCatalogEffect;
@@ -5239,10 +5270,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     if (modelSelection?.model) {
       const apiModelId = resolveClaudeCatalogApiModelId(modelCatalog, modelSelection);
       if (context.currentApiModelId !== apiModelId) {
-        yield* Effect.tryPromise({
-          try: () => context.query.setModel(apiModelId),
-          catch: (cause) => toRequestError(input.threadId, "turn/setModel", cause),
-        });
+        yield* issueControlRequest(input.threadId, "turn/setModel", () =>
+          context.query.setModel(apiModelId),
+        );
         context.currentApiModelId = apiModelId;
       }
       context.session = {
@@ -5264,15 +5294,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     // "default" restores the session's original permission mode.
     // When interactionMode is absent we leave the current mode unchanged.
     if (input.interactionMode === "plan") {
-      yield* Effect.tryPromise({
-        try: () => context.query.setPermissionMode("plan"),
-        catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
-      });
+      yield* issueControlRequest(input.threadId, "turn/setPermissionMode", () =>
+        context.query.setPermissionMode("plan"),
+      );
     } else if (input.interactionMode === "default") {
-      yield* Effect.tryPromise({
-        try: () => context.query.setPermissionMode(context.basePermissionMode ?? "default"),
-        catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
-      });
+      yield* issueControlRequest(input.threadId, "turn/setPermissionMode", () =>
+        context.query.setPermissionMode(context.basePermissionMode ?? "default"),
+      );
     }
 
     const turnId = steeringTurnState?.turnId ?? TurnId.make(yield* randomUUIDv4);
