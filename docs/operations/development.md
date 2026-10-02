@@ -24,6 +24,20 @@ See the [mobile README](../../apps/mobile/README.md) for native builds and Metro
 Flags go directly after the task name, for example `vp run dev --home-dir /tmp/t3code-dev`.
 Add `--browser` to open a browser automatically.
 
+## Working in a thread worktree
+
+When using `t3code-main` as a T3 Code project, start independent changes in **New worktree**
+threads so each change has its own branch and checkout. The repository's **Setup Worktree** action
+runs `scripts/setup-worktree.ts`: it installs dependencies, links existing ignored environment files
+from the project checkout, and warms the web dependency cache. Run `vp i` manually in a checkout
+where that action was not run.
+
+Develop and run focused checks from the thread's checkout. Its `.t3` state is separate from the
+project checkout; never point it at the live `~/.t3/userdata`. Keep the thread and worktree while a
+change is still under review. Settling a thread only moves it out of the active list; it does not
+remove its checkout. Worktree removal is controlled separately by Storage cleanup settings; see
+[project storage cleanup](../user/project-settings.md#storage-cleanup).
+
 ### State and ports
 
 Linked worktrees default to their own `.t3/userdata`, even when `T3CODE_HOME` is set.
