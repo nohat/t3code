@@ -125,6 +125,10 @@ through the pages you have visited, like a browser's back and forward buttons.
 [new-thread defaults](./thread-sidebar.md#start-a-thread). `chat.newWithoutProject`
 (`mod+alt+n`) starts a thread [without a project](./thread-sidebar.md#start-without-a-project).
 
+`thread.reload` (`mod+alt+r`) reloads the open thread: it discards this device's copy and loads
+the thread again from the server. Use it when a thread looks stale or out of sync. It is also
+**Reload thread** in the thread menu and the command palette.
+
 ## Reserved shortcuts
 
 In the desktop app, `mod+w` closes the focused terminal or the active right-panel

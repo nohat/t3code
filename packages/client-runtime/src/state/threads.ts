@@ -94,6 +94,7 @@ function makeThreadOlderTurnRequestRegistry(): ThreadOlderTurnRequestRegistry {
 }
 
 const defaultOlderTurnRequestRegistry = makeThreadOlderTurnRequestRegistry();
+const defaultResyncRequestRegistry = makeThreadOlderTurnRequestRegistry();
 
 /**
  * Channel from UI actions to the live per-thread state machines. The machines
@@ -105,6 +106,27 @@ class ThreadOlderTurnRequests extends Context.Reference<ThreadOlderTurnRequestRe
   "@t3tools/client-runtime/state/threads/ThreadOlderTurnRequests",
   { defaultValue: () => defaultOlderTurnRequestRegistry },
 ) {}
+
+/**
+ * Channel from the "reload thread" action to the live state machines, resolved like
+ * `ThreadOlderTurnRequests`.
+ */
+class ThreadResyncRequests extends Context.Reference<ThreadOlderTurnRequestRegistry>(
+  "@t3tools/client-runtime/state/threads/ThreadResyncRequests",
+  { defaultValue: () => defaultResyncRequestRegistry },
+) {}
+
+/**
+ * Drops what this client knows about `threadId` and loads it again from the server: the cached
+ * projection is discarded, a fresh snapshot is fetched, and the live subscription restarts from
+ * it. Returns false when no state machine is live for the thread (nothing is open to reload).
+ */
+export function requestThreadResync(
+  environmentId: EnvironmentIdType,
+  threadId: ThreadIdType,
+): boolean {
+  return defaultResyncRequestRegistry.request(threadKey({ environmentId, threadId }));
+}
 
 /**
  * Asks the live state machine for `threadId` to fetch the next older page.
@@ -735,6 +757,22 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
   });
 
+  // A user-requested reload restarts the subscription like a foreground wakeup, but also marks the
+  // retained state as untrustworthy so the next subscribe starts from a fresh snapshot.
+  const reloadRequested = yield* Ref.make(false);
+  const resyncRequests = yield* Queue.sliding<void>(1);
+  const resyncRequestRegistry = yield* ThreadResyncRequests;
+  const deregisterResync = resyncRequestRegistry.register(
+    threadKey({ environmentId, threadId }),
+    () => {
+      Queue.offerUnsafe(resyncRequests, undefined);
+    },
+  );
+  yield* Effect.addFinalizer(() => Effect.sync(deregisterResync));
+  const resyncSignals = Stream.fromQueue(resyncRequests).pipe(
+    Stream.tap(() => Ref.set(reloadRequested, true)),
+  );
+
   // Only the first subscription after a warm live resume keeps the retained
   // status. A replacement session or foreground resubscribe on the same scope
   // may have missed events, so those show sync progress until confirmed.
@@ -778,14 +816,15 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         yield* Ref.set(resumingLive, false);
 
         let current = yield* SubscriptionRef.get(state);
+        const reloading = yield* Ref.getAndSet(reloadRequested, false);
         // A windowed cache resuming against a server without pagination is a
         // trap: afterSequence resume keeps only the window, and the missing
         // older turns can never be loaded (the server has no cursor reads).
         // Drop the window marker and treat the data as needing a full reload.
-        if (!supportsPagination) {
+        if (!supportsPagination || reloading) {
           yield* applyLock.withPermits(1)(
             Effect.gen(function* () {
-              if (Option.isNone((yield* SubscriptionRef.get(state)).page)) return;
+              if (!reloading && Option.isNone((yield* SubscriptionRef.get(state)).page)) return;
               yield* Ref.update(historyEpoch, (epoch) => epoch + 1);
               yield* SubscriptionRef.update(state, (value) => ({
                 ...value,
@@ -851,7 +890,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         onDefect: () => setStreamError("Could not synchronize the thread."),
         onExpectedFailure: (cause) => setStreamError(formatThreadError(cause)),
         retryExpectedFailureAfter: "250 millis",
-        resubscribe: foregroundResubscriptions,
+        resubscribe: Stream.merge(foregroundResubscriptions, resyncSignals),
       },
     ).pipe(
       Stream.runForEachArray((items) =>

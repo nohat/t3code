@@ -349,6 +349,7 @@ import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import {
   requestOlderThreadTurns,
+  requestThreadResync,
   threadHasOlderTurns,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
@@ -6728,6 +6729,15 @@ export default function ChatView(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) copyActiveThreadReference();
+        return;
+      }
+
+      if (command === "thread.reload") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat && isServerThread && activeThreadRef) {
+          requestThreadResync(activeThreadRef.environmentId, activeThreadRef.threadId);
+        }
         return;
       }
 

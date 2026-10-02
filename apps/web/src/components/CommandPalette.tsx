@@ -17,6 +17,7 @@ import {
 } from "@t3tools/client-runtime/operations/projects";
 import { connectionStatusText } from "@t3tools/client-runtime/connection";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
+import { requestThreadResync } from "@t3tools/client-runtime/state/threads";
 import { resolveThreadReferenceCopyTarget } from "@t3tools/shared/threadReference";
 import {
   canPreloadBrowsePath,
@@ -64,6 +65,7 @@ import {
   SquarePenIcon,
   SunIcon,
   TextSearchIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -1926,6 +1928,22 @@ function OpenCommandPaletteDialog(props: {
       icon: <MessageSquareDashedIcon className={ITEM_ICON_CLASS} />,
       shortcutCommand: "chat.newWithoutProject",
       run: () => startScratchThread(scratchTargetEnvironmentId),
+    });
+  }
+
+  if (activeThread !== null) {
+    const reloadTarget = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:reload-thread",
+      searchTerms: ["reload", "resync", "refresh", "sync", "stuck", "out of sync", "redraw"],
+      title: "Reload thread",
+      description: "Discard this device's copy and load the thread again from the server",
+      icon: <RefreshCwIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "thread.reload",
+      run: async () => {
+        requestThreadResync(reloadTarget.environmentId, reloadTarget.threadId);
+      },
     });
   }
 
