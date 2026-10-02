@@ -947,6 +947,7 @@ import {
   ShieldIcon,
   XIcon,
 } from "lucide-react";
+import { resolveSendBlockedReason } from "./sendBlockedReason";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { hasProviderSetup } from "./ProviderStatusBanner";
 import {
@@ -1949,6 +1950,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       : (attachmentBlockReason ??
         (multipleModelSelections === null ? providerSendBlockReason : null)));
   const isSendDisabled = sendDisabledReason !== null;
+  // A disabled Send button must say why, in text, since touch has no tooltip. Delayed, so a
+  // thread that is merely opening or a reconnect blip never flashes a notice.
+  const sendBlockedNotice = useDelayedStatus(
+    composerDraftTargetKey,
+    resolveSendBlockedReason({
+      environmentUnavailable: environmentUnavailable !== null,
+      isConnecting,
+      sendDisabledReason,
+    }),
+  );
   const selectedProviderStatus = useMemo(
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
@@ -4702,7 +4713,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const toggleTasksDrawer = useCallback(() => {
     setIsTasksDrawerOpen((open) => !open);
   }, []);
-  const hasBannerItems = props.bannerItems.length > 0;
+  const bannerItems = useMemo<readonly ComposerBannerStackItem[]>(
+    () =>
+      sendBlockedNotice === null
+        ? props.bannerItems
+        : [
+            ...props.bannerItems,
+            {
+              id: "send-blocked",
+              variant: "info",
+              compact: true,
+              icon: <CircleAlertIcon />,
+              title: `Can't send yet: ${sendBlockedNotice}`,
+            },
+          ],
+    [props.bannerItems, sendBlockedNotice],
+  );
+  const hasBannerItems = bannerItems.length > 0;
   const hasBlockingComposerTopDrawer =
     activePendingApproval !== null || pendingUserInputs.length > 0;
   const showInlineTasksBadge =
@@ -5193,9 +5220,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         content: activityStackContent,
       }
     : null;
-  const bannerStackItems = activityStackItem
-    ? [activityStackItem, ...props.bannerItems]
-    : props.bannerItems;
+  const bannerStackItems = activityStackItem ? [activityStackItem, ...bannerItems] : bannerItems;
   useEffect(() => {
     if (activeTasksProgress === null || activeTaskSteps === null) {
       setIsTasksDrawerOpen(false);

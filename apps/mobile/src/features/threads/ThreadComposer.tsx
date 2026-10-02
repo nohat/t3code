@@ -51,6 +51,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { themeColorWithAlpha } from "../../lib/mobileTheme";
+import { useDelayedStatus } from "../../lib/useDelayedStatus";
 import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import {
@@ -420,6 +421,9 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     props.sendBlockedReason ??
     (pendingPastedTextAttachmentCount > 0 ? "Attaching pasted text" : null) ??
     attachmentBlockReason;
+  // The reason is also the button's accessibility label; sighted users get it as text, delayed so a
+  // brief block never flashes.
+  const shownSendBlockedReason = useDelayedStatus(composerOwnerKey, sendBlockedReason);
   const canSend =
     hasContent &&
     !contextImports[composerOwnerKey] &&
@@ -698,6 +702,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
           <Pressable accessibilityRole="button" className="px-3 py-2" onPress={openSettings}>
             <Text className="text-xs text-foreground">Model unavailable. Open model settings.</Text>
           </Pressable>
+        ) : null}
+        {shownSendBlockedReason !== null ? (
+          <Text accessibilityRole="alert" className="px-3 py-2 text-xs text-foreground">
+            Can't send yet: {shownSendBlockedReason}
+          </Text>
         ) : null}
 
         <ComposerSurface
