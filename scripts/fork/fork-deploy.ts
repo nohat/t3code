@@ -25,14 +25,17 @@ import {
   countRunningSessions,
   ensureDir,
   isComplete,
+  isQuiet,
   launchdPid,
   listCompleteReleases,
+  parseDrainStatus,
   probeHealth,
   pruneReleases,
   readCurrent,
   readPrevious,
   releaseDir,
   renderLaunchAgent,
+  serverCliCommand,
 } from "./fork-deploy-lib.ts";
 
 interface Config {
@@ -169,6 +172,44 @@ async function restartAndProbe(previousPid: number | null): Promise<boolean> {
   return false;
 }
 
+/**
+ * Runs `t3 drain <args>` from the release that is serving now, since drain mode lives in that
+ * process's memory. Null when that release has no drain command (a server built before drain mode
+ * existed), the server is not running, or the call fails.
+ */
+function drainCommand(args: readonly string[]) {
+  const release = readCurrent(config.root);
+  const command = release ? serverCliCommand(config.root, release) : null;
+  if (!command) return null;
+  const [file, ...prefix] = command;
+  const result = spawnSync(
+    file!,
+    [...prefix, "drain", ...args, "--json", "--base-dir", config.home],
+    {
+      encoding: "utf8",
+      timeout: 30_000,
+      env: { HOME: homedir(), PATH: config.buildPath, ELECTRON_RUN_AS_NODE: "1" },
+    },
+  );
+  return result.status === 0 ? parseDrainStatus(result.stdout) : null;
+}
+
+/** Switches drain mode on, so new turns are refused while running ones finish. */
+function startDrain(ttlSeconds: number): boolean {
+  const status = drainCommand(["on", "--ttl", String(Math.min(ttlSeconds, 86_400))]);
+  if (status?.draining) return (log("drain mode on: new turns are refused until the swap"), true);
+  log("the running release has no drain mode; waiting for turns without it");
+  return false;
+}
+
+function stopDrain(): void {
+  const status = drainCommand(["off"]);
+  log(status && !status.draining ? "drain mode off" : "could not confirm drain mode is off");
+}
+
+/** Polls of the running-turn count that must all read zero before a drained swap. */
+const QUIET_POLLS = 3;
+
 async function deploy(ref: string): Promise<number> {
   const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
   const before = readCurrent(config.root);
@@ -182,25 +223,33 @@ async function deploy(ref: string): Promise<number> {
     report("deploy refused: another deploy holds the lock", `lock: ${lock}`);
     return 1;
   }
+  let draining = false;
+  let swapped = false;
   try {
     if (!isComplete(config.root, sha)) {
       log(`building ${sha}`);
       buildRelease(sha);
     }
 
-    const deadline = Date.now() + Number(values["drain-timeout"]) * 1000;
+    const drainSeconds = Number(values["drain-timeout"]);
+    const deadline = Date.now() + drainSeconds * 1000;
+    // Drain first, so the count can only fall; --force interrupts instead and needs no drain.
+    draining = !values.force && startDrain(drainSeconds + 600);
     // Unreadable means no server holds the database; if one is answering, assume it is busy.
     const countRunning = async () =>
       countRunningSessions(stateDb) ?? ((await probeHealth(config.port)) ? 1 : 0);
-    let running = await countRunning();
-    while (running > 0 && !values.force && Date.now() < deadline) {
-      log(`waiting for ${running} running turn(s)`);
-      await sleep(15_000);
-      running = await countRunning();
+    // Drained, a single zero is not proof: a command that cleared the guard just before it came
+    // on can still start a turn, so require several in a row.
+    const quietPolls = draining ? QUIET_POLLS : 1;
+    const polls = [await countRunning()];
+    while (!values.force && !isQuiet(polls, quietPolls) && Date.now() < deadline) {
+      log(`waiting for ${polls.at(-1)} running turn(s)`);
+      await sleep(draining ? 5_000 : 15_000);
+      polls.push(await countRunning());
     }
-    if (running > 0 && !values.force) {
+    if (!values.force && !isQuiet(polls, quietPolls)) {
       report(
-        `deploy of ${sha} held: ${running} turn(s) still running`,
+        `deploy of ${sha} held: ${polls.at(-1)} turn(s) still running`,
         "Re-run with --force to interrupt them.",
       );
       return 2;
@@ -208,6 +257,7 @@ async function deploy(ref: string): Promise<number> {
 
     const oldPid = launchdPid(config.label, uid);
     atomicSwap(config.root, sha);
+    swapped = true; // the restart clears drain mode, so it is only switched off when no swap happened
     log(`swapped current ${before ?? "(none)"} -> ${sha}`);
     if (await restartAndProbe(oldPid)) {
       pruneReleases(config.root, config.keepReleases ?? 3);
@@ -239,6 +289,7 @@ async function deploy(ref: string): Promise<number> {
     );
     return 1;
   } finally {
+    if (draining && !swapped) stopDrain();
     rmSync(lock, { recursive: true, force: true });
   }
 }

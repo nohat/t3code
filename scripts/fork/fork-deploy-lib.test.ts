@@ -14,11 +14,14 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   atomicSwap,
   COMPLETE_MARKER,
+  isQuiet,
+  parseDrainStatus,
   pruneReleases,
   readCurrent,
   readPrevious,
   releaseDir,
   renderLaunchAgent,
+  serverCliCommand,
 } from "./fork-deploy-lib.ts";
 
 function makeRoot(shas: readonly string[]): string {
@@ -86,5 +89,43 @@ describe("renderLaunchAgent", () => {
     expect(plist).toContain("App &amp; Co.app");
     expect(plist).toContain("<key>SuccessfulExit</key><false/>");
     expect(plist).toContain("<key>T3CODE_PORT</key><string>13774</string>");
+  });
+});
+
+describe("drain helpers", () => {
+  it("reads the status line a drain command prints", () => {
+    expect(
+      parseDrainStatus('{"draining":true,"expiresAt":"2026-10-02T17:00:00Z","runningTurns":2}\n'),
+    ).toEqual({ draining: true, runningTurns: 2 });
+    expect(
+      parseDrainStatus('warning\n{"draining":false,"expiresAt":null,"runningTurns":0}'),
+    ).toEqual({
+      draining: false,
+      runningTurns: 0,
+    });
+  });
+
+  it("rejects output that is not a drain status, such as an old server's unknown-command error", () => {
+    expect(parseDrainStatus("Unknown subcommand drain")).toBeNull();
+    expect(parseDrainStatus('{"draining":"yes"}')).toBeNull();
+    expect(parseDrainStatus("")).toBeNull();
+  });
+
+  it("calls the server quiet only after consecutive zero counts", () => {
+    expect(isQuiet([0], 3)).toBe(false);
+    expect(isQuiet([2, 0, 0], 3)).toBe(false);
+    expect(isQuiet([2, 0, 0, 0], 3)).toBe(true);
+    expect(isQuiet([0, 0, 0, 1], 3)).toBe(false);
+  });
+
+  it("finds the server CLI inside a release, and null when the release is missing", () => {
+    const root = makeRoot([]);
+    expect(serverCliCommand(root, "abc")).toBeNull();
+    const macOs = join(releaseDir(root, "abc"), "T3 Code (Alpha).app", "Contents", "MacOS");
+    mkdirSync(macOs, { recursive: true });
+    writeFileSync(join(macOs, "T3 Code (Alpha)"), "");
+    const command = serverCliCommand(root, "abc");
+    expect(command?.[0]).toBe(join(macOs, "T3 Code (Alpha)"));
+    expect(command?.[1]).toMatch(/app\.asar\/apps\/server\/dist\/bin\.mjs$/);
   });
 });
