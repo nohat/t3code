@@ -114,7 +114,8 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
     this.setModelCalls.push(model);
   };
 
-  readonly setPermissionMode = async (mode: PermissionMode): Promise<void> => {
+  /** Replaced by tests that exercise a slow or failing Claude control request. */
+  setPermissionMode = async (mode: PermissionMode): Promise<void> => {
     this.setPermissionModeCalls.push(mode);
   };
 
@@ -7699,6 +7700,68 @@ describe("ClaudeAdapterLive", () => {
       );
     },
   );
+
+  it.effect("sendTurn queues the message when Claude never answers a mode change", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      harness.query.setPermissionMode = () => new Promise(() => {});
+
+      const sendFiber = yield* adapter
+        .sendTurn({
+          threadId: session.threadId,
+          input: "are you there",
+          interactionMode: "default",
+          attachments: [],
+        })
+        .pipe(Effect.forkChild);
+      yield* TestClock.adjust("3 seconds");
+      const turn = yield* Fiber.join(sendFiber);
+
+      assert.equal(turn.threadId, session.threadId);
+      assert.equal(
+        (yield* adapter.listSessions()).find((s) => s.threadId === session.threadId)?.status,
+        "running",
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("sendTurn still fails when Claude rejects a mode change", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      harness.query.setPermissionMode = async () => {
+        throw new Error("invalid permission mode");
+      };
+
+      const result = yield* adapter
+        .sendTurn({
+          threadId: session.threadId,
+          input: "plan this",
+          interactionMode: "plan",
+          attachments: [],
+        })
+        .pipe(Effect.result);
+
+      assert.equal(result._tag, "Failure");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
 
   it.effect("does not call setPermissionMode when interactionMode is absent", () => {
     const harness = makeHarness();
