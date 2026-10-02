@@ -77,8 +77,10 @@ function report(summary: string, body: string): void {
   console.error(`fork-deploy: ${summary}\n${body}`);
   if (!config.notify?.length) return;
   const [command, ...args] = config.notify;
+  // A hung notifier (it once sat on a network call for hours) must not hold up the deploy.
   spawnSync(command!, [...args, "--summary", summary.slice(0, 200), "--message", body], {
     stdio: "ignore",
+    timeout: 30_000,
   });
 }
 
@@ -208,6 +210,7 @@ async function deploy(ref: string): Promise<number> {
     log(`swapped current ${before ?? "(none)"} -> ${sha}`);
     if (await restartAndProbe(oldPid)) {
       pruneReleases(config.root, config.keepReleases ?? 3);
+      log(`${sha} is live and healthy on port ${config.port}`);
       return 0;
     }
 
