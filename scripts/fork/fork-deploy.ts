@@ -3,6 +3,7 @@
 /**
  * Gated deploy of a packaged build to a single launchd-managed production instance.
  *
+ *   node scripts/fork/fork-deploy.ts build <ref>
  *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>]
  *   node scripts/fork/fork-deploy.ts rollback [--to <sha>]
  *   node scripts/fork/fork-deploy.ts status
@@ -239,6 +240,30 @@ async function deploy(ref: string): Promise<number> {
   }
 }
 
+/** Builds a release without touching production, so the later deploy is only a swap. */
+async function build(ref: string): Promise<number> {
+  const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
+  if (isComplete(config.root, sha)) return (log(`${sha} is already built`), 0);
+  ensureDir(join(config.root, "releases"));
+  const lock = join(config.root, ".deploy.lock");
+  try {
+    mkdirSync(lock);
+  } catch {
+    report("build refused: another deploy holds the lock", `lock: ${lock}`);
+    return 1;
+  }
+  try {
+    log(`building ${sha}`);
+    buildRelease(sha);
+    return 0;
+  } catch (error) {
+    report(`build of ${sha} failed`, String(error instanceof Error ? error.message : error));
+    return 1;
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 async function rollback(to?: string): Promise<number> {
   const target = to ?? readPrevious(config.root);
   if (!target || !isComplete(config.root, target)) {
@@ -291,14 +316,22 @@ function plist(): number {
 }
 
 const [command, ref] = positionals;
-const exitCode =
-  command === "deploy" && ref
-    ? await deploy(ref)
-    : command === "rollback"
-      ? await rollback(values.to)
-      : command === "status"
-        ? await status()
-        : command === "plist"
-          ? plist()
-          : (console.error("usage: fork-deploy <deploy <ref> | rollback | status | plist>"), 64);
+const exitCode = await (async () => {
+  switch (command) {
+    case "build":
+      if (ref) return build(ref);
+      break;
+    case "deploy":
+      if (ref) return deploy(ref);
+      break;
+    case "rollback":
+      return rollback(values.to);
+    case "status":
+      return status();
+    case "plist":
+      return plist();
+  }
+  console.error("usage: fork-deploy <build <ref> | deploy <ref> | rollback | status | plist>");
+  return 64;
+})();
 process.exit(exitCode);
