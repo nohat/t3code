@@ -176,6 +176,13 @@ Decided 2026-10-01:
 - **Mobile: native app, paid Apple Developer enrollment, Tailscale instead of T3 Connect.** Parked until activated; see [mobile.md](./mobile.md).
 - **Retire the Nightly app.** Removal waits until the packaged fork build is verified, so there is always a working fallback.
 
+Decided 2026-10-02 (deploys must not lose work):
+
+- **Order of defenses:** (1) **Continue threads after restarts** stays on, so a forced deploy resumes interrupted threads from their stored resume cursor; (2) a **drain mode** in the server's command gate that refuses or queues new turn starts while `fork-deploy` waits for running turns to reach zero; (3) a durable "interrupted by deploy, resumed" activity on each affected thread so a stalled resume is never silent; (4) `--force` remains the fallback, now safe because of (1). Build (2) as its own branch, starting with a spike on what the client shows for a refused send (not yet traced).
+- Known limits of (1): Claude resumes from its last completed assistant message, so partial in-flight work is lost; approval-required threads stall waiting for a person; terminal commands die; OpenCode can leave orphans after a hard kill.
+- The fork's GitHub Issues are now enabled and are the backlog (nohat/t3code#1, #2).
+- A **papercuts** capture is planned: see [papercuts.md](./papercuts.md).
+
 Still open:
 
 - Rename `local/t3-work` to `fork/prod` and `~/code/t3code-main` to something that is not "main".
