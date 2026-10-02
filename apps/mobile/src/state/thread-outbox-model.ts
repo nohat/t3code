@@ -268,6 +268,10 @@ export function shouldRetryThreadOutboxDelivery(error: unknown): boolean {
   if (typeof error === "object" && error !== null && "_tag" in error) {
     switch (error._tag) {
       case "OrchestrationDispatchCommandError":
+        // A draining server refused the send because it is about to restart.
+        // The message is fine, so hold it and redeliver with the same
+        // commandId once the server is back instead of restoring a draft.
+        return "reason" in error && error.reason === "server-draining";
       case "EnvironmentAuthorizationError":
         return false;
       case "ConnectionTransientError":

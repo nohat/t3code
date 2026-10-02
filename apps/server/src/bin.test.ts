@@ -41,6 +41,8 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
+import * as ServerDrainState from "./orchestration/ServerDrainState.ts";
+import { ProjectionThreadSessionRepositoryLive } from "./persistence/Layers/ProjectionThreadSessions.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
@@ -370,10 +372,14 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
       Layer.provide(
         orchestrationHttpApiLayer.pipe(
           Layer.provide(
-            Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({
-              get: () => Effect.succeed(null),
-              discard: () => Effect.void,
-            }),
+            Layer.mergeAll(
+              Layer.mock(ProjectCloneTracker.ProjectCloneTracker)({
+                get: () => Effect.succeed(null),
+                discard: () => Effect.void,
+              }),
+              ServerDrainState.layer,
+              ProjectionThreadSessionRepositoryLive,
+            ),
           ),
         ),
       ),
@@ -837,6 +843,42 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
           assert.equal(addedProject?.title, "Live Project");
         }),
       );
+    }),
+  );
+
+  it.effect("turns drain mode on and off and reports it through a running server", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-drain-live-test-"));
+      const drain = (...args: ReadonlyArray<string>) =>
+        captureStdout(runCli(["drain", ...args, "--base-dir", baseDir, "--json"])).pipe(
+          Effect.map(({ output }) => JSON.parse(output) as Record<string, unknown>),
+        );
+
+      yield* withLiveProjectCliServer(baseDir, () =>
+        Effect.gen(function* () {
+          assert.deepEqual(yield* drain("status"), {
+            draining: false,
+            expiresAt: null,
+            runningTurns: 0,
+          });
+          const on = yield* drain("on", "--ttl", "600");
+          assert.equal(on.draining, true);
+          assert.equal(typeof on.expiresAt, "string");
+          assert.equal((yield* drain("status")).draining, true);
+          assert.equal((yield* drain("off")).draining, false);
+          assert.equal((yield* drain("status")).draining, false);
+        }),
+      );
+    }),
+  );
+
+  it.effect("explains that drain mode needs a running server", () =>
+    Effect.gen(function* () {
+      const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-cli-drain-down-test-"));
+      const error = yield* runCliWithRuntime(["drain", "status", "--base-dir", baseDir]).pipe(
+        Effect.flip,
+      );
+      assert.include(error.message, "No running T3 Code server found");
     }),
   );
 

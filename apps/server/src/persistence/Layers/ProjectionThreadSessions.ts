@@ -2,6 +2,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 
@@ -71,6 +72,17 @@ const makeProjectionThreadSessionRepository = Effect.gen(function* () {
       `,
   });
 
+  const countRunningProjectionThreadSessionRows = SqlSchema.findOne({
+    Request: Schema.Void,
+    Result: Schema.Struct({ count: Schema.Int }),
+    execute: () =>
+      sql`
+        SELECT COUNT(*) AS "count"
+        FROM projection_thread_sessions
+        WHERE status = 'running'
+      `,
+  });
+
   const deleteProjectionThreadSessionRow = SqlSchema.void({
     Request: DeleteProjectionThreadSessionInput,
     execute: ({ threadId }) =>
@@ -92,6 +104,14 @@ const makeProjectionThreadSessionRepository = Effect.gen(function* () {
       ),
     );
 
+  const countRunning: ProjectionThreadSessionRepositoryShape["countRunning"] = () =>
+    countRunningProjectionThreadSessionRows(undefined).pipe(
+      Effect.map((row) => row.count),
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionThreadSessionRepository.countRunning:query"),
+      ),
+    );
+
   const deleteByThreadId: ProjectionThreadSessionRepositoryShape["deleteByThreadId"] = (input) =>
     deleteProjectionThreadSessionRow(input).pipe(
       Effect.mapError(
@@ -102,6 +122,7 @@ const makeProjectionThreadSessionRepository = Effect.gen(function* () {
   return {
     upsert,
     getByThreadId,
+    countRunning,
     deleteByThreadId,
   } satisfies ProjectionThreadSessionRepositoryShape;
 });

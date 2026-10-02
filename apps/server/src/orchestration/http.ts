@@ -3,6 +3,8 @@ import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -14,9 +16,12 @@ import {
   failEnvironmentInternal,
   failEnvironmentInvalidRequest,
   failEnvironmentNotFound,
+  failEnvironmentServerDraining,
   requireEnvironmentScope,
 } from "../auth/http.ts";
+import { ProjectionThreadSessionRepository } from "../persistence/Services/ProjectionThreadSessions.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
+import * as ServerDrainState from "./ServerDrainState.ts";
 import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./Services/ProjectionSnapshotQuery.ts";
 
@@ -27,6 +32,19 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const orchestrationEngine = yield* OrchestrationEngineService;
     const projectCloneTracker = yield* ProjectCloneTracker.ProjectCloneTracker;
+    const drainState = yield* ServerDrainState.ServerDrainState;
+    const sessions = yield* ProjectionThreadSessionRepository;
+
+    const isThreadRunning = ServerDrainState.makeIsThreadRunning(projectionSnapshotQuery);
+    const drainStatus = Effect.gen(function* () {
+      const { draining, expiresAt } = yield* drainState.status;
+      const runningTurns = yield* sessions.countRunning();
+      return {
+        draining,
+        expiresAt: expiresAt === null ? null : DateTime.formatIso(expiresAt),
+        runningTurns,
+      };
+    }).pipe(Effect.catch((cause) => failEnvironmentInternal("internal_error", cause)));
 
     return handlers
       .handle(
@@ -106,6 +124,11 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
               failEnvironmentInternal("orchestration_dispatch_failed", cause),
             ),
           );
+          yield* ServerDrainState.rejectTurnStartsWhileDraining(
+            drainState,
+            isThreadRunning,
+            args.payload,
+          ).pipe(Effect.catch((error) => failEnvironmentServerDraining(error.message)));
           const normalizedCommand = yield* normalizeDispatchCommand(args.payload).pipe(
             Effect.catch(() => failEnvironmentInvalidRequest("invalid_command")),
           );
@@ -122,6 +145,29 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             normalizedCommand,
           );
           return result;
+        }),
+      )
+      .handle(
+        "drainStatus",
+        Effect.fn("environment.orchestration.drainStatus")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          return yield* drainStatus;
+        }),
+      )
+      .handle(
+        "setDrain",
+        Effect.fn("environment.orchestration.setDrain")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          yield* args.payload.enable
+            ? drainState.enable(
+                args.payload.ttlSeconds === undefined
+                  ? undefined
+                  : Duration.seconds(args.payload.ttlSeconds),
+              )
+            : drainState.disable;
+          return yield* drainStatus;
         }),
       );
   }),

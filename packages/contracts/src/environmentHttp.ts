@@ -27,6 +27,9 @@ import {
 import {
   DpopFailureReason,
   AuthSessionId,
+  IsoDateTime,
+  NonNegativeInt,
+  PositiveInt,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
@@ -62,6 +65,9 @@ const OptionalBearerHeaders = Schema.Struct({
 const OptionalDpopProofHeaders = Schema.Struct({
   dpop: Schema.optionalKey(Schema.String),
 });
+
+/** Upper bound for a drain's lifetime, so a typo cannot park the server for days. */
+export const ORCHESTRATION_DRAIN_MAX_TTL_SECONDS = 24 * 60 * 60;
 
 export const EnvironmentRequestInvalidReason = Schema.Literals([
   "invalid_scope",
@@ -188,6 +194,25 @@ export class EnvironmentInternalError extends Schema.TaggedError<EnvironmentInte
 
   override get message(): string {
     return `The environment failed to answer this request (${this.reason}).`;
+  }
+}
+
+/**
+ * The server is draining for a restart and refused a command that would start
+ * a new turn. 503 tells HTTP callers the same request is worth retrying once
+ * the server is back, unlike the generic 500 for a failed dispatch.
+ */
+export class EnvironmentServerDrainingError extends Schema.TaggedError<EnvironmentServerDrainingError>()(
+  "EnvironmentServerDrainingError",
+  {
+    code: Schema.Literal("server_draining"),
+    message: Schema.String,
+    traceId: TrimmedNonEmptyString,
+  },
+  { httpApiStatus: 503 },
+) {
+  [HttpServerRespondable.symbol]() {
+    return HttpServerResponse.schemaJson(EnvironmentServerDrainingError)(this, { status: 503 });
   }
 }
 
@@ -335,6 +360,7 @@ const EnvironmentOrchestrationThreadSnapshotErrors = [
 const EnvironmentOrchestrationDispatchErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentScopeRequiredError,
+  EnvironmentServerDrainingError,
   EnvironmentInternalError,
 ] as const;
 
@@ -505,6 +531,29 @@ const EnvironmentOrchestrationThreadSnapshotQuery = {
   beforeCursor: Schema.optional(TrimmedNonEmptyString),
 };
 
+/**
+ * Drain mode refuses new turn starts so a deploy can wait for running turns to
+ * finish. It lives in memory and expires on its own, so a deploy that dies
+ * mid-drain cannot leave the server refusing forever.
+ */
+export const EnvironmentOrchestrationDrainRequest = Schema.Struct({
+  enable: Schema.Boolean,
+  /** Only read when enabling. The server applies its default when omitted. */
+  ttlSeconds: Schema.optionalKey(
+    PositiveInt.check(Schema.isLessThanOrEqualTo(ORCHESTRATION_DRAIN_MAX_TTL_SECONDS)),
+  ),
+});
+export type EnvironmentOrchestrationDrainRequest = typeof EnvironmentOrchestrationDrainRequest.Type;
+
+export const EnvironmentOrchestrationDrainStatus = Schema.Struct({
+  draining: Schema.Boolean,
+  /** Null unless draining. */
+  expiresAt: Schema.NullOr(IsoDateTime),
+  /** Threads whose provider session is running a turn right now. */
+  runningTurns: NonNegativeInt,
+});
+export type EnvironmentOrchestrationDrainStatus = typeof EnvironmentOrchestrationDrainStatus.Type;
+
 export class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
   .add(
     HttpApiEndpoint.get("snapshot", "/api/orchestration/snapshot", {
@@ -535,6 +584,21 @@ export class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestr
       payload: ClientOrchestrationCommand,
       success: DispatchResult,
       error: EnvironmentOrchestrationDispatchErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("drainStatus", "/api/orchestration/drain", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentOrchestrationDrainStatus,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("setDrain", "/api/orchestration/drain", {
+      headers: OptionalBearerHeaders,
+      payload: EnvironmentOrchestrationDrainRequest,
+      success: EnvironmentOrchestrationDrainStatus,
+      error: EnvironmentScopedOperationErrors,
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}
 

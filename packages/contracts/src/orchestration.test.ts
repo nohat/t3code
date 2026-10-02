@@ -96,6 +96,31 @@ it.effect("decodes a dispatch error before its bootstrap thread was created", ()
   }),
 );
 
+it.effect("decodes a dispatch error refused because the server is draining", () =>
+  Effect.gen(function* () {
+    const error = yield* decodeDispatchCommandError({
+      _tag: "OrchestrationDispatchCommandError",
+      message: "T3 Code is restarting for an update.",
+      reason: "server-draining",
+      bootstrapThreadDisposition: "not-created",
+    });
+
+    assert.strictEqual(error.reason, "server-draining");
+    assert.strictEqual(error.bootstrapThreadDisposition, "not-created");
+  }),
+);
+
+it.effect("decodes a dispatch error from an older server that sends no reason", () =>
+  Effect.gen(function* () {
+    const error = yield* decodeDispatchCommandError({
+      _tag: "OrchestrationDispatchCommandError",
+      message: "Thread no longer exists",
+    });
+
+    assert.strictEqual(error.reason, undefined);
+  }),
+);
+
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeTurnDiffInput({

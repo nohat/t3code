@@ -156,6 +156,8 @@ import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
+import * as ServerDrainState from "./orchestration/ServerDrainState.ts";
+import { ProjectionThreadSessionRepositoryLive } from "./persistence/Layers/ProjectionThreadSessions.ts";
 import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -963,6 +965,8 @@ const buildAppUnderTest = (options?: {
             ...options?.layers?.terminalManager,
           }),
           WorktreeSetupTracker.layer,
+          ServerDrainState.layer,
+          ProjectionThreadSessionRepositoryLive,
           ProjectCloneTracker.layer.pipe(
             Layer.provide(
               Layer.mock(SourceControlRepositoryService.SourceControlRepositoryService)({
@@ -12167,6 +12171,83 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           ["thread.activity.append"],
         );
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  // The WebSocket and HTTP transports share one drain state: turning it on over
+  // HTTP (what `t3 drain on` does) must stop a client's turn start on the socket
+  // before anything is created, while other commands still run.
+  it.effect("refuses a bootstrap turn start over WebSocket while the server drains", () =>
+    Effect.gen(function* () {
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getThreadShellById: () => Effect.succeed(Option.none()),
+          },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+        },
+      });
+
+      const drainResponse = yield* fetchEffect(
+        yield* getHttpServerUrl("/api/orchestration/drain"),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
+          },
+          body: jsonRequestBody({ enable: true }),
+        },
+      );
+      assert.equal(drainResponse.status, 200);
+
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-drain-turn"),
+            threadId: ThreadId.make("thread-drain-new"),
+            message: {
+              messageId: MessageId.make("msg-drain-new"),
+              role: "user",
+              text: "hello",
+              attachments: [],
+            },
+            modelSelection: defaultModelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            bootstrap: {
+              createThread: {
+                projectId: defaultProjectId,
+                title: "Bootstrap Thread",
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                branch: null,
+                worktreePath: null,
+                createdAt,
+              },
+            },
+            createdAt,
+          }),
+        ).pipe(Effect.result),
+      );
+
+      assertTrue(result._tag === "Failure");
+      assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+      assert.strictEqual(result.failure.reason, "server-draining");
+      assert.strictEqual(result.failure.bootstrapThreadDisposition, "not-created");
+      assert.deepEqual(dispatchedCommands, []);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("falls back to the project checkout when worktree mode targets a non-repository", () =>
