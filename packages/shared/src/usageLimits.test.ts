@@ -1045,7 +1045,13 @@ describe("/usage-limits", () => {
   it("advertises global and workspace commands only for providers present in Limits", () => {
     const withWorkspace = provider({
       workspaceSnapshots: [
-        { cwd: "/tmp/project", checkedAt: limits.checkedAt, slashCommands: [], skills: [] },
+        {
+          cwd: "/tmp/project",
+          checkedAt: limits.checkedAt,
+          slashCommands: [],
+          skills: [],
+          agents: [],
+        },
       ],
     });
     const [supported] = withUsageLimitsCommands([withWorkspace], sources);
