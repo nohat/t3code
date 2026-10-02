@@ -104,6 +104,7 @@ const runtimeMock = {
     messages: [] as MessageEntry[],
     forkMessagesBySession: new Map<string, MessageEntry[]>(),
     forkPreservesBoundary: true,
+    messagesImplementation: null as ((sessionID: string) => Promise<void> | void) | null,
     subscribedEvents: [] as Array<unknown | Promise<unknown>>,
     eventSubscribeObserved: null as (() => void) | null,
     eventStreamError: null as ((cause: unknown) => void) | null,
@@ -168,6 +169,7 @@ const runtimeMock = {
     this.state.messages = [];
     this.state.forkMessagesBySession.clear();
     this.state.forkPreservesBoundary = true;
+    this.state.messagesImplementation = null;
     this.state.subscribedEvents = [];
     this.state.eventSubscribeObserved = null;
     this.state.eventStreamError = null;
@@ -406,10 +408,13 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           runtimeMock.state.summarizeCalls.push(input);
           return { data: true };
         },
-        messages: async ({ sessionID }: { sessionID: string }) => ({
-          data:
-            runtimeMock.state.forkMessagesBySession.get(sessionID) ?? runtimeMock.state.messages,
-        }),
+        messages: async ({ sessionID }: { sessionID: string }) => {
+          await runtimeMock.state.messagesImplementation?.(sessionID);
+          return {
+            data:
+              runtimeMock.state.forkMessagesBySession.get(sessionID) ?? runtimeMock.state.messages,
+          };
+        },
         message: async ({ sessionID, messageID }: { sessionID: string; messageID: string }) => {
           runtimeMock.state.messageCalls.push({ sessionID, messageID });
           if (runtimeMock.state.messageFailures > 0) {
@@ -6951,6 +6956,48 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }).pipe(Effect.provide(adapterLayer));
   });
 
+  it.effect("readThread folds the prompting user content into each turn snapshot", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-read-thread-roles");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      runtimeMock.state.messages = [
+        {
+          info: { id: "user-1", role: "user" },
+          parts: [{ id: "user-part-1", type: "text", text: "first prompt" }],
+        },
+        {
+          info: { id: "assistant-1", role: "assistant" },
+          parts: [{ id: "part-1", type: "text", text: "first answer" }],
+        },
+        { info: { id: "user-2", role: "user" }, parts: [] },
+        {
+          info: { id: "assistant-2", role: "assistant" },
+          parts: [{ id: "part-2", type: "tool", tool: "bash" }],
+        },
+      ];
+
+      const snapshot = yield* adapter.readThread(threadId);
+      NodeAssert.deepEqual(
+        snapshot.turns.map((turn) => turn.id),
+        ["assistant-1", "assistant-2"],
+      );
+      const itemIds = (turn: (typeof snapshot.turns)[number]) =>
+        turn.items.map((item) => (item as { id?: string }).id);
+      NodeAssert.deepEqual(itemIds(snapshot.turns[0]!), [
+        "user-1",
+        "user-part-1",
+        "assistant-1",
+        "part-1",
+      ]);
+      NodeAssert.deepEqual(itemIds(snapshot.turns[1]!), ["user-2", "assistant-2", "part-2"]);
+    }),
+  );
+
   it.effect("forks before the removed user prompt and resumes only retained history", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
@@ -6974,16 +7021,22 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         },
       ];
 
-      const originalCursor = (yield* adapter.listSessions()).find(
-        (session) => session.threadId === threadId,
-      )?.resumeCursor;
       runtimeMock.state.forkPreservesBoundary = false;
-      const boundaryError = yield* adapter.rollbackThread(threadId, 1).pipe(Effect.flip);
-      NodeAssert.match(boundaryError.message, /did not preserve the requested rewind boundary/);
+      const softenedWarningFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "runtime.warning"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      const softenedSnapshot = yield* adapter.rollbackThread(threadId, 1);
+      const softenedWarning = Option.getOrThrow(yield* Fiber.join(softenedWarningFiber));
+      NodeAssert.ok(softenedWarning.type === "runtime.warning");
+      NodeAssert.match(
+        softenedWarning.payload.message,
+        /did not preserve the exact rewind boundary/,
+      );
       NodeAssert.deepEqual(
-        (yield* adapter.listSessions()).find((session) => session.threadId === threadId)
-          ?.resumeCursor,
-        originalCursor,
+        softenedSnapshot.turns.map((turn) => turn.id),
+        ["assistant-1_fork", "assistant-2_fork"],
       );
       runtimeMock.state.forkPreservesBoundary = true;
 
@@ -7089,6 +7142,46 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const emptySnapshot = yield* adapter.rollbackThread(threadId, 1);
       NodeAssert.deepEqual(runtimeMock.state.forkCalls, []);
       NodeAssert.deepEqual(emptySnapshot.turns, []);
+    }),
+  );
+
+  it.effect("softens rollback to the nearest retained turn when the boundary shifts mid-read", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-rollback-race");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      runtimeMock.state.messages = [
+        { info: { id: "user-1", role: "user" }, parts: [] },
+        { info: { id: "assistant-1", role: "assistant" }, parts: [] },
+        { info: { id: "user-2", role: "user" }, parts: [] },
+        { info: { id: "assistant-2", role: "assistant" }, parts: [] },
+      ];
+      let messageReads = 0;
+      runtimeMock.state.messagesImplementation = () => {
+        messageReads += 1;
+        if (messageReads === 2) {
+          // The requested turn disappears between the snapshot read and the
+          // fork read, as if another client trimmed the session.
+          runtimeMock.state.messages = runtimeMock.state.messages.filter(
+            (entry) => entry.info.id !== "user-2" && entry.info.id !== "assistant-2",
+          );
+        }
+      };
+      const warningFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId && event.type === "runtime.warning"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      const snapshot = yield* adapter.rollbackThread(threadId, 1);
+      const warning = Option.getOrThrow(yield* Fiber.join(warningFiber));
+      NodeAssert.ok(warning.type === "runtime.warning");
+      NodeAssert.match(warning.payload.message, /removed the nearest retained turn/);
+      NodeAssert.equal(runtimeMock.state.forkCalls.at(-1)?.messageID, "user-1");
+      NodeAssert.deepEqual(snapshot.turns, []);
     }),
   );
 
@@ -7407,6 +7500,121 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           .map((event) => event.payload.delta),
         ["Tool results received"],
       );
+    }),
+  );
+
+  it.effect("dual-emits tool progress/summary and file-change diff events", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-tool-file-change");
+      const sessionID = "http://127.0.0.1:9999/session";
+      const messageID = "msg-edit-tool";
+      const start = promiseWithResolvers<OpenCodeEvent>();
+      const input = {
+        filePath: "/repo/src/app.ts",
+        oldString: "const a = 1;",
+        newString: "const a = 2;",
+      };
+      const runningState = {
+        status: "running",
+        input,
+        title: "Edit src/app.ts",
+        metadata: {},
+        time: { start: 1 },
+      } satisfies ToolPart["state"];
+      const completedState = {
+        status: "completed",
+        input,
+        output: "Edit applied successfully.",
+        title: "Edit src/app.ts",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      } satisfies ToolPart["state"];
+      const toolPartEvent = (state: ToolPart["state"]) =>
+        ({
+          id: `evt-edit-${state.status}`,
+          type: "message.part.updated",
+          properties: {
+            sessionID,
+            time: 2,
+            part: {
+              id: "part-edit",
+              sessionID,
+              messageID,
+              type: "tool",
+              callID: "call-edit",
+              tool: "edit",
+              state,
+            },
+          },
+        }) satisfies OpenCodeEvent;
+      runtimeMock.state.subscribedEvents = [
+        start.promise,
+        toolPartEvent(runningState),
+        toolPartEvent(completedState),
+        {
+          id: "evt-file-change-drained",
+          type: "session.compacted",
+          properties: { sessionID },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.takeUntil((event) => event.type === "thread.state.changed"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId,
+        input: "Edit the file",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode"),
+          "opencode/kimi-k3",
+        ),
+      });
+      start.resolve({
+        id: "evt-edit-started",
+        type: "session.status",
+        properties: { sessionID, status: { type: "busy" } },
+      });
+      const events = yield* Fiber.join(eventsFiber);
+
+      // item.* lifecycle is preserved alongside the dual-emitted tool events.
+      NodeAssert.ok(events.some((event) => event.type === "item.updated"));
+      NodeAssert.ok(events.some((event) => event.type === "item.completed"));
+
+      const progress = events.find((event) => event.type === "tool.progress");
+      NodeAssert.ok(progress);
+      if (progress?.type === "tool.progress") {
+        NodeAssert.equal(progress.payload.toolName, "edit");
+        NodeAssert.equal(progress.payload.toolUseId, "call-edit");
+      }
+
+      const summary = events.find((event) => event.type === "tool.summary");
+      NodeAssert.ok(summary);
+      if (summary?.type === "tool.summary") {
+        NodeAssert.equal(summary.payload.summary, "Edit src/app.ts");
+      }
+
+      const persisted = events.find((event) => event.type === "files.persisted");
+      NodeAssert.ok(persisted);
+      if (persisted?.type === "files.persisted") {
+        NodeAssert.deepEqual(persisted.payload.files, [
+          { filename: "/repo/src/app.ts", fileId: "/repo/src/app.ts" },
+        ]);
+      }
+
+      const diff = events.find((event) => event.type === "turn.diff.updated");
+      NodeAssert.ok(diff);
+      if (diff?.type === "turn.diff.updated") {
+        NodeAssert.match(diff.payload.unifiedDiff, /-const a = 1;/u);
+        NodeAssert.match(diff.payload.unifiedDiff, /\+const a = 2;/u);
+      }
     }),
   );
 

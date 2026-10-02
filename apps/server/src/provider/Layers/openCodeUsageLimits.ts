@@ -36,7 +36,16 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
 }) {
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const unsupported = makeUnavailableUsageLimits({ checkedAt, reason: "unsupported" });
-  if (!input.enabled || input.serverUrl.trim()) return unsupported;
+  if (!input.enabled) return unsupported;
+  if (input.serverUrl.trim()) {
+    // An external server owns its own credentials and subscription. Say so
+    // instead of implying the account has no limits at all.
+    return makeUnavailableUsageLimits({
+      checkedAt,
+      reason: "unsupported",
+      message: "Usage is managed by the OpenCode server.",
+    });
+  }
 
   return yield* Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

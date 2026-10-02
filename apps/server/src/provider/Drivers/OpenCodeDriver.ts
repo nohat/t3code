@@ -59,6 +59,23 @@ import {
 } from "../providerUpdateSettings.ts";
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
+/**
+ * Snapshot refresh policy for an OpenCode instance. A scope-owned local server
+ * can change under us (login, config, model install), so it re-probes on
+ * settings changes and on the health interval. An external server owns its own
+ * lifecycle; T3 can neither spawn nor update it, so polling would be wasted.
+ */
+export function openCodeSnapshotRefreshOptions(serverUrl: string): {
+  readonly checkProviderOnSettingsChange?: () => boolean;
+  readonly refreshOnInterval: boolean;
+} {
+  const external = serverUrl.trim().length > 0;
+  return {
+    ...(external ? { checkProviderOnSettingsChange: () => false } : {}),
+    refreshOnInterval: !external,
+  };
+}
+
 const DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 function isOpenCodeNativeCommandPath(commandPath: string): boolean {
@@ -121,6 +138,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         continuationGroupKey: continuationIdentity.continuationKey,
       });
       const effectiveConfig = { ...config, enabled } satisfies OpenCodeSettings;
+      const isExternalServer = effectiveConfig.serverUrl.trim().length > 0;
       const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
         resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
           binaryPath: effectiveConfig.binaryPath,
@@ -188,7 +206,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           { concurrency: "unbounded" },
         );
       const loadWorkspaceForCwd = (cwd: string) =>
-        effectiveConfig.serverUrl.trim().length > 0
+        isExternalServer
           ? Effect.scoped(
               Effect.gen(function* () {
                 const server = yield* openCodeRuntime.connectToOpenCodeServer({
@@ -229,8 +247,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
           getSettings: snapshotSettings.getSettings,
           streamSettings: snapshotSettings.streamSettings,
           haveSettingsChanged: haveProviderSnapshotSettingsChanged,
-          checkProviderOnSettingsChange: () => false,
-          refreshOnInterval: false,
+          ...openCodeSnapshotRefreshOptions(effectiveConfig.serverUrl),
           initialSnapshot: (settings) =>
             makePendingOpenCodeProvider(settings.provider).pipe(Effect.map(stampIdentity)),
           checkProvider,

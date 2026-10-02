@@ -93,11 +93,8 @@ it.effect("reads Go limits with the instance's XDG credentials and preserves res
 
 it.effect("does not read local credentials for external or disabled OpenCode instances", () =>
   Effect.gen(function* () {
-    for (const settings of [
-      { enabled: true, serverUrl: "https://remote.example" },
-      { enabled: false, serverUrl: "" },
-    ]) {
-      const limits = yield* readOpenCodeGoUsageLimits({ ...settings, environment: {} }).pipe(
+    const readWithoutProbing = (settings: { enabled: boolean; serverUrl: string }) =>
+      readOpenCodeGoUsageLimits({ ...settings, environment: {} }).pipe(
         Effect.provideService(
           FileSystem.FileSystem,
           FileSystem.makeNoop({
@@ -110,8 +107,17 @@ it.effect("does not read local credentials for external or disabled OpenCode ins
         ),
         Effect.provide(NodeServices.layer),
       );
-      NodeAssert.equal(limits.unavailable?.reason, "unsupported");
-    }
+
+    const external = yield* readWithoutProbing({
+      enabled: true,
+      serverUrl: "https://remote.example",
+    });
+    NodeAssert.equal(external.unavailable?.reason, "unsupported");
+    NodeAssert.equal(external.unavailable?.message, "Usage is managed by the OpenCode server.");
+
+    const disabled = yield* readWithoutProbing({ enabled: false, serverUrl: "" });
+    NodeAssert.equal(disabled.unavailable?.reason, "unsupported");
+    NodeAssert.equal(disabled.unavailable?.message, undefined);
   }),
 );
 
