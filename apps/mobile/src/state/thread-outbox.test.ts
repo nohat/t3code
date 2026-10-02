@@ -1447,6 +1447,24 @@ describe("thread outbox", () => {
     ).toBe(false);
   });
 
+  // The server refuses new turns while it drains for a deploy. Restoring the
+  // draft would make the user retype a message the server never judged bad.
+  it("holds a send refused by a draining server for redelivery after the restart", () => {
+    const refusal = new OrchestrationDispatchCommandError({
+      message: "T3 Code is restarting for an update.",
+      reason: "server-draining",
+      bootstrapThreadDisposition: "not-created",
+    });
+    expect(shouldRetryThreadOutboxDelivery(refusal)).toBe(true);
+    expect(
+      resolveThreadOutboxFailureAction({
+        stage: "start-turn",
+        error: refusal,
+        interrupted: false,
+      }),
+    ).toBe("retry");
+  });
+
   // A pending task created offline drains the moment the phone reconnects,
   // which is exactly when the socket is most likely to drop again. Every way a
   // request can fail in flight must retry; a restore turns the pending task
