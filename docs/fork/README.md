@@ -153,6 +153,13 @@ Filter: a change earns time if it removes a friction I hit weekly and works on t
 
 Each feature gets a recorded decision per surface and per provider, the same checklist as upstream's "Hit every surface".
 
+## Status (2026-10-02)
+
+- **Packaged build spike passed.** An unsigned arm64 build of the `local/t3-work` tip runs from an unpacked release directory, serves its own port, and reads only the data home it is given. Two traps cost time, and both are now handled in `fork-deploy`: builds must run in a scrubbed environment (agent shells inherit the dev-desktop's `T3CODE_*` and `VITE_*` variables, which launch a dev Electron and bake localhost origins into the bundle), and the resource monitor needs a newer Rust than Homebrew ships, so the build `PATH` carries an isolated rustup toolchain.
+- **`fork-deploy` exists** (`scripts/fork/`, branch `feat/fork-deploy`): gate, build, drain, swap, probe, roll back, report. It was rehearsed against a copy of the live data on a throwaway launchd label: a held deploy, a good deploy, and a broken release that rolled back. The rehearsal found two launchd traps: `kickstart -k` hangs on a job stuck in "spawn failed", and `bootstrap` fails with an I/O error right after `bootout`. The script times out and reloads the job.
+- **Thread state, first slice** (branches `fix/send-blocked-reason`, `feat/thread-resync`): a disabled Send button now says why, as text, on web and mobile; `requestThreadResync` in the client runtime reloads a thread from a fresh snapshot, exposed on web as **Reload thread** (thread menu, command palette) and `mod+alt+r`. Mobile has no entry point yet; it needs the on-device pull-to-reload prototype.
+- **One cost-picker copy.** `wip/triage-model-cost-picker` is canonical; the copy on `local/t3-work` is tagged `superseded/cost-picker-on-local-t3-work`.
+
 ## Order of work
 
 1. **Stop the bleeding (first).** Make dev stacks incapable of touching the live home or my main browser; decide Nightly; delete the duplicate cost-picker copy from `local/t3-work`; rename it `fork/prod`; trial-merge `upstream/main` in a scratch branch to size the drift.
