@@ -23,9 +23,9 @@ import {
 } from "./keybindings.ts";
 import { EditorId, FileManagerRevealKind, RemoteOpenTarget } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
-import { UsageCostSource } from "./usage.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
+import { UsageCostSource } from "./usage.ts";
 import { ServerSettings } from "./settings.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -69,26 +69,27 @@ export const ServerProviderAuth = Schema.Struct({
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
-const ServerProviderModelPrice = Schema.Number.check(
-  Schema.isFinite(),
-  Schema.isGreaterThanOrEqualTo(0),
-);
-
-/**
- * Estimated rates for one provider model, in USD per million tokens.
- *
- * Field names match {@link UsageModelPriceOverride} so overrides and estimates
- * stay comparable. A model without `pricing` is unpriced: clients render it
- * without a cost badge. `costSource` reuses the usage provenance vocabulary;
- * `unpriced` never appears here because the struct itself is absent then.
- */
 export const ServerProviderModelPricing = Schema.Struct({
-  inputCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
-  outputCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
-  cacheReadCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
-  cacheWriteCostPerMillionTokens: Schema.optional(ServerProviderModelPrice),
+  /** USD per million tokens. Zero rates mean the model is free. */
+  inputCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  outputCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  cacheReadCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  cacheWriteCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
   costSource: UsageCostSource,
-  /** When the backing rate table was fetched, so the UI can show staleness. */
+  /** True when the rates came from a server admin's custom override, not LiteLLM. */
+  isCustomRate: Schema.optional(Schema.Boolean),
   fetchedAt: Schema.optional(IsoDateTime),
 });
 export type ServerProviderModelPricing = typeof ServerProviderModelPricing.Type;
@@ -104,6 +105,11 @@ export const ServerProviderModel = Schema.Struct({
   isDefault: Schema.optional(Schema.Boolean),
   isLegacy: Schema.optional(Schema.Boolean),
   capabilities: Schema.NullOr(ModelCapabilities),
+  /**
+   * Per-model cost estimate for the composer model picker. Absent when the
+   * model has no known rate; older servers never send it and older clients
+   * ignore it.
+   */
   pricing: Schema.optional(ServerProviderModelPricing),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;

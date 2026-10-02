@@ -1,4 +1,4 @@
-import { ProviderDriverKind } from "@t3tools/contracts";
+import { ProviderDriverKind, type ServerProviderModel } from "@t3tools/contracts";
 import {
   AntigravityIcon,
   ClaudeAI,
@@ -28,7 +28,16 @@ export type ModelEsque = {
   badge?: "new" | undefined;
   isLegacy?: boolean | undefined;
   isUnavailable?: boolean | undefined;
+  /**
+   * Per-model cost estimate from the server snapshot. Absent when the model
+   * has no known rate (or the server predates pricing) — rows render no
+   * badge in that case.
+   */
+  pricing?: ModelPricing | undefined;
 };
+
+/** Cost estimate attached to a server model snapshot, in USD per 1M tokens. */
+export type ModelPricing = NonNullable<ServerProviderModel["pricing"]>;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

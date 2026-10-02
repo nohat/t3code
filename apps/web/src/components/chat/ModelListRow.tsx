@@ -1,4 +1,5 @@
 import { type ProviderDriverKind, type ProviderInstanceId } from "@t3tools/contracts";
+import type { ModelCostDisplay } from "@t3tools/contracts/settings";
 import { memo } from "react";
 import { CheckIcon, StarIcon } from "lucide-react";
 import {
@@ -14,6 +15,7 @@ import { Kbd } from "../ui/kbd";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
 import { modelPickerModelKey } from "./modelPickerKeys";
+import { PricingBadge } from "./PricingBadge";
 
 export const ModelListRow = memo(function ModelListRow(props: {
   index: number;
@@ -39,12 +41,14 @@ export const ModelListRow = memo(function ModelListRow(props: {
   unavailable?: boolean;
   jumpLabel?: string | null;
   disabledReason?: string | null;
+  pricingDisplay?: ModelCostDisplay;
   onToggleFavorite: () => void;
 }) {
   const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[props.driverKind] ?? null;
   const providerLabel = props.model.subProvider
     ? `${props.providerDisplayName} · ${props.model.subProvider}`
     : props.providerDisplayName;
+  const splitPricing = props.model.pricing !== undefined && props.pricingDisplay === "both";
 
   const row = (
     <ComboboxItem
@@ -76,6 +80,11 @@ export const ModelListRow = memo(function ModelListRow(props: {
               New
             </span>
           ) : null}
+          {props.model.pricing && splitPricing ? (
+            <PricingBadge pricing={props.model.pricing} display="both" part="blended" />
+          ) : props.model.pricing ? (
+            <PricingBadge pricing={props.model.pricing} display={props.pricingDisplay} />
+          ) : null}
           {props.unavailable ? (
             <Badge variant="outline" size="sm">
               Unavailable
@@ -83,11 +92,19 @@ export const ModelListRow = memo(function ModelListRow(props: {
           ) : null}
         </div>
         {props.showProvider && (
-          <div className="mt-1 flex items-center gap-1.5">
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
             {ProviderIcon ? <ProviderIcon className="size-3 shrink-0" /> : null}
-            <span className="truncate text-xs font-normal leading-snug text-muted-foreground/70">
+            <span
+              className={cn(
+                "truncate text-xs font-normal leading-snug text-muted-foreground/70",
+                splitPricing && "min-w-0 flex-1",
+              )}
+            >
               {providerLabel}
             </span>
+            {splitPricing && props.model.pricing ? (
+              <PricingBadge pricing={props.model.pricing} display="both" part="base" />
+            ) : null}
           </div>
         )}
       </div>

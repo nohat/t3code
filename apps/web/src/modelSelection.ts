@@ -25,7 +25,7 @@ import {
   getProviderModels,
   resolveSelectableProvider,
 } from "./providerModels";
-import { ModelEsque } from "./components/chat/providerIconUtils";
+import { ModelEsque, type ModelPricing } from "./components/chat/providerIconUtils";
 import {
   type ProviderInstanceEntry,
   deriveProviderInstanceEntries,
@@ -89,6 +89,7 @@ export interface AppModelOption {
   isDefault?: boolean;
   isLegacy?: boolean;
   isUnavailable?: boolean;
+  pricing?: ModelPricing;
 }
 
 function appendUnavailableDynamicModelSelection(
@@ -124,6 +125,7 @@ function toAppModelOption(model: ServerProvider["models"][number]): AppModelOpti
   if (model.badge) option.badge = model.badge;
   if (model.isDefault) option.isDefault = true;
   if (model.isLegacy) option.isLegacy = true;
+  if (model.pricing) option.pricing = model.pricing;
   return option;
 }
 

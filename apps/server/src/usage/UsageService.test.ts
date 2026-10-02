@@ -5,7 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeSqlite from "node:sqlite";
 
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { mergeUsage } from "@t3tools/shared/usageMerge";
@@ -1011,6 +1011,71 @@ describe("UsageService", () => {
       assert.strictEqual(refreshed.status, "fresh");
       assert.strictEqual(refreshed.knownModels, 1);
     }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+  );
+
+  it.live("reads cached model rates with settings overrides for snapshot pricing", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+
+      let ratesFetches = 0;
+      const service = yield* UsageService.make.pipe(
+        Effect.provide(
+          serviceLayers({
+            prefix: "usage-service-model-rates-test",
+            home,
+            settings: {
+              ...settings,
+              usagePriceOverrides: {
+                "example-model": {
+                  inputCostPerMillionTokens: 2,
+                  outputCostPerMillionTokens: 8,
+                },
+              },
+            },
+            ratesDocument: {
+              "claude-fable-5": { input_cost_per_token: 1e-5, output_cost_per_token: 5e-5 },
+            },
+            onRatesFetch: () => {
+              ratesFetches += 1;
+            },
+          }),
+        ),
+      );
+
+      const snapshot = yield* service.readModelRates;
+      assert.strictEqual(ratesFetches, 1);
+      expect(snapshot.rates.get("claude-fable-5")).toMatchObject({
+        inputCostPerToken: 1e-5,
+        outputCostPerToken: 5e-5,
+      });
+      expect(snapshot.overrides.get("example-model")).toMatchObject({
+        inputCostPerToken: 2e-6,
+        outputCostPerToken: 8e-6,
+      });
+      assert.isString(snapshot.fetchedAt);
+
+      // Inside the daily TTL a second read reuses the cached table.
+      yield* TestClock.adjust(Duration.minutes(2));
+      const cached = yield* service.readModelRates;
+      assert.strictEqual(ratesFetches, 1);
+      assert.strictEqual(cached.fetchedAt, snapshot.fetchedAt);
+    }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+  );
+
+  it.live("reads empty model rates when the table is unavailable", () =>
+    Effect.gen(function* () {
+      const { settings, home } = yield* setup;
+      const service = yield* UsageService.make.pipe(
+        Effect.provide(
+          serviceLayers({ prefix: "usage-service-model-rates-empty-test", home, settings }),
+        ),
+      );
+
+      const snapshot = yield* service.readModelRates;
+      assert.strictEqual(snapshot.rates.size, 0);
+      assert.strictEqual(snapshot.overrides.size, 0);
+      assert.isNull(snapshot.fetchedAt);
+    }).pipe(Effect.scoped),
   );
 
   it.live("does not orphan an in-flight scan when its first caller is interrupted", () =>
