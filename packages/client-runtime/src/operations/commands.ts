@@ -7,11 +7,11 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import type { EnvironmentSupervisor } from "../connection/supervisor.ts";
+import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import {
   type EnvironmentRpcFailure,
   type EnvironmentRpcSuccess,
-  type EnvironmentRpcUnavailableError,
+  EnvironmentRpcUnavailableError,
   request,
 } from "../rpc/client.ts";
 
@@ -308,16 +308,36 @@ export const setThreadInteractionMode: (input: SetThreadInteractionModeInput) =>
     });
   });
 
+/**
+ * How long a `thread.turn.start` may wait for the server's reply. The server replies only after
+ * the provider has accepted the turn, and a bootstrap start also waits on a git fetch and worktree
+ * creation, so this is far above a healthy start. It exists so a start that never answers cannot
+ * hold the thread's command lane, and the send that issued it, forever.
+ */
+export const START_THREAD_TURN_TIMEOUT_MS = 120_000;
+
 export const startThreadTurn: (input: StartThreadTurnInput) => CommandEffect = Effect.fn(
   "EnvironmentCommands.startThreadTurn",
 )(function* (input) {
+  const supervisor = yield* EnvironmentSupervisor;
   const metadata = yield* timestampedCommandMetadata(input);
   return yield* dispatch({
     ...input,
     type: "thread.turn.start",
     commandId: metadata.commandId,
     createdAt: metadata.createdAt,
-  });
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: START_THREAD_TURN_TIMEOUT_MS,
+      orElse: () =>
+        Effect.fail(
+          new EnvironmentRpcUnavailableError({
+            environmentId: supervisor.target.environmentId,
+            message: `${supervisor.target.label} did not confirm the message within ${START_THREAD_TURN_TIMEOUT_MS / 1000} seconds. It may still arrive; check the thread before sending it again.`,
+          }),
+        ),
+    }),
+  );
 });
 
 export const interruptThreadTurn: (input: InterruptThreadTurnInput) => CommandEffect = Effect.fn(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   CommandId,
   EnvironmentId,
+  MessageId,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ProviderInstanceId,
@@ -354,4 +355,56 @@ describe("remote thread lifecycle commands", () => {
       }),
     );
   }
+
+  it.effect("sends Stop while an earlier turn start on the same thread has no reply", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness();
+      const start = h.commands.startTurn.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: {
+          threadId: THREAD_ID,
+          message: {
+            messageId: MessageId.make("message-1"),
+            role: "user",
+            text: "hello",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        },
+      });
+      const startRequest = yield* Queue.take(h.requests);
+      expect(startRequest.command.type).toBe("thread.turn.start");
+
+      const queuedSettle = h.commands.settle.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const interrupt = h.commands.interruptTurn.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const stopSession = h.commands.stopSession.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const interruptRequest = yield* Queue.take(h.requests);
+      const stopRequest = yield* Queue.take(h.requests);
+      expect(interruptRequest.command.type).toBe("thread.turn.interrupt");
+      expect(stopRequest.command.type).toBe("thread.session.stop");
+      yield* Deferred.succeed(interruptRequest.reply, { sequence: 2 });
+      yield* Deferred.succeed(stopRequest.reply, { sequence: 3 });
+      expect((yield* Effect.promise(() => interrupt))._tag).toBe("Success");
+      expect((yield* Effect.promise(() => stopSession))._tag).toBe("Success");
+
+      // Other commands still wait their turn behind the unanswered start.
+      expect(yield* Queue.size(h.requests)).toBe(0);
+      yield* Deferred.succeed(startRequest.reply, { sequence: 4 });
+      yield* Effect.promise(() => start);
+      const settleRequest = yield* Queue.take(h.requests);
+      expect(settleRequest.command.type).toBe("thread.settle");
+      yield* Deferred.succeed(settleRequest.reply, { sequence: 5 });
+      yield* Effect.promise(() => queuedSettle);
+    }),
+  );
 });

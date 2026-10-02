@@ -2,6 +2,7 @@ import {
   CommandId,
   EnvironmentId,
   ORCHESTRATION_WS_METHODS,
+  MessageId,
   ProjectId,
   ThreadId,
   type ClientOrchestrationCommand,
@@ -9,9 +10,12 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import * as TestClock from "effect/testing/TestClock";
 
 import {
   AVAILABLE_CONNECTION_STATE,
@@ -27,6 +31,8 @@ import {
   revertThreadCheckpoint,
   reorderActiveThread,
   settleThread,
+  START_THREAD_TURN_TIMEOUT_MS,
+  startThreadTurn,
   stopThreadSession,
   unsettleThread,
 } from "./commands.ts";
@@ -48,11 +54,13 @@ const TARGET = new PrimaryConnectionTarget({
 
 const makeSupervisor = Effect.fn("TestEnvironmentCommands.makeSupervisor")(function* (
   dispatched: ClientOrchestrationCommand[],
+  options?: { readonly neverReply?: boolean },
 ) {
   const client = {
     [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command: ClientOrchestrationCommand) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         dispatched.push(command);
+        if (options?.neverReply) return yield* Effect.never;
         return { sequence: dispatched.length };
       }),
   } as unknown as WsRpcProtocolClient;
@@ -213,6 +221,38 @@ describe("environment commands", () => {
           orderKey: "mf",
         },
       ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("fails a thread turn start the server never answers once the timeout passes", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched, { neverReply: true });
+      const fiber = yield* startThreadTurn({
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-1"),
+          role: "user",
+          text: "hello",
+          attachments: [],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+      }).pipe(
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+
+      yield* TestClock.adjust(START_THREAD_TURN_TIMEOUT_MS - 1);
+      expect(fiber.pollUnsafe()).toBeUndefined();
+      expect(dispatched.map((command) => command.type)).toEqual(["thread.turn.start"]);
+
+      yield* TestClock.adjust(1);
+      const exit = yield* Fiber.await(fiber);
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(Exit.isFailure(exit) && Exit.findErrorOption(exit)).toMatchObject({
+        value: { _tag: "EnvironmentRpcUnavailableError", environmentId: "environment-1" },
+      });
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
   );
 });

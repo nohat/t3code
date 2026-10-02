@@ -48,6 +48,8 @@ import {
   getStartedThreadModelChangeBlockReason,
   hasEnvironmentReconnectWarningGraceElapsed,
   hasServerAcknowledgedLocalDispatch,
+  LOCAL_DISPATCH_ACK_TIMEOUT_MS,
+  localDispatchExpiryDelayMs,
   shouldRefocusComposerOnWindowFocus,
   isBranchMismatchDismissedForSession,
   reconcileMountedTerminalThreadIds,
@@ -1806,6 +1808,58 @@ describe("startNewThreadForProject", () => {
       }),
     ).toBe(false);
     expect(called).toBe(false);
+  });
+});
+
+describe("localDispatchExpiryDelayMs", () => {
+  const startedAt = "2026-03-29T00:00:00.000Z";
+  const startedAtMs = Date.parse(startedAt);
+  const pending = { startedAt, preparingWorktree: false };
+
+  it("counts down the acknowledgment timeout from when the dispatch began", () => {
+    expect(
+      localDispatchExpiryDelayMs({
+        localDispatch: pending,
+        serverAcknowledged: false,
+        nowMs: startedAtMs + 10_000,
+      }),
+    ).toBe(LOCAL_DISPATCH_ACK_TIMEOUT_MS - 10_000);
+  });
+
+  it("reports an overdue dispatch as zero or less so a late timer still clears it", () => {
+    const delay = localDispatchExpiryDelayMs({
+      localDispatch: pending,
+      serverAcknowledged: false,
+      nowMs: startedAtMs + LOCAL_DISPATCH_ACK_TIMEOUT_MS + 5_000,
+    });
+    expect(delay).toBe(-5_000);
+  });
+
+  it("never expires a dispatch the server acknowledged, however long ago it began", () => {
+    expect(
+      localDispatchExpiryDelayMs({
+        localDispatch: pending,
+        serverAcknowledged: true,
+        nowMs: startedAtMs + 10 * LOCAL_DISPATCH_ACK_TIMEOUT_MS,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not expire while a worktree is being prepared or when nothing is pending", () => {
+    expect(
+      localDispatchExpiryDelayMs({
+        localDispatch: { startedAt, preparingWorktree: true },
+        serverAcknowledged: false,
+        nowMs: startedAtMs + 10 * LOCAL_DISPATCH_ACK_TIMEOUT_MS,
+      }),
+    ).toBeNull();
+    expect(
+      localDispatchExpiryDelayMs({
+        localDispatch: null,
+        serverAcknowledged: false,
+        nowMs: startedAtMs,
+      }),
+    ).toBeNull();
   });
 });
 

@@ -106,6 +106,9 @@ export function createThreadEnvironmentAtoms<R, E>(
     key: ({ environmentId, input }: { environmentId: string; input: { threadId: string } }) =>
       JSON.stringify([environmentId, input.threadId]),
   };
+  // Stopping must never wait behind a command that may be hung, such as a
+  // turn start still waiting on the provider, so it skips the thread's lane.
+  const stopConcurrency = { mode: "parallel" as const };
   const commands = {
     create: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:create",
@@ -225,7 +228,7 @@ export function createThreadEnvironmentAtoms<R, E>(
       label: "environment-data:commands:thread:interrupt-turn",
       execute: (input: InterruptThreadTurnInput) => interruptThreadTurn(input),
       scheduler,
-      concurrency,
+      concurrency: stopConcurrency,
     }),
     respondToApproval: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:respond-to-approval",
@@ -255,7 +258,7 @@ export function createThreadEnvironmentAtoms<R, E>(
       label: "environment-data:commands:thread:stop-session",
       execute: (input: StopThreadSessionInput) => stopThreadSession(input),
       scheduler,
-      concurrency,
+      concurrency: stopConcurrency,
     }),
     uploadFeedback: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:upload-feedback",

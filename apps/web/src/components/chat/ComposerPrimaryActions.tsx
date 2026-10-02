@@ -25,7 +25,10 @@ interface ComposerPrimaryActionsProps {
   isSendBusy: boolean;
   sendDisabledReason: string | null;
   isConnecting: boolean;
+  /** Disables the actions for any reason the composer has nowhere to send. */
   isEnvironmentUnavailable: boolean;
+  /** The subset of `isEnvironmentUnavailable` that is a genuinely lost connection. */
+  isEnvironmentDisconnected: boolean;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
@@ -71,6 +74,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   sendDisabledReason,
   isConnecting,
   isEnvironmentUnavailable,
+  isEnvironmentDisconnected,
   isPreparingWorktree,
   hasSendableContent,
   preserveComposerFocusOnPointerDown = false,
@@ -229,7 +233,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         !hasSendableContent
       }
       aria-label={
-        isEnvironmentUnavailable
+        isEnvironmentDisconnected
           ? "Environment disconnected"
           : sendDisabledReason
             ? sendDisabledReason
