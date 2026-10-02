@@ -120,6 +120,53 @@ describe("ServerProvider", () => {
 
     expect(parsed.models[0]?.isLegacy).toBe(true);
   });
+
+  it("round-trips optional model pricing estimates", () => {
+    const parsed = decodeServerProvider({
+      ...baseProviderSnapshot,
+      models: [
+        {
+          slug: "acme-fable-5",
+          name: "Acme Fable 5",
+          isCustom: false,
+          capabilities: null,
+          pricing: {
+            inputCostPerMillionTokens: 10,
+            outputCostPerMillionTokens: 50,
+            cacheReadCostPerMillionTokens: 1,
+            cacheWriteCostPerMillionTokens: 20,
+            costSource: "modelPriced",
+            fetchedAt: "2026-10-01T00:00:00.000Z",
+          },
+        },
+      ],
+    });
+
+    expect(parsed.models[0]?.pricing).toEqual({
+      inputCostPerMillionTokens: 10,
+      outputCostPerMillionTokens: 50,
+      cacheReadCostPerMillionTokens: 1,
+      cacheWriteCostPerMillionTokens: 20,
+      costSource: "modelPriced",
+      fetchedAt: "2026-10-01T00:00:00.000Z",
+    });
+  });
+
+  it("leaves model pricing undefined for servers that do not send it", () => {
+    const parsed = decodeServerProvider({
+      ...baseProviderSnapshot,
+      models: [
+        {
+          slug: "acme-fable-5",
+          name: "Acme Fable 5",
+          isCustom: false,
+          capabilities: null,
+        },
+      ],
+    });
+
+    expect(parsed.models[0]?.pricing).toBeUndefined();
+  });
 });
 
 describe("server config forward compatibility", () => {

@@ -218,6 +218,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["wide full width column layout messages composer monitor"],
   },
   {
+    id: "model-cost-display",
+    title: "Model cost display",
+    to: "/settings/appearance",
+    searchTerms: ["model picker prices input output cache discount blended cost rate"],
+  },
+  {
     id: "panel-animations",
     title: "Panel animations",
     to: "/settings/appearance",

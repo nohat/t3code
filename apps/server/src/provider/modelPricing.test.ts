@@ -65,6 +65,28 @@ describe("attachModelPricing", () => {
     });
   });
 
+  it("marks override-priced models as custom rates", () => {
+    const priced = attachModelPricing([model("acme-fable-5")], {
+      rates,
+      overrides: createOverrideRateTable({
+        "acme-fable-5": { inputCostPerMillionTokens: 1, outputCostPerMillionTokens: 2 },
+      }),
+      fetchedAt: FETCHED_AT,
+    });
+
+    expect(priced[0]?.pricing).toMatchObject({ isCustomRate: true });
+  });
+
+  it("leaves LiteLLM-priced models without the custom rate marker", () => {
+    const priced = attachModelPricing([model("acme-fable-5")], {
+      rates,
+      overrides: createOverrideRateTable({}),
+      fetchedAt: FETCHED_AT,
+    });
+
+    expect(priced[0]?.pricing).not.toHaveProperty("isCustomRate");
+  });
+
   it("matches override keys by trimmed slug", () => {
     const priced = attachModelPricing([model("acme-fable-5")], {
       rates: parseRateTable({}),

@@ -46,7 +46,8 @@ export function attachModelPricing(
   const priced = models.map((model) => {
     // Same lookup order as `priceUsage`: trimmed-slug override first,
     // normalized LiteLLM rate second.
-    const rate = input.overrides.get(model.slug.trim()) ?? lookupRate(input.rates, model.slug);
+    const overrideRate = input.overrides.get(model.slug.trim());
+    const rate = overrideRate ?? lookupRate(input.rates, model.slug);
     if (rate === null) {
       return model;
     }
@@ -59,6 +60,8 @@ export function attachModelPricing(
         cacheReadCostPerMillionTokens: rate.cacheReadCostPerToken * TOKENS_PER_MILLION,
         cacheWriteCostPerMillionTokens: rate.cacheCreationCostPerToken * TOKENS_PER_MILLION,
         costSource: "modelPriced" as const,
+        // The picker footer distinguishes admin-set rates from LiteLLM's.
+        ...(overrideRate === undefined ? {} : { isCustomRate: true as const }),
         ...(input.fetchedAt === null ? {} : { fetchedAt: input.fetchedAt }),
       },
     };

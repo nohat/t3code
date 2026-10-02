@@ -6,6 +6,7 @@ import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
+  DEFAULT_MODEL_COST_DISPLAY,
   DEFAULT_SERVER_SETTINGS,
   resolveProviderInstanceEnabled,
   ServerSettings,
@@ -74,6 +75,20 @@ describe("ClientSettings rich text composer", () => {
     const preference = { composerRichTextEnabled: false };
     expect(decodeClientSettingsPatch(preference)).toEqual(preference);
     expect(encodeClientSettings(decodeClientSettings(preference))).toMatchObject(preference);
+  });
+});
+
+describe("ClientSettings model cost display", () => {
+  it("defaults to input/output rates and accepts each picker display mode", () => {
+    expect(decodeClientSettings({}).modelCostDisplay).toBe(DEFAULT_MODEL_COST_DISPLAY);
+    for (const modelCostDisplay of ["input-output", "blended", "both"] as const) {
+      expect(decodeClientSettingsPatch({ modelCostDisplay })).toEqual({ modelCostDisplay });
+      expect(decodeClientSettings({ modelCostDisplay }).modelCostDisplay).toBe(modelCostDisplay);
+    }
+  });
+
+  it("rejects unsupported display modes", () => {
+    expect(() => decodeClientSettingsPatch({ modelCostDisplay: "cached-only" })).toThrow();
   });
 });
 

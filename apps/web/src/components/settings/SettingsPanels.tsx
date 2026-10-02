@@ -1,6 +1,7 @@
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { ModelCostDisplaySettings } from "./ModelCostDisplaySettings";
 import { ArchiveIcon, ArchiveX, CheckIcon, ChevronRightIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
@@ -1425,6 +1426,7 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+        <ModelCostDisplaySettings />
       </SettingsSection>
 
       <SettingsSection id="motion" title="Motion">

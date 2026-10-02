@@ -295,6 +295,10 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 
+export const ModelCostDisplay = Schema.Literals(["input-output", "blended", "both"]);
+export type ModelCostDisplay = typeof ModelCostDisplay.Type;
+export const DEFAULT_MODEL_COST_DISPLAY: ModelCostDisplay = "input-output";
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -304,6 +308,9 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed("red-green" as const)),
   ),
   chatWidth: ChatWidth.pipe(Schema.withDecodingDefault(Effect.succeed("comfortable" as const))),
+  modelCostDisplay: ModelCostDisplay.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_MODEL_COST_DISPLAY)),
+  ),
   loadBalancingEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   loadBalancingWeights: LoadBalancingWeights.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   appearanceContrast: AppearanceContrast.pipe(
@@ -1597,6 +1604,7 @@ export const ClientSettingsPatch = Schema.Struct({
   inAppNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
   chatWidth: Schema.optionalKey(ChatWidth),
+  modelCostDisplay: Schema.optionalKey(ModelCostDisplay),
   loadBalancingEnabled: Schema.optionalKey(Schema.Boolean),
   loadBalancingWeights: Schema.optionalKey(LoadBalancingWeights),
   appearanceContrast: Schema.optionalKey(AppearanceContrast),

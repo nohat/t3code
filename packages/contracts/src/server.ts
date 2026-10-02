@@ -25,6 +25,7 @@ import { EditorId, FileManagerRevealKind, RemoteOpenTarget } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
+import { UsageCostSource } from "./usage.ts";
 import { ServerSettings } from "./settings.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -68,6 +69,31 @@ export const ServerProviderAuth = Schema.Struct({
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
+export const ServerProviderModelPricing = Schema.Struct({
+  /** USD per million tokens. Zero rates mean the model is free. */
+  inputCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  outputCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  cacheReadCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  cacheWriteCostPerMillionTokens: Schema.Number.check(
+    Schema.isFinite(),
+    Schema.isGreaterThanOrEqualTo(0),
+  ),
+  costSource: UsageCostSource,
+  /** True when the rates came from a server admin's custom override, not LiteLLM. */
+  isCustomRate: Schema.optional(Schema.Boolean),
+  fetchedAt: Schema.optional(IsoDateTime),
+});
+export type ServerProviderModelPricing = typeof ServerProviderModelPricing.Type;
+
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -79,6 +105,12 @@ export const ServerProviderModel = Schema.Struct({
   isDefault: Schema.optional(Schema.Boolean),
   isLegacy: Schema.optional(Schema.Boolean),
   capabilities: Schema.NullOr(ModelCapabilities),
+  /**
+   * Per-model cost estimate for the composer model picker. Absent when the
+   * model has no known rate; older servers never send it and older clients
+   * ignore it.
+   */
+  pricing: Schema.optional(ServerProviderModelPricing),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 

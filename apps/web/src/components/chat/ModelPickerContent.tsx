@@ -26,7 +26,7 @@ import {
   ComboboxItem,
   ComboboxListVirtualized,
 } from "../ui/combobox";
-import { ModelEsque } from "./providerIconUtils";
+import { ModelEsque, type ModelPricing } from "./providerIconUtils";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { primaryServerKeybindingsAtom } from "../../state/server";
 import {
@@ -53,6 +53,7 @@ type ModelPickerItem = {
   shortName?: string;
   subProvider?: string;
   badge?: "new";
+  pricing?: ModelPricing;
   instanceId: ProviderInstanceId;
   driverKind: ProviderDriverKind;
   instanceDisplayName: string;
@@ -270,6 +271,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   );
   const serverKeybindings = useAtomValue(primaryServerKeybindingsAtom);
   const keybindings = providedKeybindings ?? serverKeybindings;
+  const modelCostDisplay = useClientSettings((settings) => settings.modelCostDisplay);
   const updateSettings = useUpdateClientSettings();
 
   const focusSearchInput = useCallback(() => {
@@ -381,6 +383,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           ...(model.shortName ? { shortName: model.shortName } : {}),
           ...(model.subProvider ? { subProvider: model.subProvider } : {}),
           ...(model.badge ? { badge: model.badge } : {}),
+          ...(model.pricing ? { pricing: model.pricing } : {}),
           ...(model.isLegacy ? { isLegacy: true } : {}),
           ...(model.isUnavailable ? { isUnavailable: true } : {}),
           instanceId,
@@ -731,8 +734,14 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return mapping.size > 0 ? mapping : EMPTY_MODEL_JUMP_LABELS;
   }, [keybindings, modelJumpCommandByKey, modelJumpShortcutContext]);
   const modelListExtraData = useMemo(
-    () => ({ favoritesSet, modelJumpLabelByKey, activeModelKey, selectedModelKeySet }),
-    [favoritesSet, modelJumpLabelByKey, activeModelKey, selectedModelKeySet],
+    () => ({
+      favoritesSet,
+      modelJumpLabelByKey,
+      activeModelKey,
+      selectedModelKeySet,
+      modelCostDisplay,
+    }),
+    [favoritesSet, modelJumpLabelByKey, activeModelKey, selectedModelKeySet, modelCostDisplay],
   );
 
   useEffect(() => {
@@ -1003,6 +1012,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                         unavailable={model.isUnavailable === true}
                         jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
                         disabledReason={disabledReason}
+                        pricingDisplay={modelCostDisplay}
                         onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
                       />
                     );
