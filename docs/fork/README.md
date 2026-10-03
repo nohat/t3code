@@ -119,10 +119,11 @@ The target is the native app on iPad and iPhone, built from this fork and update
 ### 7. Where knowledge lives
 
 - This page: vision, branch model, deploy model, priorities.
+- [maintenance.md](./maintenance.md): syncing with upstream, guards, and how the posture reaches agents.
 - [posture.md](./posture.md): how much agents ask, trust, and verify; it overrides conflicting text here.
 - [defect-resolution.md](./defect-resolution.md): how defects are found, verified, fixed, and tracked.
 - Gitignored `.t3/LOCAL_SETUP.md`: volatile facts only (PIDs, ports); mostly replaced by `fork-deploy status` over time.
-- The `AGENTS.md` operator pointer stays local. Pointing agents at this page is a one-line edit to upstream's file and needs my sign-off.
+- Upstream's `AGENTS.md` and `CLAUDE.md` are never edited. A user-level `SessionStart` hook injects [posture.md](./posture.md); see [maintenance.md](./maintenance.md).
 - Backlog: GitHub issues on the fork, per upstream's no-committed-plans rule. Plans that must survive across threads and worktrees live at one absolute path outside any checkout, not in per-worktree `.plans/` (pain 3).
 
 ### 8. Design system and appearance
