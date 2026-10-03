@@ -14,4 +14,4 @@ for ref in fork/prod local/t3-work docs/fork; do
   body=""
 done
 [ -n "$body" ] || exit 0
-printf 'Fork posture for nohat/t3code, read from git ref %s. It overrides AGENTS.md wherever they conflict. Other fork docs: git show %s:docs/fork/<page>.md. Defects: /fork-defect-session.\n\n%s\n' "$ref" "$ref" "$body"
+printf 'Fork posture for nohat/t3code, read from git ref %s. It overrides AGENTS.md wherever they conflict. Other fork docs: git show %s:docs/fork/<page>.md. Defects: /defect-session.\n\n%s\n' "$ref" "$ref" "$body"

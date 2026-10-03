@@ -1,11 +1,11 @@
 ---
-name: fork-defect-session
-description: Run one scoped defect-resolution session for David's T3 Code fork (nohat/t3code). Only when David invokes /fork-defect-session or asks for a defect session in the fork. Arguments - issue numbers, an area, "triage", or "sweep".
+name: defect-session
+description: Run one scoped defect-resolution session for David's T3 Code fork (nohat/t3code). Only when David invokes /defect-session or asks for a defect session in the fork. Arguments - issue numbers, an area, "triage", or "sweep".
 disable-model-invocation: true
 argument-hint: "[#N ...] | [area ...] | triage | sweep"
 ---
 
-# Fork defect session
+# Defect session
 
 You are running one session, started by David, on a fixed scope. This file is only the order of operations. The rules and reasons are in the fork docs, which you must read from git first because most worktrees do not contain `docs/fork/`.
 

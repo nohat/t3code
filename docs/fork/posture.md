@@ -46,7 +46,7 @@ Relaxed on purpose:
 
 ## Defects
 
-Defects are found, verified, fixed, and tracked as described in [defect-resolution.md](./defect-resolution.md); GitHub issues on `nohat/t3code` are the ledger. I start a session with `/fork-defect-session` (issue numbers, an area, `triage`, or `sweep`). Outside a session, an agent that notices a defect files an issue and does not start the fix. Most worktrees do not contain `docs/fork/`; read any page with `git show <ref>:docs/fork/<page>.md` using the ref the hook printed.
+Defects are found, verified, fixed, and tracked as described in [defect-resolution.md](./defect-resolution.md); GitHub issues on `nohat/t3code` are the ledger. I start a session with `/defect-session` (issue numbers, an area, `triage`, or `sweep`). Outside a session, an agent that notices a defect files an issue and does not start the fix. Most worktrees do not contain `docs/fork/`; read any page with `git show <ref>:docs/fork/<page>.md` using the ref the hook printed.
 
 ## What this overrides
 

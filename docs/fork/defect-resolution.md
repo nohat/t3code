@@ -2,7 +2,7 @@
 
 Status: **draft**. How I want an orchestrating agent to drive down defects in the fork without being handed a list. Adapted from a charter written for another project, which assumed a product spec, interaction contract, and stylebook. This repo has none of those, so this page says what stands in for them and what is missing. Rules in `AGENTS.md` and [README.md](./README.md) are linked, not repeated. How much to ask, trust, and verify is in [posture.md](./posture.md), which wins over anything here that conflicts.
 
-Start a session with `/fork-defect-session` (the skill in `.agents/skills/fork-defect-session/`, installed user-wide by `scripts/fork/agent-config/install.sh`; see [maintenance.md](./maintenance.md)).
+Start a session with `/defect-session` (the skill in `.agents/skills/defect-session/`, installed user-wide by `scripts/fork/agent-config/install.sh`; see [maintenance.md](./maintenance.md)).
 
 The loop: baseline, discover, verify, prioritize, fix, validate, hand to me, re-audit, repeat. Stop when I am needed, when independent audits find only duplicates and low-impact edges (then do one more broad audit), or when the harness stops you.
 
