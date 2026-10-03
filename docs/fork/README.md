@@ -13,6 +13,7 @@ Consequences:
 - **Not upstream-driven.** Upstream acceptance is not a goal. A feature does not need to be PR-ready, and I do not trim scope to please upstream. I still keep changes additive and at the edges where that is cheap, because every line I diverge costs a merge later.
 - **iPad and iPhone are first-class surfaces**, not an afterthought to the Mac. I want to build my own there too, and get features and fixes onto iOS devices as easily as onto the Mac.
 - **Visual quality is a requirement, not polish.** Density and trustworthiness targets are set for me personally.
+- **Appearance parity with upstream by default.** As much as is practical, the fork renders exactly as upstream unless warm brutalism is explicitly selected as an option. This keeps upstream's visual intent visible and makes a sync regression distinguishable from a fork preference. See [design-system.md](./design-system.md).
 - **Admin is automated.** Servers, processes, builds, tunnels, and upstream sync should take none of my attention.
 
 Two tests for any change, from `project-app/docs/motivation.md`: lazy input and professional output; complexity serves simplicity.
@@ -104,12 +105,12 @@ I recommend keeping this in the fork rather than registering it in scaffold's `d
 
 Small launchd jobs, each doing one thing, installed by one script (job names are working names):
 
-| Job                        | Does                                                                                                                                                                                    |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `t3.prod`                  | Keeps the production server and desktop shell running from `current`                                                                                                                    |
-| `t3.tunnel`                | Runs `cloudflared`; its origin is read from the server's exposed port, never declared twice                                                                                             |
-| `t3.upstream-sync`         | Daily: fetch upstream, fast-forward `main`, trial-merge into `fork/prod` in a scratch worktree, run the gate, report "N new commits, clean" or "conflict in X". It never lands anything |
-| scaffold `t3_attention.py` | Heartbeat reads prod health, Tailscale exposure health, deploy failure, and sync result. Heartbeat already stays silent unless something is broken                                      |
+| Job                        | Does                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `t3.prod`                  | Keeps the production server and desktop shell running from `current`                                                                                                                                                                                                                                                                  |
+| `t3.tunnel`                | Runs `cloudflared`; its origin is read from the server's exposed port, never declared twice                                                                                                                                                                                                                                           |
+| `t3.upstream-sync`         | Daily: fetch upstream, fast-forward `main`, trial-merge into `fork/prod` in a scratch worktree, run the gate, and visually diff key surfaces in **both** profiles (upstream default and warm brutalism) against the last good baseline; report "N new commits, clean" or "conflict / visual regression in X". It never lands anything |
+| scaffold `t3_attention.py` | Heartbeat reads prod health, Tailscale exposure health, deploy failure, and sync result. Heartbeat already stays silent unless something is broken                                                                                                                                                                                    |
 
 ### 6. iPad and iPhone
 
@@ -121,6 +122,16 @@ The target is the native app on iPad and iPhone, built from this fork and update
 - Gitignored `.t3/LOCAL_SETUP.md`: volatile facts only (PIDs, ports); mostly replaced by `fork-deploy status` over time.
 - The `AGENTS.md` operator pointer stays local. Pointing agents at this page is a one-line edit to upstream's file and needs my sign-off.
 - Backlog: GitHub issues on the fork, per upstream's no-committed-plans rule. Plans that must survive across threads and worktrees live at one absolute path outside any checkout, not in per-worktree `.plans/` (pain 3).
+
+### 8. Design system and appearance
+
+Appearance parity with upstream is the default; warm brutalism is an **option**, not the shipped skin. It is built on the Ledger grammar (`~/code/drawerkit-v2/grammar`, vendored to `design/`), gated by a `[data-design="warm-brutalism"]` profile so the bridge CSS is inert unless selected. `scripts/fork/design-system` builds the scoped bridge and gates it (contrast, theme validity, stale generated CSS); a dev-only `/stylebook` route renders both profiles side by side. Decisions, the untrusted conflicts, and commands live in [design-system.md](./design-system.md).
+
+The sync validates both: `t3.upstream-sync` compares the upstream default and the warm-brutalism profile against a baseline, so an upstream visual change and a fork regression are not confused.
+
+### 9. Upstream issues and the PR escape hatch
+
+Not upstream-driven, but not hostile to it. When a fork fix also resolves an upstream issue, record the issue beside the fix and keep the fix isolatable (one concern, its own branch off `main`, a test that fails if a merge drops it). Opening a PR is an opt-in side effect, only when I ask. Detection, the tracker, and the search procedure are in [upstream-issues.md](./upstream-issues.md).
 
 ## What other forks teach
 
