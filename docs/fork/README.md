@@ -83,6 +83,15 @@ A dev stack started by an agent must be unable to reach the live home and unable
 - `fork/prod` (rename of `local/t3-work`): `main` plus the features I have accepted. The only branch ever built for production.
 - `feat/*`, `fix/*`: feature branches off `main`, merged into `fork/prod` when their gate passes (see [posture.md](./posture.md)). A feature lives on exactly one branch; drop any stale copy from `fork/prod` before moving it (the cost-picker rule).
 - Upstream sync merges `main` into `fork/prod`, never rebases, so production history is stable and rollback by SHA is meaningful. Opening an upstream PR is an opt-in side effect, only when I ask.
+- `docs/fork`: this documentation, the fork-only agent skill, and the config installer. It is its own branch because worktrees cut from `main` do not contain `docs/fork/`, and agents read it with `git show` ([maintenance.md](./maintenance.md)). It stays until `fork/prod` contains `docs/fork/posture.md`.
+
+**What gets pushed where.** Everything goes to `origin` (`nohat/t3code`) and nothing goes to upstream, whose push URL is `no_push`.
+
+- `main` follows `upstream/main` by fast-forward only.
+- `fork/prod` and `docs/fork` are always pushed, so the fork's docs and production history have a copy off this machine. Until the rename, `local/t3-work` stands in for `fork/prod`.
+- A `feat/*` or `fix/*` branch is pushed once it has commits not on `fork/prod`, and kept after it merges until its issue is closed.
+- Scratch branches (`wip/*`, `candidate/*`, agent worktree branches) are pushed only if they hold work worth keeping. A tag named `superseded/<name>` marks a retired branch's tip before it is deleted.
+- No force-push to `fork/prod` or `docs/fork`.
 
 ### 3. One checkout rule
 
