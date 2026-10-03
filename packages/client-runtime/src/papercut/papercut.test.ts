@@ -1,4 +1,5 @@
 import {
+  type OrchestrationThread,
   PAPERCUT_MAX_EVENTS,
   PAPERCUT_MAX_MESSAGES,
   PapercutCreateInput,
@@ -8,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { capturePapercut } from "./capture.ts";
 import { createPapercutEventBuffer } from "./eventBuffer.ts";
+import { papercutThreadContext } from "./threadContext.ts";
 
 const isValidPayload = Schema.is(PapercutCreateInput);
 
@@ -121,5 +123,72 @@ describe("capturePapercut", () => {
     );
     expect(payload.screenshot).toBeUndefined();
     expect(isValidPayload(payload)).toBe(true);
+  });
+});
+
+describe("papercutThreadContext", () => {
+  const thread = {
+    id: "thread-1",
+    modelSelection: { instanceId: "codex", model: "gpt-5" },
+    runtimeMode: "full-access",
+    latestTurn: { turnId: "turn-3" },
+    session: { activeTurnId: "turn-2" },
+    activities: [
+      {
+        kind: "approval.requested",
+        createdAt: "2026-10-02T12:00:00.000Z",
+        payload: { requestId: "approval-1", requestKind: "command" },
+      },
+    ],
+    messages: Array.from({ length: PAPERCUT_MAX_MESSAGES + 2 }, (_, index) => ({
+      role: "user",
+      text: `message ${index}`,
+      createdAt: "2026-10-02T12:00:00.000Z",
+    })),
+  } as unknown as OrchestrationThread;
+
+  it("separates evidence ids and state from message text", () => {
+    const context = papercutThreadContext({
+      environmentId: "env-1",
+      thread,
+      route: "/env-1/thread-1",
+      threadStatus: "live",
+      connectionPhase: "connected",
+    });
+
+    expect(context.where).toEqual({
+      environmentId: "env-1",
+      threadId: "thread-1",
+      turnId: "turn-3",
+      provider: "codex",
+      model: "gpt-5",
+      runtimeMode: "full-access",
+      route: "/env-1/thread-1",
+    });
+    expect(context.clientState).toEqual({
+      connection: "connected",
+      threadSyncPhase: "live",
+      pendingUserInput: false,
+      pendingApproval: true,
+    });
+    expect(context.messages).toHaveLength(PAPERCUT_MAX_MESSAGES);
+    expect(context.messages.at(-1)?.text).toBe(`message ${PAPERCUT_MAX_MESSAGES + 1}`);
+    expect(
+      JSON.stringify({ where: context.where, clientState: context.clientState }),
+    ).not.toContain("message ");
+  });
+
+  it("reports only connection facts when no thread is open", () => {
+    expect(
+      papercutThreadContext({
+        environmentId: "env-1",
+        thread: null,
+        connectionPhase: "reconnecting",
+      }),
+    ).toEqual({
+      where: { environmentId: "env-1" },
+      clientState: { connection: "reconnecting" },
+      messages: [],
+    });
   });
 });
