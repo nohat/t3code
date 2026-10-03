@@ -80,22 +80,21 @@ A dev stack started by an agent must be unable to reach the live home and unable
 ### 2. One branch model
 
 - `main`: fast-forward-only mirror of `upstream/main`. Never commit here.
-- `fork/prod` (rename of `local/t3-work`): `main` plus the features I have accepted. The only branch ever built for production.
+- `fork/prod` (renamed from `local/t3-work` on 2026-10-03): `main` plus the features I have accepted. The only branch ever built for production.
 - `feat/*`, `fix/*`: feature branches off `main`, merged into `fork/prod` when their gate passes (see [posture.md](./posture.md)). A feature lives on exactly one branch; drop any stale copy from `fork/prod` before moving it (the cost-picker rule).
 - Upstream sync merges `main` into `fork/prod`, never rebases, so production history is stable and rollback by SHA is meaningful. Opening an upstream PR is an opt-in side effect, only when I ask.
-- `docs/fork`: this documentation, the fork-only agent skill, and the config installer. It is its own branch because worktrees cut from `main` do not contain `docs/fork/`, and agents read it with `git show` ([maintenance.md](./maintenance.md)). It stays until `fork/prod` contains `docs/fork/posture.md`.
 
 **What gets pushed where.** Everything goes to `origin` (`nohat/t3code`) and nothing goes to upstream, whose push URL is `no_push`.
 
 - `main` follows `upstream/main` by fast-forward only.
-- `fork/prod` and `docs/fork` are always pushed, so the fork's docs and production history have a copy off this machine. Until the rename, `local/t3-work` stands in for `fork/prod`.
+- `fork/prod` is always pushed, so the fork's docs and production history have a copy off this machine. The fork docs live on it as `docs/fork/`; worktrees cut from `main` do not contain them, so agents read them with `git show fork/prod:docs/fork/<page>.md` ([maintenance.md](./maintenance.md)).
 - A `feat/*` or `fix/*` branch is pushed once it has commits not on `fork/prod`, and kept after it merges until its issue is closed.
 - Scratch branches (`wip/*`, `candidate/*`, agent worktree branches) are pushed only if they hold work worth keeping. A tag named `superseded/<name>` marks a retired branch's tip before it is deleted.
-- No force-push to `fork/prod` or `docs/fork`.
+- No force-push to `fork/prod`.
 
 ### 3. One checkout rule
 
-`~/code/t3code` is the primary checkout: on `fork/prod`, never edited by hand, written only by deploy tooling. All development happens in worktrees (T3's own **New worktree**). `t3code-main` stops being special.
+`~/code/t3code` is the primary checkout: on `fork/prod`, never edited by hand, written only by git merges from fork tooling. All development happens in worktrees (T3's own **New worktree**). `~/code/t3code-main` is the T3 project root and the working checkout agents start in, left detached at the `fork/prod` tip so nothing commits to a named branch by accident. It keeps its name: `.t3/fork-deploy.json`, `cutover.py`, and the deploy launchd plist hard-code the path, and dev servers run from it.
 
 ### 4. A deploy command, not a ritual
 
@@ -208,7 +207,6 @@ Decided 2026-10-02 (deploys must not lose work):
 
 Still open:
 
-- Rename `local/t3-work` to `fork/prod` and `~/code/t3code-main` to something that is not "main".
 - Where the shared cross-thread plans directory lives.
 - How to replace push notifications without Connect (mobile.md lists three options; Telegram through `agent_inbox` first).
 - Which exact app I use on the iPad today (the App Store release, assumed here) and whether I rely on Live Activities, widgets, or the share extension.
