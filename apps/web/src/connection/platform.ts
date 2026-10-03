@@ -24,12 +24,14 @@ import {
 import { bootstrapRemoteBearerSession } from "@t3tools/client-runtime/authorization";
 import { fetchRemoteEnvironmentDescriptor } from "@t3tools/client-runtime/environment";
 import { managedRelayAccountChanges, managedRelaySessionAtom } from "@t3tools/client-runtime/relay";
+import { beginPapercutOperation } from "@t3tools/client-runtime/papercut";
 import { EnvironmentRpcRequestObserver } from "@t3tools/client-runtime/rpc";
 import {
   AuthStandardClientScopes,
   type DesktopBridge,
   type DesktopEnvironmentBootstrap,
   type DesktopSshEnvironmentTarget,
+  ORCHESTRATION_WS_METHODS,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
@@ -600,8 +602,14 @@ const rpcRequestObserverLayer = Layer.succeed(
         nextObservedRpcRequestId += 1;
         const requestId = `${environmentId}:${nextObservedRpcRequestId}`;
         trackRpcRequestSent(requestId, method, `${method} · ${environmentId}`);
+        // A papercut reports how long the oldest command has gone unacknowledged.
+        const acknowledgeDispatch =
+          method === ORCHESTRATION_WS_METHODS.dispatchCommand
+            ? beginPapercutOperation("dispatch", requestId)
+            : undefined;
         return Effect.sync(() => {
           acknowledgeRpcRequest(requestId);
+          acknowledgeDispatch?.();
         });
       }),
   }),
