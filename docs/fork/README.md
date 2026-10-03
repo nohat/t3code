@@ -81,7 +81,7 @@ A dev stack started by an agent must be unable to reach the live home and unable
 
 - `main`: fast-forward-only mirror of `upstream/main`. Never commit here.
 - `fork/prod` (rename of `local/t3-work`): `main` plus the features I have accepted. The only branch ever built for production.
-- `feat/*`, `fix/*`: feature branches off `main`, merged into `fork/prod` when accepted. A feature lives on exactly one branch; drop any stale copy from `fork/prod` before moving it (the cost-picker rule).
+- `feat/*`, `fix/*`: feature branches off `main`, merged into `fork/prod` when their gate passes (see [posture.md](./posture.md)). A feature lives on exactly one branch; drop any stale copy from `fork/prod` before moving it (the cost-picker rule).
 - Upstream sync merges `main` into `fork/prod`, never rebases, so production history is stable and rollback by SHA is meaningful. Opening an upstream PR is an opt-in side effect, only when I ask.
 
 ### 3. One checkout rule
@@ -119,6 +119,7 @@ The target is the native app on iPad and iPhone, built from this fork and update
 ### 7. Where knowledge lives
 
 - This page: vision, branch model, deploy model, priorities.
+- [posture.md](./posture.md): how much agents ask, trust, and verify; it overrides conflicting text here.
 - [defect-resolution.md](./defect-resolution.md): how defects are found, verified, fixed, and tracked.
 - Gitignored `.t3/LOCAL_SETUP.md`: volatile facts only (PIDs, ports); mostly replaced by `fork-deploy status` over time.
 - The `AGENTS.md` operator pointer stays local. Pointing agents at this page is a one-line edit to upstream's file and needs my sign-off.

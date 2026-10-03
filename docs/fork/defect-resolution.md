@@ -1,6 +1,6 @@
 # Defect resolution
 
-Status: **draft**. How I want an orchestrating agent to drive down defects in the fork without being handed a list. Adapted from a charter written for another project, which assumed a product spec, interaction contract, and stylebook. This repo has none of those, so this page says what stands in for them and what is missing. Rules in `AGENTS.md` and [README.md](./README.md) are linked, not repeated.
+Status: **draft**. How I want an orchestrating agent to drive down defects in the fork without being handed a list. Adapted from a charter written for another project, which assumed a product spec, interaction contract, and stylebook. This repo has none of those, so this page says what stands in for them and what is missing. Rules in `AGENTS.md` and [README.md](./README.md) are linked, not repeated. How much to ask, trust, and verify is in [posture.md](./posture.md), which wins over anything here that conflicts.
 
 The loop: baseline, discover, verify, prioritize, fix, validate, hand to me, re-audit, repeat. Stop when I am needed, when independent audits find only duplicates and low-impact edges (then do one more broad audit), or when the harness stops you.
 
@@ -31,8 +31,10 @@ Status uses issue state and existing labels (do not create labels):
 
 - **Candidate:** open, `question`, body says "Not verified". **Needs my decision:** open, `question`, with the decision and alternatives.
 - **Verified:** open, `bug` (or `enhancement` for a missing capability). **Blocked:** a "Blocked on #N" line.
-- **In progress:** a "Fix branch: `fix/...`" line, plus "cause unknown" if it is only a mitigation. **Fixed, awaiting deploy:** merged to `fork/prod`, not yet in a running build.
-- **Validated:** closed after the fix ran in my daily driver, with the build SHA in the closing comment. Otherwise close as `duplicate`, `invalid`, or `wontfix` with one line of reason.
+- **In progress:** a "Fix branch: `fix/...`" line, plus "cause unknown" if it is only a mitigation.
+- **Merged, pending gate:** on `fork/prod`, not yet in a running build. **Fixed, awaiting soak:** deployed, with the build SHA in a comment, watching for recurrence.
+- **Fixed, unverified:** deployed, but only a person at a device can confirm it. Does not block anything.
+- **Validated:** closed by the agent when the reproduction passes and the soak window ends with no recurrence signal. Otherwise close as `duplicate`, `invalid`, or `wontfix` with one line of reason.
 
 Severity is a line in the body, as in #1. High: data loss or a core flow dead. Medium: recoverable, misleading, or lossy. Low: cosmetic or rare. The iPad counts as my main surface.
 
@@ -58,17 +60,19 @@ Severity: ...
 
 **Fix** on a `fix/*` or `feat/*` branch off `main`, one concern each, in new files where practical. Fix the cause: if five places lack a timeout, consider the shared primitive. Walk "Hit every surface" and say in the issue which entries applied and which were decided "not here". Add a test that fails if an upstream merge drops the fix. For data-touching fixes, inspect real variants by copy first; never rewrite my data to make a test pass.
 
-**Validate** with the smallest proof: `vp test run <files>`, targeted lint and typecheck, no repo-wide checks, receipts and drains instead of sleeps. Then have a fresh reviewer try to disprove the fix: is the symptom gone, was a sibling surface missed, does the test only mirror the implementation. A defect is validated only when the original behavior was verified, the intended behavior is grounded in rules 1 to 3, a focused test passes, I merged and deployed the fix, and I used it.
+**Validate** with the smallest proof: `vp test run <files>`, targeted lint and typecheck, no repo-wide checks, receipts and drains instead of sleeps. Then have a fresh reviewer try to disprove the fix: is the symptom gone, was a sibling surface missed, does the test only mirror the implementation. A defect is validated only when the original behavior was verified, the intended behavior is grounded in rules 1 to 3, a focused test passes, a reproduction of the original symptom no longer fails (on the simulator for iPad defects, once #4 exists), the fix is deployed, and the soak window passes with no recurrence signal. I am never the test runner.
 
 **Re-audit** the touched subsystem and shared primitives after each merged batch, file what turns up, and reprioritize.
 
-**Handoff.** The issues are the handoff: state, branch, next action. Anything needing me goes through `agent_inbox`.
+**Land.** When the gate passes (targeted checks, a fresh reviewer's attempt to disprove the fix, a test that fails if a merge drops it), the orchestrating session merges to `fork/prod` and deploys with `fork-deploy`, then updates the issue and the docs in the same change. Subagents never merge or deploy.
+
+**Handoff.** The issues are the handoff: state, branch, next action. Anything in "Needs me" in [posture.md](./posture.md) goes through `agent_inbox`.
 
 ## Fork rules
 
 - The three ways to hurt yourself in `AGENTS.md` have no exceptions: no kill by pattern, nothing writes to or serves from `~/.t3/userdata` (copy with `VACUUM INTO`), never set `VITE_HTTP_URL` or `VITE_WS_URL`.
-- Branches follow the README: off `main`, merged to `fork/prod` when I accept them. Never commit to `main`.
-- No PRs unless I ask. No browsers, computer use, simulators, or dev servers without my agreement for that task; subagents never launch servers.
+- Branches follow the README: off `main`, merged to `fork/prod` when the gate passes. Never commit to `main`.
+- No PRs unless I ask. Dev servers, the Browser panel, and simulators are fine against an isolated worktree `.t3` or a copy of my data. Computer use that drives my real desktop, and anything touching live data, still needs me. Subagents never launch servers.
 
 ## iPad and mobile
 
@@ -81,9 +85,9 @@ Most defects first appear on the iPad, where server traces cannot see a blocked 
 
 ## Alone, or with me
 
-Alone: read code, traces, logs, docs, and `~/.t3` data by copy; file, update, and comment on fork issues; fix on a branch with focused tests and commit locally; record in `docs/fork` a decision I already made.
+Alone: everything in the loop above, including fixing on a branch, committing, pushing to the fork, merging to `fork/prod` when the gate passes, deploying through `fork-deploy`, filing and closing fork issues, and recording a decision I already made in `docs/fork`. Choose a default and record it rather than asking.
 
-With me: merging to `fork/prod`; deploys or anything that restarts production; PRs and anything outside nohat/t3code; computer use, browsers, simulators, any server start; anything on real data, destructive, or irreversible; answering a "Still open" question; creating labels. To escalate, give the decision, why the docs do not settle it, the alternatives with costs, and your default.
+With me: only the list in "Needs me" in [posture.md](./posture.md).
 
 ## Gaps
 
