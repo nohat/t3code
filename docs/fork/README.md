@@ -175,6 +175,12 @@ Filter: a change earns time if it removes a friction I hit weekly and works on t
 
 Each feature gets a recorded decision per surface and per provider, the same checklist as upstream's "Hit every surface".
 
+## Status (2026-10-04)
+
+- **Batch landed.** Merged to `fork/prod` and shipped through `fork-deploy` (packaged build `0.0.44`, release `7345a87552`): papercut capture stage 1 (`feat/papercuts-stage1`), stalled-turn watchdog (`feat/turn-activity-registry`), the mobile sync-stall bound (#3 mitigation, `fix/mobile-thread-sync-stall`), OpenCode wave 1 parity plus child-agent `task.*` on the Agents surface, remote-connection failure feedback and a visible reconnect state, crash-safe composer drafts, model-picker dismissal-commits with a cross-provider starred group, and the opt-in warm-brutalism design scaffold (`feat/design-system-clean`). Superseded and duplicate branches are tagged `superseded/*` and deleted; the scratch worktrees are removed.
+- **Model catalog preserved, not landed.** `feat/model-catalog` holds the halted agent's offline catalog, `/models` dashboard, and multi-provider summary pipeline. It is incomplete (the summary generator is not wired into refresh, the seed holds 7 models, there is no mobile screen, and the audit script bakes a maintainer path) and needs a decision before it ships.
+- **Baseline gap confirmed.** `apps/mobile` typecheck fails with 29 pre-existing React Native/Expo type errors on `fork/prod` before this batch. Mobile changes were verified by unit tests and per-worktree typecheck; the baseline issue is filed separately.
+
 ## Status (2026-10-02)
 
 - **Packaged build spike passed.** An unsigned arm64 build of the `local/t3-work` tip runs from an unpacked release directory, serves its own port, and reads only the data home it is given. Two traps cost time, and both are now handled in `fork-deploy`: builds must run in a scrubbed environment (agent shells inherit the dev-desktop's `T3CODE_*` and `VITE_*` variables, which launch a dev Electron and bake localhost origins into the bundle), and the resource monitor needs a newer Rust than Homebrew ships, so the build `PATH` carries an isolated rustup toolchain.

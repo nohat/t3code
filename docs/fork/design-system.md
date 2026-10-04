@@ -2,7 +2,7 @@
 
 - Status: accepted (direction); conflict resolutions below need sign-off
 - Date: 2026-10-02
-- Branch: `feat/design-system` (not merged into `main` or `fork/prod`; this page describes code that exists only on that branch)
+- Branch: `feat/design-system-clean` (merged into `fork/prod` 2026-10-04; the scaffold is opt-in and inert unless `[data-design="warm-brutalism"]` is set)
 - Source grammar: `~/code/drawerkit-v2/grammar` ("Ledger"), vendored to `design/`
 
 ## Context
