@@ -29,6 +29,7 @@ The iPad hang reports (#3, #16) are exactly when JavaScript cannot run, so a rep
 - JavaScript blocked: a haptic and a native alert ("saved on this device"), then the upload happens on recovery or relaunch. The record carries a `client.js-unresponsive` event with the heartbeat age.
 - The event buffer also records `client.js-stall` (with how late the tick was) whenever a blocked thread recovers, so a later report shows a stall that already ended.
 - The native hook cannot help if the main thread itself is blocked.
+- Known gap: `papercut.create` has no idempotency key, so if the connection drops after the server stored a report but before the reply, the retry stores a duplicate.
 
 ## Where it goes
 
