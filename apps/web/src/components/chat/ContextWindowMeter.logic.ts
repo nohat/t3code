@@ -9,8 +9,8 @@ import {
 } from "../../providerInstances";
 import { getTriggerDisplayModelName, type ModelEsque } from "./providerIconUtils";
 
-const CLAUDE_RESUME_COMPACTION_MINUTES = 70;
-const CLAUDE_RESUME_COMPACTION_TOKENS = 100_000;
+const RESUME_COMPACTION_MINUTES = 70;
+const RESUME_COMPACTION_TOKENS = 100_000;
 
 export function providerSupportsManualCompaction(
   provider: ProviderInstanceEntry | null | undefined,
@@ -60,16 +60,19 @@ export function hasDismissedResumeCompaction(
   });
 }
 
+/**
+ * Offer the resume banner for any provider whose adapter exposes compaction,
+ * not just Claude. The caller supplies `providerSupportsCompaction` because
+ * capability lives on the selected provider instance, which this pure module
+ * does not have access to.
+ */
 export function shouldOfferResumeCompaction(input: {
-  readonly provider: string | null | undefined;
+  readonly providerSupportsCompaction: boolean;
   readonly usedTokens: number | null | undefined;
   readonly updatedAt: string | null | undefined;
   readonly now: string;
 }): boolean {
-  if (
-    input.provider !== "claudeAgent" ||
-    (input.usedTokens ?? 0) < CLAUDE_RESUME_COMPACTION_TOKENS
-  ) {
+  if (!input.providerSupportsCompaction || (input.usedTokens ?? 0) < RESUME_COMPACTION_TOKENS) {
     return false;
   }
 
@@ -78,7 +81,7 @@ export function shouldOfferResumeCompaction(input: {
   return (
     Number.isFinite(updatedAt) &&
     Number.isFinite(now) &&
-    now - updatedAt >= CLAUDE_RESUME_COMPACTION_MINUTES * 60_000
+    now - updatedAt >= RESUME_COMPACTION_MINUTES * 60_000
   );
 }
 
