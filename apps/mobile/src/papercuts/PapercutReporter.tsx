@@ -31,6 +31,8 @@ import { registerPapercutReporter } from "./reportPapercut";
 const HEARTBEAT_INTERVAL_MS = 1000;
 /** A tick this much later than scheduled means the JavaScript thread was blocked. */
 const STALL_THRESHOLD_MS = 1500;
+/** How often leftover bundles are retried when nothing else prompts it. */
+const PENDING_RETRY_INTERVAL_MS = 30_000;
 /** Lets a closing sheet or palette finish dismissing before the screen is captured. */
 const MENU_DISMISS_SETTLE_MS = 400;
 
@@ -83,15 +85,25 @@ export function PapercutReporter(props: { readonly pathname: string }) {
   const threadStatus = threadRef ? threadState.status : undefined;
 
   // Native callbacks and timers run outside React, so they read the latest render.
+  const connectedEnvironmentIds = useMemo(
+    () =>
+      environments
+        .filter((environment) => environment.connection.phase === "connected")
+        .map((environment) => environment.environmentId),
+    [environments],
+  );
   const latest = useRef({
+    connectedEnvironmentIds,
     environmentId,
     threadState,
     pathname: props.pathname,
     connectionPhase,
     threadStatus,
   });
+  const drainPendingRef = useRef<(() => Promise<void>) | null>(null);
   useEffect(() => {
     latest.current = {
+      connectedEnvironmentIds,
       environmentId,
       threadState,
       pathname: props.pathname,
@@ -237,6 +249,7 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       now: Date.now,
     });
     let storedContextKey = "";
+    let tickCount = 0;
     const timer = setInterval(() => {
       if (AppState.currentState !== "active") {
         stall.reset();
@@ -244,7 +257,14 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       }
       papercutNative?.heartbeat();
       const lateBy = stall.tick();
-      if (lateBy !== null) recordPapercutEvent("client.js-stall", String(lateBy));
+      tickCount += 1;
+      if (lateBy !== null) {
+        recordPapercutEvent("client.js-stall", String(lateBy));
+        // A shake during this stall left a bundle that nothing else would upload promptly.
+        void drainPending();
+      } else if (tickCount % (PENDING_RETRY_INTERVAL_MS / HEARTBEAT_INTERVAL_MS) === 0) {
+        void drainPending();
+      }
       if (papercutNative) {
         // Hand over a fresh context only when something worth reporting changed.
         const current = snapshot();
@@ -279,10 +299,12 @@ export function PapercutReporter(props: { readonly pathname: string }) {
     });
 
     const unregister = registerPapercutReporter(reportFromMenu);
+    drainPendingRef.current = drainPending;
     void drainPending();
 
     return () => {
       unregister();
+      drainPendingRef.current = null;
       clearInterval(timer);
       shakeSubscription?.remove();
       appStateSubscription.remove();
@@ -293,6 +315,10 @@ export function PapercutReporter(props: { readonly pathname: string }) {
   useEffect(() => {
     if (connectionPhase) recordPapercutEvent(`connection.${connectionPhase}`, environmentId ?? "");
   }, [connectionPhase, environmentId]);
+  useEffect(() => {
+    // A bundle whose upload failed for lack of a connection goes up when one returns.
+    if (connectionPhase === "connected") void drainPendingRef.current?.();
+  }, [connectionPhase]);
   useEffect(() => {
     if (threadStatus) recordPapercutEvent(`thread.${threadStatus}`, threadRef?.threadId);
   }, [threadStatus, threadRef?.threadId]);
