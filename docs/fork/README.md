@@ -210,6 +210,7 @@ Decided 2026-10-02 (deploys must not lose work):
 - Known limits of (1): Claude resumes from its last completed assistant message, so partial in-flight work is lost; approval-required threads stall waiting for a person; terminal commands die; OpenCode can leave orphans after a hard kill.
 - The fork's GitHub Issues are now enabled and are the backlog (nohat/t3code#1, #2).
 - A **papercuts** capture is planned: see [papercuts.md](./papercuts.md).
+- **Notifications** (2026-10-04): one alert on the surface I'm using, server-confirmed "seen", nothing disappears unseen. Spec, gaps, and a practice audit in [notifications.md](./notifications.md); tracked in nohat/t3code#12 and #13.
 
 Still open:
 
