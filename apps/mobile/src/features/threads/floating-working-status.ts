@@ -65,3 +65,18 @@ export function connectionFloatingStatus(input: {
       return null;
   }
 }
+
+/**
+ * A sync that has run past the stall limit with no error. The tap target is
+ * the environment reconnect, which resubscribes the thread.
+ */
+export function syncStalledFloatingStatus(input: {
+  readonly onRetry: () => void;
+}): FloatingWorkingStatus {
+  return {
+    kind: "connection",
+    tone: "unavailable",
+    label: "Messages are taking too long to load. Tap to retry.",
+    onPress: input.onRetry,
+  };
+}

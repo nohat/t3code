@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { connectionFloatingStatus } from "./floating-working-status";
+import { connectionFloatingStatus, syncStalledFloatingStatus } from "./floating-working-status";
 
 const status = (
   connectionState: Parameters<typeof connectionFloatingStatus>[0]["connectionState"],
@@ -62,5 +62,15 @@ describe("connectionFloatingStatus", () => {
     if (pill?.kind !== "connection") throw new Error("expected a connection pill");
     pill.onPress();
     expect(onReconnect).toHaveBeenCalledOnce();
+  });
+});
+
+describe("syncStalledFloatingStatus", () => {
+  it("is a tappable pill that runs the retry", () => {
+    const onRetry = vi.fn();
+    const pill = syncStalledFloatingStatus({ onRetry });
+    expect(pill).toMatchObject({ kind: "connection", tone: "unavailable" });
+    if (pill.kind === "connection") pill.onPress();
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

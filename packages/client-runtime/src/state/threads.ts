@@ -156,6 +156,8 @@ export function isThreadSessionRunning(session: OrchestrationThread["session"]):
   return session?.status === "starting" || session?.status === "running";
 }
 
+const THREAD_CACHE_LOAD_TIMEOUT = "5 seconds";
+
 function shouldPersistThread(thread: OrchestrationThread): boolean {
   return !isThreadSessionRunning(thread.session);
 }
@@ -219,6 +221,11 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const cached =
     retained === undefined
       ? yield* cache.loadThread(environmentId, threadId).pipe(
+          // A cache that cannot answer quickly is skipped: the fresh fetch
+          // below is the source of truth, so a slow disk must not hold the
+          // thread open.
+          Effect.timeoutOption(THREAD_CACHE_LOAD_TIMEOUT),
+          Effect.map(Option.flatten),
           Effect.catch((error) =>
             Effect.logWarning("Could not load cached thread.").pipe(
               Effect.annotateLogs({
