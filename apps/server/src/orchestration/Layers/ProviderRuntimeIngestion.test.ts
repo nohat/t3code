@@ -58,6 +58,7 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
+import * as ThreadTurnActivity from "../ThreadTurnActivity.ts";
 import {
   ProviderRuntimeIngestionLive,
   splitBufferedAssistantText,
@@ -68,6 +69,7 @@ import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeInge
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { STALLED_TURN_THRESHOLD_MS, sweepStalledTurns } from "../ThreadTurnWatchdog.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { makeSqlStatementCounter } from "../../../integration/SqlStatementCounter.integration.ts";
 
@@ -328,6 +330,7 @@ describe("ProviderRuntimeIngestion", () => {
       // engine, and the snapshot query (reader).
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
+      Layer.provideMerge(ThreadTurnActivity.layer),
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(ProviderService, provider.service)),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
@@ -433,6 +436,12 @@ describe("ProviderRuntimeIngestion", () => {
       advanceClock: (ms: number) => {
         clockOffsetMs += ms;
       },
+      sweepStalledTurns: () =>
+        testRuntime.runPromise(
+          sweepStalledTurns({ thresholdMs: STALLED_TURN_THRESHOLD_MS }).pipe(
+            Effect.provideService(Clock.Clock, shiftedClock),
+          ),
+        ),
       emitAndDrain,
       sqlCount: sqlCounter.count,
       setProviderSession: provider.setSession,
@@ -5084,6 +5093,155 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime still processed");
+  });
+
+  describe("stalled-turn watchdog", () => {
+    const claude = ProviderDriverKind.make("claudeAgent");
+    const stalledTurnId = asTurnId("turn-stalled");
+
+    async function startClaudeTurn() {
+      const harness = await createHarness();
+      await harness.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-claude-running"),
+        threadId: asThreadId("thread-1"),
+        session: {
+          threadId: asThreadId("thread-1"),
+          status: "running",
+          providerName: "claudeAgent",
+          runtimeMode: "approval-required",
+          activeTurnId: stalledTurnId,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          lastError: null,
+        },
+        createdAt: "2026-01-01T00:00:00.000Z",
+      });
+      return harness;
+    }
+
+    // A command_output delta is dropped by the lifecycle worker, so it only
+    // proves liveness if the registry is stamped before the drop.
+    const silentDelta = (
+      id: string,
+      createdAt = "2026-01-01T00:00:01.000Z",
+    ): LegacyProviderRuntimeEvent => ({
+      type: "content.delta",
+      eventId: asEventId(id),
+      provider: claude,
+      threadId: asThreadId("thread-1"),
+      turnId: stalledTurnId,
+      createdAt,
+      payload: { streamKind: "command_output", delta: "..." },
+    });
+
+    const stallRows = async (harness: Awaited<ReturnType<typeof startClaudeTurn>>) =>
+      (await harness.readModel()).threads[0]!.activities.filter(
+        (activity) =>
+          activity.kind === "provider.turn.stalled" || activity.kind === "provider.turn.resumed",
+      );
+
+    it("flags a silent turn, then records one resume when the provider speaks again", async () => {
+      const harness = await startClaudeTurn();
+      await harness.emitAndDrain([silentDelta("stall-delta-1")]);
+
+      // The test clock rides on the real one, so leave a margin for real time
+      // elapsing between the stamp and the sweep.
+      harness.advanceClock(STALLED_TURN_THRESHOLD_MS - 60_000);
+      await harness.sweepStalledTurns();
+      expect((await harness.readThreadShell()).stalledSince ?? null).toBeNull();
+
+      harness.advanceClock(60_000);
+      await harness.sweepStalledTurns();
+      await harness.sweepStalledTurns();
+      const flagged = await harness.readThreadShell();
+      expect(flagged.stalledSince).toEqual(expect.any(String));
+      expect(await stallRows(harness)).toMatchObject([
+        { kind: "provider.turn.stalled", turnId: stalledTurnId },
+      ]);
+      // Never interrupts: the turn is still running.
+      expect(flagged.session?.activeTurnId).toBe(stalledTurnId);
+
+      // Activities sort by createdAt and the flag was stamped from the shifted
+      // clock, so the resume events need a later wall-clock time.
+      const later = "2099-01-01T00:00:00.000Z";
+      await harness.emitAndDrain([silentDelta("stall-delta-2", later)]);
+      await harness.emitAndDrain([silentDelta("stall-delta-3", later)]);
+      expect((await harness.readThreadShell()).stalledSince ?? null).toBeNull();
+      expect((await stallRows(harness)).map((activity) => activity.kind)).toEqual([
+        "provider.turn.stalled",
+        "provider.turn.resumed",
+      ]);
+    });
+
+    it("clears the flag without a resume row when the turn completes", async () => {
+      const harness = await startClaudeTurn();
+      await harness.emitAndDrain([silentDelta("stall-delta-1")]);
+      harness.advanceClock(STALLED_TURN_THRESHOLD_MS);
+      await harness.sweepStalledTurns();
+      expect((await harness.readThreadShell()).stalledSince).toEqual(expect.any(String));
+
+      await harness.emitAndDrain([
+        {
+          type: "turn.completed",
+          eventId: asEventId("stall-turn-completed"),
+          provider: claude,
+          threadId: asThreadId("thread-1"),
+          turnId: stalledTurnId,
+          createdAt: "2026-01-01T00:00:02.000Z",
+          payload: { state: "completed" },
+        },
+      ]);
+
+      expect((await harness.readThreadShell()).stalledSince ?? null).toBeNull();
+      expect((await stallRows(harness)).map((activity) => activity.kind)).toEqual([
+        "provider.turn.stalled",
+      ]);
+    });
+
+    it("keeps a turn unflagged while tool.progress heartbeats arrive", async () => {
+      const harness = await startClaudeTurn();
+      const heartbeat = (id: string): LegacyProviderRuntimeEvent => ({
+        type: "tool.progress",
+        eventId: asEventId(id),
+        provider: claude,
+        threadId: asThreadId("thread-1"),
+        turnId: stalledTurnId,
+        createdAt: "2026-01-01T00:00:01.000Z",
+        payload: { toolUseId: "tool-1", toolName: "Bash", elapsedSeconds: 1 },
+      });
+
+      for (let beat = 0; beat < 4; beat += 1) {
+        await harness.emitAndDrain([heartbeat(`stall-heartbeat-${beat}`)]);
+        harness.advanceClock(STALLED_TURN_THRESHOLD_MS - 60_000);
+        await harness.sweepStalledTurns();
+      }
+
+      expect((await harness.readThreadShell()).stalledSince ?? null).toBeNull();
+      expect(await stallRows(harness)).toEqual([]);
+    });
+
+    it("does not flag a silent turn that is waiting on an approval", async () => {
+      const harness = await startClaudeTurn();
+      await harness.emitAndDrain([
+        {
+          type: "request.opened",
+          eventId: asEventId("stall-approval-opened"),
+          provider: claude,
+          threadId: asThreadId("thread-1"),
+          turnId: stalledTurnId,
+          requestId: ApprovalRequestId.make("stall-approval"),
+          createdAt: "2026-01-01T00:00:01.000Z",
+          payload: { requestType: "command_execution_approval", detail: "bun test" },
+        },
+      ]);
+      expect((await harness.readThreadShell()).hasPendingApprovals).toBe(true);
+
+      harness.advanceClock(STALLED_TURN_THRESHOLD_MS * 2);
+      await harness.sweepStalledTurns();
+
+      expect((await harness.readThreadShell()).stalledSince ?? null).toBeNull();
+      expect(await stallRows(harness)).toEqual([]);
+    });
   });
 });
 

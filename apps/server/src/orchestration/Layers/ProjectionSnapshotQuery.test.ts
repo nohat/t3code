@@ -27,6 +27,7 @@ import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
+import * as ThreadTurnActivity from "../ThreadTurnActivity.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { encodeThreadDetailPageCursor } from "../threadDetailCursor.ts";
 import { projectThreadDetailSnapshot } from "../ActivityPayloadProjection.ts";
@@ -53,6 +54,7 @@ it.effect("reads project shells without loading threads or resolving excluded pr
   const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(ThreadTurnActivity.layer),
     Layer.provide(
       Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
         resolve: (root) =>
@@ -104,6 +106,7 @@ const projectionSnapshotLayer = it.layer(
   OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(ThreadTurnActivity.layer),
     Layer.provideMerge(RepositoryIdentityResolver.layer),
     Layer.provideMerge(SqlitePersistenceMemory),
     Layer.provideMerge(NodeServices.layer),
@@ -631,6 +634,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           hasActionableProposedPlan: false,
           backgroundLiveness: null,
           planProgress: null,
+          stalledSince: null,
         },
       ]);
 
@@ -2407,6 +2411,7 @@ it.effect(
     const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(ThreadBackgroundLiveness.layer),
       Layer.provide(ThreadPlanProgress.layer),
+      Layer.provide(ThreadTurnActivity.layer),
       Layer.provideMerge(
         Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
           resolve: (cwd: string) =>
@@ -3455,6 +3460,7 @@ it.effect("omits foreign-host PRs from legacy snapshots while preserving native 
   const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(ThreadTurnActivity.layer),
     Layer.provide(
       Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
         resolve: () =>
@@ -3504,6 +3510,46 @@ it.effect("omits foreign-host PRs from legacy snapshots while preserving native 
   }).pipe(Effect.provide(layer));
 });
 
+it.effect("maps the stalled-turn flag into every shell read and drops it when cleared", () => {
+  const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
+    Layer.provide(ThreadBackgroundLiveness.layer),
+    Layer.provide(ThreadPlanProgress.layer),
+    Layer.provideMerge(ThreadTurnActivity.layer),
+    Layer.provide(
+      Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
+        resolve: () => Effect.succeed(null),
+      }),
+    ),
+    Layer.provideMerge(SqlitePersistenceMemory),
+  );
+  return Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const query = yield* ProjectionSnapshotQuery;
+    const turnActivity = yield* ThreadTurnActivity.ThreadTurnActivityService;
+    yield* sql`INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at)
+      VALUES ('project-1', 'Project', '/repo', '[]', '2026-09-09T00:00:00Z', '2026-09-09T00:00:00Z')`;
+    yield* sql`INSERT INTO projection_threads (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at)
+      VALUES ('thread-1', 'project-1', 'Thread', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', '2026-09-09T00:00:00Z', '2026-09-09T00:00:00Z')`;
+    const readStalledSince = Effect.gen(function* () {
+      const shell = yield* query.getShellSnapshot();
+      const individual = yield* query.getThreadShellById(ThreadId.make("thread-1"));
+      return [shell.threads[0]?.stalledSince, Option.getOrThrow(individual).stalledSince];
+    });
+
+    assert.deepEqual(yield* readStalledSince, [null, null]);
+
+    turnActivity.recordEvent("thread-1", 1_000);
+    turnActivity.markStalled("thread-1", "2026-09-09T00:10:00.000Z", 1_000);
+    assert.deepEqual(yield* readStalledSince, [
+      "2026-09-09T00:10:00.000Z",
+      "2026-09-09T00:10:00.000Z",
+    ]);
+
+    turnActivity.recordEvent("thread-1", 2_000);
+    assert.deepEqual(yield* readStalledSince, [null, null]);
+  }).pipe(Effect.provide(layer));
+});
+
 it.effect(
   "lists linked threads like the shell snapshot, in one query and without identities",
   () => {
@@ -3511,6 +3557,7 @@ it.effect(
     const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
       Layer.provide(ThreadBackgroundLiveness.layer),
       Layer.provide(ThreadPlanProgress.layer),
+      Layer.provide(ThreadTurnActivity.layer),
       Layer.provide(
         Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
           resolve: (root) =>
@@ -3579,6 +3626,7 @@ it.effect("reads one sweep thread and its projects like the shell snapshot", () 
   const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(ThreadTurnActivity.layer),
     Layer.provide(
       Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
         resolve: () =>
@@ -3648,6 +3696,7 @@ it.effect("reads a full sweep from unsettled threads and every project", () => {
   const layer = OrchestrationProjectionSnapshotQueryLive.pipe(
     Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(ThreadPlanProgress.layer),
+    Layer.provide(ThreadTurnActivity.layer),
     Layer.provide(
       Layer.succeed(RepositoryIdentityResolver.RepositoryIdentityResolver, {
         resolve: (root) =>

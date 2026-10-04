@@ -927,6 +927,14 @@ export const OrchestrationThreadShell = Schema.Struct({
    */
   backgroundLiveness: Schema.optional(Schema.NullOr(Schema.Literals(["working", "monitoring"]))),
   /**
+   * When the stalled-turn watchdog flagged the running turn: the provider has
+   * emitted nothing for longer than the threshold while the thread was not
+   * waiting on the user or on background work. Cleared as soon as the provider
+   * speaks again or the turn ends. Optional so old servers/clients interop;
+   * absent = not stalled.
+   */
+  stalledSince: Schema.optional(Schema.NullOr(IsoDateTime)),
+  /**
    * Current plan step while a turn runs, for the Working indicators
    * (sidebar row, in-chat working line). Cleared when the turn settles —
    * never persists as stale UI. Optional so old servers/clients interop.

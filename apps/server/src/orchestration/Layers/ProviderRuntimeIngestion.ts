@@ -46,6 +46,11 @@ import { ProjectionThreadProposedPlanRepositoryLive } from "../../persistence/La
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
+import { ThreadTurnActivityService } from "../ThreadTurnActivity.ts";
+import {
+  resolveStalledTurnWatchdogOptions,
+  startStalledTurnWatchdog,
+} from "../ThreadTurnWatchdog.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
   ProviderRuntimeIngestionService,
@@ -137,6 +142,12 @@ type RuntimeIngestionInput =
   | {
       source: "domain";
       event: TurnStartRequestedDomainEvent;
+    }
+  | {
+      // The watchdog flagged this thread and its provider just spoke again.
+      // Queued ahead of the event that proved it, so the row lands first.
+      source: "stall-resumed";
+      event: ProviderRuntimeEvent;
     }
   | {
       /** A diff whose workspace the diff worker confirmed is a Git repository. */
@@ -1043,6 +1054,11 @@ export function runtimeEventToActivities(
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
+  const threadTurnActivity = yield* ThreadTurnActivityService;
+  const watchdogOptions = yield* resolveStalledTurnWatchdogOptions;
+  // Captured here so event timestamps follow the layer's clock, not whatever
+  // clock the forked stream consumer inherits.
+  const clock = yield* Clock.Clock;
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
@@ -2620,6 +2636,43 @@ const make = Effect.gen(function* () {
 
   const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;
 
+  const recordTurnResumed = (event: ProviderRuntimeEvent) =>
+    Effect.gen(function* () {
+      const thread = yield* resolveThreadRuntimeContext(event.threadId);
+      if (!thread) return;
+      yield* orchestrationEngine.dispatch({
+        type: "thread.activity.append",
+        commandId: yield* providerCommandId(event, "turn-resumed"),
+        threadId: thread.id,
+        activity: {
+          id: EventId.make(`${event.eventId}:turn-resumed`),
+          tone: "info",
+          kind: "provider.turn.resumed",
+          summary: "Provider resumed",
+          payload: {},
+          turnId: toTurnId(event.turnId) ?? thread.session?.activeTurnId ?? null,
+          createdAt: event.createdAt,
+        },
+        createdAt: event.createdAt,
+      });
+    });
+
+  // Stamps the turn-activity registry for the stalled-turn watchdog. Runs at
+  // the stream consumer, ahead of the worker, because processRuntimeEvent
+  // drops high-frequency deltas that still prove the provider is alive.
+  // Returns true when the thread was flagged stalled and has just resumed.
+  const stampTurnActivity = (event: ProviderRuntimeEvent): boolean => {
+    if (
+      event.type === "turn.completed" ||
+      event.type === "turn.aborted" ||
+      event.type === "session.exited"
+    ) {
+      threadTurnActivity.clearThread(event.threadId);
+      return false;
+    }
+    return threadTurnActivity.recordEvent(event.threadId, clock.currentTimeMillisUnsafe());
+  };
+
   // Records a mid-turn placeholder checkpoint for a provider diff. Runs on the
   // lifecycle worker, after repository detection, so the running-turn check
   // and the dispatch are ordered with the turn's terminal events: a diff that
@@ -2665,6 +2718,8 @@ const make = Effect.gen(function* () {
         return processDomainEvent(input.event);
       case "diff":
         return recordProviderDiff(input.event);
+      case "stall-resumed":
+        return recordTurnResumed(input.event);
     }
   };
 
@@ -2709,19 +2764,32 @@ const make = Effect.gen(function* () {
   const start: ProviderRuntimeIngestionShape["start"] = () =>
     Effect.gen(function* () {
       yield* forkParked(
-        Stream.runForEach(providerService.streamEvents, (event) =>
-          event.type === "turn.diff.updated"
-            ? diffWorker.enqueue(event)
-            : worker.enqueue({ source: "runtime", event }),
-        ),
+        Stream.runForEach(providerService.streamEvents, (event) => {
+          const resumed = stampTurnActivity(event);
+          if (event.type === "turn.diff.updated") {
+            return diffWorker.enqueue(event);
+          }
+          return resumed
+            ? worker
+                .enqueue({ source: "stall-resumed", event })
+                .pipe(Effect.andThen(worker.enqueue({ source: "runtime", event })))
+            : worker.enqueue({ source: "runtime", event });
+        }),
       );
       yield* forkParked(
         Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
           if (event.type !== "thread.turn-start-requested") {
             return Effect.void;
           }
+          // A turn that never produces a first event must still be caught.
+          threadTurnActivity.recordEvent(event.payload.threadId, clock.currentTimeMillisUnsafe());
           return worker.enqueue({ source: "domain", event });
         }),
+      );
+      yield* startStalledTurnWatchdog(watchdogOptions).pipe(
+        Effect.provideService(ThreadTurnActivityService, threadTurnActivity),
+        Effect.provideService(ProjectionSnapshotQuery, projectionSnapshotQuery),
+        Effect.provideService(OrchestrationEngineService, orchestrationEngine),
       );
     });
 
