@@ -7,7 +7,7 @@ import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useCallback, useState } from "react";
-import { Platform, Alert, Pressable, View } from "react-native";
+import { ActivityIndicator, Platform, Alert, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { AppText as Text } from "../../components/AppText";
@@ -25,11 +25,15 @@ function connectionStatusLabel(environment: ConnectedEnvironmentSummary): string
   if (!environment.isEnabled && environment.connectionState !== "unsupported") {
     return "Off";
   }
-  return connectionStatusText({
-    phase: environment.connectionState,
-    error: environment.connectionError,
-    traceId: environment.connectionErrorTraceId,
-  });
+  return connectionStatusText(
+    {
+      phase: environment.connectionState,
+      error: environment.connectionError,
+      traceId: environment.connectionErrorTraceId,
+      failureKind: environment.connectionFailureKind ?? null,
+    },
+    { label: environment.environmentLabel },
+  );
 }
 
 export function ConnectionEnvironmentRow(props: {
@@ -60,6 +64,9 @@ export function ConnectionEnvironmentRow(props: {
     enabled &&
     (props.environment.connectionState === "connecting" ||
       props.environment.connectionState === "reconnecting");
+  // Reconnecting disables the control and shows progress, so a press always
+  // has a visible pending state before it resolves.
+  const showReconnectProgress = isRetrying;
   const handleSave = useCallback(async () => {
     const result = await props.onUpdate(props.environment.environmentId, {
       label: label.trim(),
@@ -195,13 +202,23 @@ export function ConnectionEnvironmentRow(props: {
                   />
                 </View>
               )}
-              <MaterialIconButton
-                accessibilityLabel="Reconnect environment"
-                icon="arrow.clockwise"
-                variant="tonal"
-                disabled={!enabled}
-                onPress={() => props.onReconnect(props.environment.environmentId)}
-              />
+              {showReconnectProgress ? (
+                <View
+                  accessibilityLabel="Reconnecting environment"
+                  accessibilityRole="button"
+                  className="size-12 items-center justify-center rounded-full bg-secondary"
+                >
+                  <ActivityIndicator size="small" colorClassName="accent-secondary-foreground" />
+                </View>
+              ) : (
+                <MaterialIconButton
+                  accessibilityLabel="Reconnect environment"
+                  icon="arrow.clockwise"
+                  variant="tonal"
+                  disabled={!enabled}
+                  onPress={() => props.onReconnect(props.environment.environmentId)}
+                />
+              )}
               <MaterialIconButton
                 accessibilityLabel="Remove environment"
                 icon="trash"
@@ -230,15 +247,23 @@ export function ConnectionEnvironmentRow(props: {
 
               <Pressable
                 className="h-[42px] w-[42px] items-center justify-center rounded-[14px] border border-input-border bg-input active:opacity-70 disabled:opacity-40"
-                disabled={!enabled}
+                disabled={!enabled || showReconnectProgress}
+                accessibilityLabel={
+                  showReconnectProgress ? "Reconnecting environment" : "Reconnect environment"
+                }
+                accessibilityRole="button"
                 onPress={() => props.onReconnect(props.environment.environmentId)}
               >
-                <SymbolView
-                  name="arrow.clockwise"
-                  size={14}
-                  tintColorClassName="accent-icon-subtle"
-                  type="monochrome"
-                />
+                {showReconnectProgress ? (
+                  <ActivityIndicator size="small" colorClassName="accent-icon-subtle" />
+                ) : (
+                  <SymbolView
+                    name="arrow.clockwise"
+                    size={14}
+                    tintColorClassName="accent-icon-subtle"
+                    type="monochrome"
+                  />
+                )}
               </Pressable>
 
               <Pressable

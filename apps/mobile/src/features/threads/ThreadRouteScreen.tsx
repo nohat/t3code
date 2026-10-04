@@ -962,6 +962,7 @@ function ThreadRouteContent(
           contentPresentation={contentPresentation}
           screenTone={connectionTone(routeConnectionState)}
           connectionError={routeConnectionError}
+          connectionFailureKind={routeEnvironmentRuntime?.connectionFailureKind ?? null}
           environmentLabel={selectedEnvironmentConnection?.environmentLabel ?? null}
           feedbackSubmissions={composer.feedbackSubmissions}
           onDismissFeedback={composer.dismissFeedback}

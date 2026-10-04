@@ -240,7 +240,7 @@ function EnvironmentUnavailablePlaceholder({
     ? access.reason === "permissions"
       ? "Checking what this session is allowed to change."
       : `Waiting for ${environment.label}'s configuration.`
-    : connectionStatusTitle(environment.connection);
+    : connectionStatusTitle(environment.connection, { label: environment.label });
   const error = isLoading ? null : environment.connection.error;
   // No spinner: this state can persist indefinitely for a wedged device, and a
   // continuously repainting animation would run the whole time.
@@ -373,7 +373,9 @@ function ProviderSettingsPanelContent(target: ProviderSettingsTarget) {
           {options.map((environment) => {
             const machine = resolveEnvironmentMachineKind(environment.serverConfig);
             const detail = providerEnvironmentDetail(environment);
-            const statusText = connectionStatusTitle(environment.connection);
+            const statusText = connectionStatusTitle(environment.connection, {
+              label: environment.label,
+            });
             return (
               <Tooltip key={environment.environmentId}>
                 <TooltipTrigger

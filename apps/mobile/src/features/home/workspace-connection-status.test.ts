@@ -14,6 +14,8 @@ function workspaceState(overrides: Partial<WorkspaceState> = {}): WorkspaceState
     connectingEnvironments: [],
     connectionState: "connected",
     connectionError: null,
+    connectionFailureKind: null,
+    connectionFailureLabel: null,
     shellSnapshotError: null,
     latestCachedSnapshotReceivedAt: null,
     networkStatus: "online",
@@ -49,6 +51,7 @@ describe("workspace connection status", () => {
           connectionState: "reconnecting",
           connectionError: null,
           connectionErrorTraceId: null,
+          connectionFailureKind: null,
         },
       ],
     });
@@ -59,7 +62,22 @@ describe("workspace connection status", () => {
     });
   });
 
-  it("surfaces connection errors before the generic disconnected fallback", () => {
+  it("surfaces an actionable error before the generic disconnected fallback", () => {
+    const state = workspaceState({
+      connectionError: "Could not reach Julius’s Mac mini",
+      connectionFailureKind: "unreachable",
+      connectionFailureLabel: "Julius’s Mac mini",
+      hasLoadedShellSnapshot: false,
+      hasReadyEnvironment: false,
+    });
+
+    expect(workspaceConnectionStatusPresentation(state)).toEqual({
+      label: "Can't reach Julius’s Mac mini. Check your network or VPN, then reconnect.",
+      showsProgress: false,
+    });
+  });
+
+  it("falls back to the raw error when no failure category is known", () => {
     const state = workspaceState({
       connectionError: "Could not reach Julius’s Mac mini",
       hasLoadedShellSnapshot: false,

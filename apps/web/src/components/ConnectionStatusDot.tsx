@@ -56,14 +56,15 @@ export function ConnectionStatusDot({
     );
   }
 
+  // A status dot with a tooltip is informational, not a control. Render it as
+  // a span so it never reads as a button that does nothing when clicked.
   const dot = (
-    <button
-      type="button"
+    <span
       aria-label={tooltipText}
       className="relative flex size-3 shrink-0 cursor-help items-center justify-center rounded-full outline-hidden"
     >
       {dotContent}
-    </button>
+    </span>
   );
 
   return (

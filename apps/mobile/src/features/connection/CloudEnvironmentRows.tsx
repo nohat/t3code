@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/expo";
 import { SymbolView } from "../../components/AppSymbol";
 import {
   connectionStatusText,
+  type ConnectionFailureKind,
   type EnvironmentConnectionPhase,
 } from "@t3tools/client-runtime/connection";
 import {
@@ -230,6 +231,9 @@ function ConnectedCloudEnvironmentRow(props: {
         opensDetails={props.onOpen !== undefined}
         connectionError={enabled || unsupported ? props.environment.connectionError : null}
         connectionErrorTraceId={enabled ? props.environment.connectionErrorTraceId : null}
+        connectionFailureKind={
+          enabled || unsupported ? (props.environment.connectionFailureKind ?? null) : null
+        }
         connectionState={enabled || unsupported ? props.environment.connectionState : "available"}
         errorExpanded={props.errorExpanded}
         label={props.environment.environmentLabel}
@@ -292,6 +296,7 @@ function CloudEnvironmentRowShell(props: {
   readonly connectionError: string | null;
   readonly connectionErrorTraceId: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
+  readonly connectionFailureKind?: ConnectionFailureKind | null;
   readonly disabled?: boolean;
   readonly errorExpanded: boolean;
   readonly label: string;
@@ -306,11 +311,15 @@ function CloudEnvironmentRowShell(props: {
   const shouldPulse = isRetrying;
   const statusText =
     props.statusText ??
-    connectionStatusText({
-      phase: props.connectionState,
-      error: props.connectionError,
-      traceId: props.connectionErrorTraceId,
-    });
+    connectionStatusText(
+      {
+        phase: props.connectionState,
+        error: props.connectionError,
+        traceId: props.connectionErrorTraceId,
+        failureKind: props.connectionFailureKind ?? null,
+      },
+      { label: props.label },
+    );
   // Unsupported is a compatibility note, not a failure, so it stays muted.
   const statusClassName =
     props.connectionError && props.connectionState !== "unsupported"

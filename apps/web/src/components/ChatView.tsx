@@ -46,7 +46,11 @@ import {
   TerminalOpenInput,
   type WorktreeSetupSnapshot,
 } from "@t3tools/contracts";
-import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
+import {
+  connectionFailureGuidance,
+  connectionStatusTitle,
+  type EnvironmentConnectionPresentation,
+} from "@t3tools/client-runtime/connection";
 import {
   wasBootstrapThreadDeleted,
   wasBootstrapThreadNotCreated,
@@ -2391,6 +2395,10 @@ export default function ChatView(props: ChatViewProps) {
       : null;
   const [reconnectWarningGraceElapsedEnvironmentId, setReconnectWarningGraceElapsedEnvironmentId] =
     useState<EnvironmentId | null>(null);
+  // A manual reconnect keeps its banner visible through the reconnect grace
+  // window, so pressing Reconnect always shows a pending state and result.
+  const [requestedReconnectEnvironmentId, setRequestedReconnectEnvironmentId] =
+    useState<EnvironmentId | null>(null);
   const reconnectWarningGraceElapsed = hasEnvironmentReconnectWarningGraceElapsed(
     activeReconnectingEnvironmentId,
     reconnectWarningGraceElapsedEnvironmentId,
@@ -2402,6 +2410,24 @@ export default function ChatView(props: ChatViewProps) {
       setReconnectWarningGraceElapsedEnvironmentId(activeReconnectingEnvironmentId),
     );
   }, [activeReconnectingEnvironmentId]);
+  useEffect(() => {
+    if (
+      requestedReconnectEnvironmentId === null ||
+      activeEnvironment?.environmentId !== requestedReconnectEnvironmentId
+    ) {
+      return;
+    }
+    if (
+      activeEnvironmentConnectionPhase !== "connecting" &&
+      activeEnvironmentConnectionPhase !== "reconnecting"
+    ) {
+      setRequestedReconnectEnvironmentId(null);
+    }
+  }, [
+    activeEnvironment?.environmentId,
+    activeEnvironmentConnectionPhase,
+    requestedReconnectEnvironmentId,
+  ]);
   const activeEnvironmentUnavailableLabel = activeEnvironment?.label ?? null;
   const activeEnvironmentUnavailableState = useMemo<EnvironmentUnavailableState | null>(() => {
     if (!activeEnvironmentUnavailable || !activeEnvironmentUnavailableLabel || !activeEnvironment) {
@@ -2415,20 +2441,25 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [activeEnvironment, activeEnvironmentUnavailable, activeEnvironmentUnavailableLabel]);
   const handleReconnectActiveEnvironment = useCallback(
-    async (environmentId: EnvironmentId) => {
+    async (environmentId: EnvironmentId, environmentLabel: string) => {
+      setRequestedReconnectEnvironmentId(environmentId);
       const result = await retryEnvironment(environmentId);
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        setRequestedReconnectEnvironmentId(null);
         const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({
             type: "error",
-            title: "Could not reconnect environment",
-            description: error instanceof Error ? error.message : "Failed to reconnect.",
+            title: `Couldn't reconnect ${environmentLabel}`,
+            description:
+              error instanceof Error
+                ? error.message
+                : "The environment did not start reconnecting.",
           }),
         );
       }
     },
-    [retryEnvironment],
+    [retryEnvironment, setRequestedReconnectEnvironmentId],
   );
   const disconnectDelayElapsed = useEnvironmentDisconnectDelay(
     activeEnvironmentUnavailable ? activeEnvironment.environmentId : null,
@@ -2721,30 +2752,41 @@ export default function ChatView(props: ChatViewProps) {
         unavailableConnection.phase === "reconnecting");
     // While an update runs, transient connect blips are expected (the server
     // restarts) and the update banner already shows progress. Hard failure
-    // phases still surface so the Reconnect action stays reachable.
+    // phases still surface so the Reconnect action stays reachable. A manual
+    // reconnect keeps the banner up so the press always has a visible result.
+    const manualReconnectRequested =
+      requestedReconnectEnvironmentId !== null &&
+      requestedReconnectEnvironmentId === activeEnvironmentUnavailableState?.environmentId;
     const suppressUnavailableBanner =
-      environmentReconnecting && (updateRunning || !reconnectWarningGraceElapsed);
+      environmentReconnecting &&
+      !manualReconnectRequested &&
+      (updateRunning || !reconnectWarningGraceElapsed);
     if (activeEnvironmentUnavailableState && unavailableConnection && !suppressUnavailableBanner) {
+      const label = activeEnvironmentUnavailableState.label;
       items.push({
         id: `environment-unavailable:${activeEnvironmentUnavailableState.environmentId}`,
         variant: unavailableConnection.phase === "error" ? "error" : "warning",
         icon: <WifiOffIcon />,
-        title: `${activeEnvironmentUnavailableState.label} is ${environmentReconnecting ? "reconnecting" : "offline"}`,
+        title:
+          unavailableConnection.phase === "offline"
+            ? `${label} is offline`
+            : connectionStatusTitle(unavailableConnection, { label }),
+        description: connectionFailureGuidance(unavailableConnection, { label }) ?? undefined,
         actions: (
           <>
-            {!environmentReconnecting ? (
-              <Button
-                size="xs"
-                variant="ghost"
-                onClick={() =>
-                  void handleReconnectActiveEnvironment(
-                    activeEnvironmentUnavailableState.environmentId,
-                  )
-                }
-              >
-                Reconnect
-              </Button>
-            ) : null}
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={environmentReconnecting}
+              onClick={() =>
+                void handleReconnectActiveEnvironment(
+                  activeEnvironmentUnavailableState.environmentId,
+                  label,
+                )
+              }
+            >
+              {environmentReconnecting ? "Reconnecting…" : "Reconnect"}
+            </Button>
             {disconnectAction}
           </>
         ),
@@ -2836,6 +2878,7 @@ export default function ChatView(props: ChatViewProps) {
     autoBalanceUpdateBanner,
     activeEnvironmentUnavailableState,
     reconnectWarningGraceElapsed,
+    requestedReconnectEnvironmentId,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,
     disconnectingEnvironment,

@@ -1,5 +1,6 @@
 import { ConnectionTraceId } from "./ConnectionTraceId";
 import {
+  connectionFailureGuidance,
   type EnvironmentConnectionPhase,
   type EnvironmentConnectionPresentation,
 } from "@t3tools/client-runtime/connection";
@@ -60,6 +61,14 @@ export function EnvironmentConnectionNotice(props: {
 }) {
   const isRetrying =
     props.connection.phase === "connecting" || props.connection.phase === "reconnecting";
+  // Offline keeps its cached-data explanation; every other failure gets the
+  // one actionable sentence for its category when the data provides one.
+  const guidance =
+    props.connection.phase === "error" ||
+    props.connection.phase === "reconnecting" ||
+    props.connection.phase === "unsupported"
+      ? connectionFailureGuidance(props.connection, { label: props.environmentLabel })
+      : null;
 
   return (
     <View className="flex-1 items-center justify-center px-8">
@@ -79,7 +88,8 @@ export function EnvironmentConnectionNotice(props: {
           {noticeTitle(props.connection.phase, props.environmentLabel)}
         </Text>
         <Text className="text-center text-sm leading-normal text-foreground-muted">
-          {noticeDetail(props.connection.phase, props.resourceName, props.connection.error)}
+          {guidance ??
+            noticeDetail(props.connection.phase, props.resourceName, props.connection.error)}
           {props.connection.traceId ? (
             <ConnectionTraceId traceId={props.connection.traceId} />
           ) : null}

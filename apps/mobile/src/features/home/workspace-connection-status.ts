@@ -1,3 +1,5 @@
+import { connectionFailureGuidance } from "@t3tools/client-runtime/connection";
+
 import type { WorkspaceState } from "../../state/workspaceModel";
 
 export interface WorkspaceConnectionStatusPresentation {
@@ -24,7 +26,19 @@ function workspaceConnectionStatusLabel(state: WorkspaceState): string {
   if (state.connectingEnvironments.length > 1) {
     return `Reconnecting ${state.connectingEnvironments.length} environments`;
   }
-  if (state.connectionError !== null) return state.connectionError;
+  if (state.connectionError !== null) {
+    return (
+      connectionFailureGuidance(
+        {
+          phase: "error",
+          error: state.connectionError,
+          traceId: null,
+          failureKind: state.connectionFailureKind,
+        },
+        { label: state.connectionFailureLabel },
+      ) ?? state.connectionError
+    );
+  }
   if (state.hasPendingShellSnapshot) {
     return state.hasLoadedShellSnapshot ? "Syncing threads..." : "Loading threads...";
   }

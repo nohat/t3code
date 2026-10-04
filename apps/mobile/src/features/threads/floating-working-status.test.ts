@@ -4,11 +4,16 @@ import { connectionFloatingStatus } from "./floating-working-status";
 
 const status = (
   connectionState: Parameters<typeof connectionFloatingStatus>[0]["connectionState"],
-  overrides: { connectionError?: string | null; environmentLabel?: string | null } = {},
+  overrides: {
+    connectionError?: string | null;
+    connectionFailureKind?: Parameters<typeof connectionFloatingStatus>[0]["connectionFailureKind"];
+    environmentLabel?: string | null;
+  } = {},
 ) =>
   connectionFloatingStatus({
     connectionError: overrides.connectionError ?? null,
     connectionState,
+    connectionFailureKind: overrides.connectionFailureKind ?? null,
     environmentLabel:
       overrides.environmentLabel === undefined ? "Mac mini" : overrides.environmentLabel,
     onReconnect: () => {},
@@ -43,6 +48,30 @@ describe("connectionFloatingStatus", () => {
       label: "Failed to connect to Mac mini: handshake timed out",
     });
     expect(status("error")).toMatchObject({ label: "Failed to connect to Mac mini" });
+  });
+
+  it("gives one actionable sentence when the failure category is known", () => {
+    expect(
+      status("error", {
+        connectionError: "Connection refused",
+        connectionFailureKind: "unreachable",
+      }),
+    ).toMatchObject({
+      tone: "unavailable",
+      label: "Can't reach Mac mini. Check your network or VPN, then reconnect.",
+    });
+    expect(
+      status("reconnecting", {
+        connectionError: "401 Unauthorized",
+        connectionFailureKind: "authentication",
+      }),
+    ).toMatchObject({
+      tone: "reconnecting",
+      label: "Can't sign in to Mac mini. Reconnect and sign in again.",
+    });
+    expect(status("unsupported", { connectionFailureKind: "unsupported" })).toMatchObject({
+      label: "Client not supported",
+    });
   });
 
   it("falls back to a generic name when the environment has no label", () => {

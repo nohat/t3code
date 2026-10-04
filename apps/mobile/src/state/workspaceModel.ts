@@ -1,6 +1,9 @@
 import { type EnvironmentShellSummary } from "@t3tools/client-runtime/state/shell";
 import { type NetworkStatus } from "@t3tools/client-runtime/connection";
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import {
+  type ConnectionFailureKind,
+  type EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 
 import type { EnvironmentPresentation } from "./environments";
@@ -14,6 +17,7 @@ export interface WorkspaceEnvironment {
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
   readonly connectionErrorTraceId: string | null;
+  readonly connectionFailureKind: ConnectionFailureKind | null;
 }
 
 export interface WorkspaceState {
@@ -26,6 +30,8 @@ export interface WorkspaceState {
   readonly connectingEnvironments: ReadonlyArray<WorkspaceEnvironment>;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
+  readonly connectionFailureKind: ConnectionFailureKind | null;
+  readonly connectionFailureLabel: string | null;
   readonly shellSnapshotError: string | null;
   readonly latestCachedSnapshotReceivedAt: string | null;
   readonly networkStatus: NetworkStatus;
@@ -43,6 +49,7 @@ export function projectWorkspaceEnvironment(
     connectionState: environment.connection.phase,
     connectionError: environment.connection.error,
     connectionErrorTraceId: environment.connection.traceId,
+    connectionFailureKind: environment.connection.failureKind ?? null,
   };
 }
 
@@ -91,6 +98,8 @@ export function projectWorkspaceState(input: {
       environment.connectionState === "connecting" ||
       environment.connectionState === "reconnecting",
   );
+  const failedEnvironment =
+    activeEnvironments.find((environment) => environment.connectionError !== null) ?? null;
 
   return {
     isLoadingConnections: !input.isReady,
@@ -103,9 +112,9 @@ export function projectWorkspaceState(input: {
     hasConnectingEnvironment: connectingEnvironments.length > 0,
     connectingEnvironments,
     connectionState: overallConnectionState(activeEnvironments, input.networkStatus),
-    connectionError:
-      activeEnvironments.find((environment) => environment.connectionError !== null)
-        ?.connectionError ?? null,
+    connectionError: failedEnvironment?.connectionError ?? null,
+    connectionFailureKind: failedEnvironment?.connectionFailureKind ?? null,
+    connectionFailureLabel: failedEnvironment?.environmentLabel ?? null,
     shellSnapshotError: input.shellSummary.firstError,
     latestCachedSnapshotReceivedAt: input.shellSummary.latestSnapshotUpdatedAt,
     networkStatus: input.networkStatus,

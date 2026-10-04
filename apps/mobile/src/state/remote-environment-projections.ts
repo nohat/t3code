@@ -99,6 +99,7 @@ export function createRemoteEnvironmentProjectionAtoms(input: {
         connection.phase === previousConnection?.phase &&
         connection.error === previousConnection?.error &&
         connection.traceId === previousConnection?.traceId &&
+        connection.failureKind === previousConnection?.failureKind &&
         serverConfig === previousServerConfig
       ) {
         return previous;
@@ -110,6 +111,7 @@ export function createRemoteEnvironmentProjectionAtoms(input: {
         connectionState: connection.phase,
         connectionError: connection.error,
         connectionErrorTraceId: connection.traceId,
+        connectionFailureKind: connection.failureKind ?? null,
         serverConfig,
       };
       return previous;
