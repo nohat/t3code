@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { deriveProviderInstanceEntries } from "../../providerInstances";
 import {
   adjacentModelPickerProvider,
+  resolveModelPickerCommit,
   resolveModelPickerSelectedModel,
   shouldIncludeModelPickerOption,
   shouldOfferModelPickerSetup,
@@ -151,6 +152,47 @@ describe("resolveModelPickerSelectedModel", () => {
         options: [{ slug: "gemini-fast", name: "Gemini Fast" }],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("resolveModelPickerCommit", () => {
+  const driverKind = ProviderDriverKind.make("codex");
+  const options = [
+    { slug: "gpt-5", name: "GPT 5" },
+    { slug: "gpt-5-mini", name: "GPT 5 Mini" },
+  ];
+
+  it("commits a selectable model by its catalog slug", () => {
+    expect(
+      resolveModelPickerCommit({
+        disabledReason: null,
+        driverKind,
+        modelSlug: "gpt-5-mini",
+        options,
+      }),
+    ).toBe("gpt-5-mini");
+  });
+
+  it("never commits a disabled or unavailable row", () => {
+    expect(
+      resolveModelPickerCommit({
+        disabledReason: "Unavailable in this thread",
+        driverKind,
+        modelSlug: "gpt-5",
+        options,
+      }),
+    ).toBeNull();
+  });
+
+  it("never commits a model missing from the catalog", () => {
+    expect(
+      resolveModelPickerCommit({
+        disabledReason: null,
+        driverKind,
+        modelSlug: "removed-model",
+        options,
+      }),
+    ).toBeNull();
   });
 });
 

@@ -27,6 +27,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -79,12 +80,13 @@ import {
 import { ModelRow, ChoiceRow } from "./ThreadSettingsRows";
 import { RUNTIME_MODE_CHOICES, selectableChoices } from "./thread-settings-options";
 import {
-  canCommitPendingModel,
+  collectStarredModels,
   favoritesFirst,
   modelFavoriteKey,
   modelMatchesCatalogQuery,
   pendingModelAfterPress,
   providerSectionIsCollapsed,
+  resolveDismissAction,
   toggleModelFavorite,
 } from "./thread-settings-sheet-state";
 
@@ -170,6 +172,16 @@ function ProviderHeader(props: {
   return (
     <View accessibilityRole="header" className="mx-4 min-h-9 flex-row items-center gap-2 px-1 pt-1">
       {content}
+    </View>
+  );
+}
+
+/** Global favorites header above every starred model, whatever its provider. */
+function StarredHeader() {
+  return (
+    <View accessibilityRole="header" className="mx-4 min-h-9 flex-row items-center gap-2 px-1 pt-1">
+      <SymbolView name="star.fill" size={14} tintColorClassName="accent-icon" type="monochrome" />
+      <Text className="text-sm font-t3-medium text-foreground-muted">Favorites</Text>
     </View>
   );
 }
@@ -304,6 +316,7 @@ type ThreadSettingsSessionValue = {
   readonly searchQuery: string;
   readonly showLegacy: boolean;
   readonly applyOptionChange: (id: string, value: string | boolean) => void;
+  readonly cancelPendingModel: () => void;
   readonly commitPendingModel: () => boolean;
   readonly isApplied: (option: ModelOption) => boolean;
   readonly isDisplayed: (option: ModelOption) => boolean;
@@ -355,6 +368,40 @@ function ThreadSettingsSessionProvider(
     () => new Set(),
   );
   const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
+  const pendingModelRef = useRef<ModelOption | null>(null);
+  const dismissGroupsRef = useRef(props.providerGroups);
+  const dismissSelectRef = useRef(props.onSelectModel);
+  const cancelRequestedRef = useRef(false);
+
+  // A dismissal (Done, Save, swipe, backdrop, or back navigation) keeps the
+  // staged model; only Cancel clears it. The cleanup reads the latest values
+  // through refs so a gesture dismissal still commits after unmount.
+  useEffect(() => {
+    pendingModelRef.current = pendingModel;
+    dismissGroupsRef.current = props.providerGroups;
+    dismissSelectRef.current = props.onSelectModel;
+  });
+
+  useEffect(
+    () => () => {
+      if (cancelRequestedRef.current) {
+        return;
+      }
+      const action = resolveDismissAction({
+        pending: pendingModelRef.current,
+        groups: dismissGroupsRef.current,
+      });
+      if (action.kind === "commit") {
+        dismissSelectRef.current(action.option);
+      } else if (action.kind === "unavailable") {
+        Alert.alert(
+          "Model unavailable",
+          "Set up this provider on web or desktop, or select another model.",
+        );
+      }
+    },
+    [],
+  );
 
   const isApplied = useCallback(
     (option: ModelOption) =>
@@ -389,19 +436,28 @@ function ThreadSettingsSessionProvider(
     [props.providerGroups],
   );
   const commitPendingModel = useCallback(() => {
-    if (pendingModel) {
-      if (!canCommitPendingModel(pendingModel, props.providerGroups)) {
-        Alert.alert(
-          "Model unavailable",
-          "Set up this provider on web or desktop, or select another model.",
-        );
-        return false;
-      }
+    const action = resolveDismissAction({ pending: pendingModel, groups: props.providerGroups });
+    if (action.kind === "unavailable") {
+      Alert.alert(
+        "Model unavailable",
+        "Set up this provider on web or desktop, or select another model.",
+      );
+      return false;
+    }
+    if (action.kind === "commit") {
       void Haptics.selectionAsync();
-      props.onSelectModel(pendingModel);
+      props.onSelectModel(action.option);
+      pendingModelRef.current = null;
+      setPendingModel(null);
     }
     return true;
   }, [pendingModel, props.onSelectModel, props.providerGroups]);
+
+  const cancelPendingModel = useCallback(() => {
+    cancelRequestedRef.current = true;
+    pendingModelRef.current = null;
+    setPendingModel(null);
+  }, []);
 
   const applyOptionChange = useCallback(
     (id: string, value: string | boolean) => {
@@ -462,6 +518,7 @@ function ThreadSettingsSessionProvider(
       searchQuery,
       showLegacy: showLegacyToggle,
       applyOptionChange,
+      cancelPendingModel,
       commitPendingModel,
       isApplied,
       isDisplayed,
@@ -474,6 +531,7 @@ function ThreadSettingsSessionProvider(
     }),
     [
       applyOptionChange,
+      cancelPendingModel,
       commitPendingModel,
       displayedDescriptors,
       favoriteKeys,
@@ -530,6 +588,17 @@ type ThreadSettingsCatalogItem =
     }
   | {
       readonly kind: "model";
+      readonly key: string;
+      readonly option: ModelOption;
+      readonly isFirst: boolean;
+      readonly isLast: boolean;
+    }
+  | {
+      readonly kind: "starredHeader";
+      readonly key: "starred-header";
+    }
+  | {
+      readonly kind: "starredModel";
       readonly key: string;
       readonly option: ModelOption;
       readonly isFirst: boolean;
@@ -593,89 +662,111 @@ function ThreadSettingsProviderListHeader(props: {
 function useThreadSettingsCatalogItems(
   session: ThreadSettingsSessionValue,
 ): ReadonlyArray<ThreadSettingsCatalogItem> {
-  return useMemo(
-    () =>
-      session.providerGroups.flatMap((group) => {
-        if (
-          session.providerFilter !== null &&
-          session.providerFilter !== FAVORITES_PROVIDER_FILTER &&
-          group.providerKey !== session.providerFilter
-        ) {
-          return [];
-        }
-        const driver = group.models[0]?.providerDriver ?? group.providerKey;
-        const catalogModels =
-          session.showLegacy || session.providerFilter === FAVORITES_PROVIDER_FILTER
-            ? group.models
-            : group.models.filter(
-                (model) =>
-                  !model.isLegacy ||
-                  session.isDisplayed(model) ||
-                  session.favoriteKeys.has(model.key),
-              );
-        const visibleModels = favoritesFirst(
-          catalogModels.filter(
-            (model) =>
-              (session.providerFilter !== FAVORITES_PROVIDER_FILTER ||
-                session.favoriteKeys.has(model.key)) &&
-              modelMatchesCatalogQuery({
-                model,
-                providerLabel: group.providerLabel,
-                query: session.searchQuery,
-              }),
-          ),
-          session.favoriteKeys,
-        );
-        if (visibleModels.length === 0) {
-          return [];
-        }
-        const isPrimary = driver !== undefined && PRIMARY_PROVIDER_DRIVERS.has(driver);
-        // Staging a model must not change disclosure state. The applied model
-        // stays stable for the lifetime of this picker (Save closes it), so it
-        // is safe to use as the initial selected-provider default.
-        const containsAppliedSelection = group.models.some(session.isApplied);
-        const isNarrowed = session.providerFilter !== null || session.searchQuery.trim().length > 0;
-        const collapsible = !isNarrowed;
-        const collapsed = providerSectionIsCollapsed({
-          defaultExpanded: isPrimary || containsAppliedSelection,
-          hasExpansionOverride: session.providerExpansionOverrides.has(group.providerKey),
-          isNarrowed,
-        });
-        const provider: ThreadSettingsProviderCatalog = {
-          key: group.providerKey,
-          driver,
-          label: group.providerLabel,
-          collapsible,
-          collapsed,
-          modelCount: visibleModels.length,
-          models: collapsed ? [] : visibleModels,
-        };
-        return [
-          {
-            kind: "provider" as const,
-            key: `provider:${group.providerKey}`,
-            provider,
-          },
-          ...provider.models.map((option, index) => ({
-            kind: "model" as const,
-            key: `model:${option.key}`,
+  return useMemo(() => {
+    const items: ThreadSettingsCatalogItem[] = [];
+    const isDefaultList =
+      session.providerFilter === null && session.searchQuery.trim().length === 0;
+
+    // Every starred model leads the default all-providers list, even when the
+    // provider it belongs to is collapsed or its own section starts lower.
+    if (isDefaultList) {
+      const starredModels = collectStarredModels(session.providerGroups, session.favoriteKeys);
+      if (starredModels.length > 0) {
+        items.push({ kind: "starredHeader", key: "starred-header" });
+        starredModels.forEach((option, index) => {
+          items.push({
+            kind: "starredModel",
+            key: `starred-model:${option.key}`,
             option,
             isFirst: index === 0,
-            isLast: index === provider.models.length - 1,
-          })),
-        ];
-      }),
-    [
-      session.isApplied,
-      session.isDisplayed,
-      session.favoriteKeys,
-      session.providerExpansionOverrides,
-      session.providerFilter,
-      session.providerGroups,
-      session.searchQuery,
-      session.showLegacy,
-    ],
-  );
+            isLast: index === starredModels.length - 1,
+          });
+        });
+      }
+    }
+
+    for (const group of session.providerGroups) {
+      if (
+        session.providerFilter !== null &&
+        session.providerFilter !== FAVORITES_PROVIDER_FILTER &&
+        group.providerKey !== session.providerFilter
+      ) {
+        continue;
+      }
+      const driver = group.models[0]?.providerDriver ?? group.providerKey;
+      const catalogModels =
+        session.showLegacy || session.providerFilter === FAVORITES_PROVIDER_FILTER
+          ? group.models
+          : group.models.filter(
+              (model) =>
+                !model.isLegacy ||
+                session.isDisplayed(model) ||
+                session.favoriteKeys.has(model.key),
+            );
+      const visibleModels = favoritesFirst(
+        catalogModels.filter(
+          (model) =>
+            (session.providerFilter !== FAVORITES_PROVIDER_FILTER ||
+              session.favoriteKeys.has(model.key)) &&
+            modelMatchesCatalogQuery({
+              model,
+              providerLabel: group.providerLabel,
+              query: session.searchQuery,
+            }),
+        ),
+        session.favoriteKeys,
+      );
+      if (visibleModels.length === 0) {
+        continue;
+      }
+      const isPrimary = driver !== undefined && PRIMARY_PROVIDER_DRIVERS.has(driver);
+      // Staging a model must not change disclosure state. The applied model
+      // stays stable for the lifetime of this picker (Save closes it), so it
+      // is safe to use as the initial selected-provider default.
+      const containsAppliedSelection = group.models.some(session.isApplied);
+      const isNarrowed = session.providerFilter !== null || session.searchQuery.trim().length > 0;
+      const collapsible = !isNarrowed;
+      const collapsed = providerSectionIsCollapsed({
+        defaultExpanded: isPrimary || containsAppliedSelection,
+        hasExpansionOverride: session.providerExpansionOverrides.has(group.providerKey),
+        isNarrowed,
+      });
+      const provider: ThreadSettingsProviderCatalog = {
+        key: group.providerKey,
+        driver,
+        label: group.providerLabel,
+        collapsible,
+        collapsed,
+        modelCount: visibleModels.length,
+        models: collapsed ? [] : visibleModels,
+      };
+      items.push({
+        kind: "provider",
+        key: `provider:${group.providerKey}`,
+        provider,
+      });
+      provider.models.forEach((option, index) => {
+        items.push({
+          kind: "model",
+          key: `model:${option.key}`,
+          option,
+          isFirst: index === 0,
+          isLast: index === provider.models.length - 1,
+        });
+      });
+    }
+
+    return items;
+  }, [
+    session.isApplied,
+    session.isDisplayed,
+    session.favoriteKeys,
+    session.providerExpansionOverrides,
+    session.providerFilter,
+    session.providerGroups,
+    session.searchQuery,
+    session.showLegacy,
+  ]);
 }
 
 function ThreadSettingsOptionsItem(props: {
@@ -808,7 +899,7 @@ function ThreadSettingsMainContent(props: {
 
       if (item.kind === "provider") {
         content = <ThreadSettingsProviderListHeader provider={item.provider} />;
-      } else if (item.kind === "model") {
+      } else if (item.kind === "model" || item.kind === "starredModel") {
         content = (
           <ThreadSettingsModelListRow
             isFirst={item.isFirst}
@@ -816,6 +907,8 @@ function ThreadSettingsMainContent(props: {
             option={item.option}
           />
         );
+      } else if (item.kind === "starredHeader") {
+        content = <StarredHeader />;
       } else if (item.kind === "empty") {
         content = (
           <View className="items-center px-8 py-14">
@@ -1048,6 +1141,10 @@ function ThreadSettingsModelsScreen() {
     if (!session.commitPendingModel()) return;
     presentation.onClose();
   }, [presentation, session]);
+  const cancelAndClose = useCallback(() => {
+    session.cancelPendingModel();
+    presentation.onClose();
+  }, [presentation, session]);
   const providerFilters = useMemo(
     () => [
       { id: "all-providers", title: "All providers", value: null },
@@ -1198,7 +1295,7 @@ function ThreadSettingsModelsScreen() {
         <NativeHeaderToolbar.Button
           accessibilityLabel="Cancel thread settings"
           label="Cancel"
-          onPress={presentation.onClose}
+          onPress={cancelAndClose}
         />
       </NativeHeaderToolbar>
       <NativeHeaderToolbar placement="right">

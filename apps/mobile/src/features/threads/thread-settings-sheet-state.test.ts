@@ -2,13 +2,15 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { ProviderInstanceId, type ProviderOptionSelection } from "@t3tools/contracts";
 
-import type { ModelOption } from "../../lib/modelOptions";
+import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
 import {
   canCommitPendingModel,
+  collectStarredModels,
   favoritesFirst,
   modelFavoriteKey,
   modelMatchesCatalogQuery,
   pendingModelAfterPress,
+  resolveDismissAction,
   toggleModelFavorite,
 } from "./thread-settings-sheet-state";
 
@@ -158,5 +160,53 @@ describe("thread settings sheet state", () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  it("commits a staged model on dismissal and reports an unavailable one", () => {
+    const pending = modelOption("gpt-next");
+    const group: ProviderGroup = {
+      providerKey: "codex",
+      providerLabel: "Codex",
+      models: [pending],
+    };
+
+    expect(resolveDismissAction({ pending, groups: [group] })).toEqual({
+      kind: "commit",
+      option: pending,
+    });
+    expect(resolveDismissAction({ pending: null, groups: [group] })).toEqual({ kind: "none" });
+    expect(
+      resolveDismissAction({
+        pending,
+        groups: [{ ...group, models: [{ ...pending, isUnavailable: true }] }],
+      }),
+    ).toEqual({ kind: "unavailable", option: pending });
+  });
+
+  it("collects starred models across providers in instance then catalog order", () => {
+    const codexFirst = modelOption("codex-first");
+    const codexSecond = modelOption("codex-second");
+    const claudeProvider = ProviderInstanceId.make("claudeAgent");
+    const claudeModel = {
+      ...modelOption("claude-first"),
+      key: modelFavoriteKey(claudeProvider, "claude-first"),
+      providerKey: "claudeAgent",
+      providerLabel: "Claude",
+      selection: { ...modelOption("claude-first").selection, instanceId: claudeProvider },
+    };
+    const groups: ReadonlyArray<ProviderGroup> = [
+      { providerKey: "codex", providerLabel: "Codex", models: [codexFirst, codexSecond] },
+      {
+        providerKey: "claudeAgent",
+        providerLabel: "Claude",
+        models: [claudeModel, modelOption("claude-unstarred")],
+      },
+    ];
+
+    expect(
+      collectStarredModels(groups, new Set([codexSecond.key, claudeModel.key, codexFirst.key])).map(
+        (model) => model.key,
+      ),
+    ).toEqual([codexFirst.key, codexSecond.key, claudeModel.key]);
   });
 });
