@@ -44,7 +44,12 @@ export function createEnvironmentPresentationAtoms<E>(input: {
         connection:
           entry.unsupportedReason === undefined
             ? presentEnvironmentConnection(state)
-            : { phase: "unsupported", error: entry.unsupportedReason, traceId: null },
+            : {
+                phase: "unsupported",
+                error: entry.unsupportedReason,
+                traceId: null,
+                failureKind: "unsupported",
+              },
         serverConfig: get(input.serverConfigValueAtom(environmentId)),
       } satisfies EnvironmentPresentation;
     }).pipe(Atom.withLabel(`environment-presentation:${environmentId}`)),

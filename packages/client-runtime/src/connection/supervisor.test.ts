@@ -556,6 +556,30 @@ describe("EnvironmentSupervisor", () => {
     }),
   );
 
+  it.effect("explicit retry replaces a healthy session and reconnects", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const supervisor = yield* EnvironmentSupervisor.make(TARGET_ENTRY, {
+        initiallyDesired: true,
+      }).pipe(Effect.provide(harness.dependencies));
+
+      yield* awaitState(
+        supervisor.state,
+        (state) => state.phase === "connected" && state.generation === 1,
+      );
+      expect(yield* Ref.get(harness.sessionCount)).toBe(1);
+
+      yield* supervisor.retryNow;
+      yield* awaitState(
+        supervisor.state,
+        (state) => state.phase === "connected" && state.generation === 2,
+      );
+
+      expect(yield* Ref.get(harness.sessionCount)).toBe(2);
+      expect(yield* Ref.get(harness.releaseCount)).toBe(1);
+    }),
+  );
+
   it.effect("explicit retry starts a fresh backoff sequence", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({

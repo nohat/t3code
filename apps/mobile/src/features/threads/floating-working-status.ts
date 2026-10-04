@@ -1,4 +1,8 @@
-import type { EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import {
+  connectionFailureGuidance,
+  type ConnectionFailureKind,
+  type EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 
 /**
  * What the floating pill says. Connection, syncing, and working share one
@@ -26,10 +30,18 @@ export type FloatingWorkingStatus =
 export function connectionFloatingStatus(input: {
   readonly connectionError: string | null;
   readonly connectionState: EnvironmentConnectionPhase;
+  readonly connectionFailureKind?: ConnectionFailureKind | null;
   readonly environmentLabel: string | null;
   readonly onReconnect: () => void;
 }): FloatingWorkingStatus | null {
   const environmentLabel = input.environmentLabel ?? "Environment";
+  const connection = {
+    phase: input.connectionState,
+    error: input.connectionError,
+    traceId: null,
+    failureKind: input.connectionFailureKind ?? null,
+  } as const;
+  const guidance = connectionFailureGuidance(connection, { label: environmentLabel });
   const unavailable = (label: string): FloatingWorkingStatus => ({
     kind: "connection",
     tone: "unavailable",
@@ -46,7 +58,7 @@ export function connectionFloatingStatus(input: {
         label:
           input.connectionError === null
             ? `Reconnecting to ${environmentLabel}...`
-            : `Failed to connect. Retrying ${environmentLabel}...`,
+            : (guidance ?? `Failed to connect. Retrying ${environmentLabel}...`),
         onPress: input.onReconnect,
       };
     case "offline":
@@ -55,9 +67,10 @@ export function connectionFloatingStatus(input: {
       return unavailable("Client not supported");
     case "error":
       return unavailable(
-        input.connectionError
-          ? `Failed to connect to ${environmentLabel}: ${input.connectionError}`
-          : `Failed to connect to ${environmentLabel}`,
+        guidance ??
+          (input.connectionError
+            ? `Failed to connect to ${environmentLabel}: ${input.connectionError}`
+            : `Failed to connect to ${environmentLabel}`),
       );
     case "available":
       return unavailable(`${environmentLabel} is not connected`);
