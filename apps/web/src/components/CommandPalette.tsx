@@ -53,6 +53,7 @@ import {
   FileSearchIcon,
   FolderGit2Icon,
   FolderIcon,
+  BugIcon,
   FolderPlusIcon,
   MessageSquareDashedIcon,
   LinkIcon,
@@ -211,6 +212,7 @@ import {
 import type { Project } from "../types";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
+import { openPapercutPrompt } from "../papercuts/papercutPrompt";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
 
@@ -576,6 +578,14 @@ export function CommandPalette({ children }: { children: ReactNode }) {
           themeHalves,
           initialAppearance: resolvedTheme,
         });
+        return;
+      }
+      if (command === "papercut.report") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat) return;
+        setOpen(false);
+        void openPapercutPrompt();
         return;
       }
       if (command === "usage.open") {
@@ -2246,6 +2256,19 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:report-papercut",
+    searchTerms: ["papercut", "report", "bug", "feedback", "glitch", "problem", "issue"],
+    title: "Report a papercut",
+    icon: <BugIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "papercut.report",
+    run: async () => {
+      // Let the palette finish closing so it is not in the screenshot.
+      window.setTimeout(() => void openPapercutPrompt(), 250);
+    },
+  });
 
   actionItems.push({
     kind: "action",

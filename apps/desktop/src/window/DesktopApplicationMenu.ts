@@ -150,6 +150,9 @@ export const make = Effect.gen(function* () {
       if (event.triggeredByAccelerator === true) return;
       runMenuEffect("paste-as-text", dispatchMenuAction("paste-as-text"));
     };
+    const papercutClick = () => {
+      runMenuEffect("report-papercut", dispatchMenuAction("report-papercut"));
+    };
     const zoomClick = (direction: DesktopWindow.MainWindowZoomDirection) => () => {
       runMenuEffect(`zoom-${direction}`, zoomMainWindow(direction));
     };
@@ -260,6 +263,10 @@ export const make = Effect.gen(function* () {
           {
             label: "Check for Updates...",
             click: checkForUpdatesClick,
+          },
+          {
+            label: "Report a Papercut...",
+            click: papercutClick,
           },
         ],
       },

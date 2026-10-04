@@ -17,6 +17,7 @@ import { WORKSPACE_IMAGE_PREVIEW_EXTENSIONS } from "@t3tools/shared/filePreview"
 import { resolveEditorCommand } from "@t3tools/shared/editor";
 import * as HostProcess from "@t3tools/shared/hostProcess";
 import * as NodeOS from "node:os";
+import * as Duration from "effect/Duration";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Effect from "effect/Effect";
@@ -344,6 +345,48 @@ export const probeRemoteEditors = DesktopIpc.makeIpcMethod({
       }
     }
     return available;
+  }),
+});
+
+const SCREENSHOT_MAX_WIDTH = 1600;
+const SCREENSHOT_JPEG_QUALITY = 70;
+const SCREENSHOT_TIMEOUT = Duration.seconds(3);
+
+/**
+ * Captures the requesting main window for a papercut report. `capturePage` can
+ * fail to settle when the compositor is wedged, which is exactly when a user
+ * files a report, so the wait is bounded and a miss yields null.
+ */
+export const captureScreenshot = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.CAPTURE_SCREENSHOT_CHANNEL,
+  payload: Schema.Undefined,
+  result: Schema.NullOr(
+    Schema.Struct({ mimeType: Schema.Literal("image/jpeg"), dataBase64: Schema.String }),
+  ),
+  handler: Effect.fn("desktop.ipc.window.captureScreenshot")(function* (_input, event) {
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    const window = yield* electronWindow.main;
+    if (
+      event === undefined ||
+      Option.isNone(window) ||
+      window.value.isDestroyed() ||
+      window.value.webContents.id !== event.sender.id
+    ) {
+      return null;
+    }
+    const captured = yield* Effect.tryPromise(() => window.value.webContents.capturePage()).pipe(
+      Effect.timeoutOption(SCREENSHOT_TIMEOUT),
+      Effect.orElseSucceed(() => Option.none<Electron.NativeImage>()),
+    );
+    if (Option.isNone(captured) || captured.value.isEmpty()) return null;
+    const image =
+      captured.value.getSize().width > SCREENSHOT_MAX_WIDTH
+        ? captured.value.resize({ width: SCREENSHOT_MAX_WIDTH })
+        : captured.value;
+    return {
+      mimeType: "image/jpeg" as const,
+      dataBase64: image.toJPEG(SCREENSHOT_JPEG_QUALITY).toString("base64"),
+    };
   }),
 });
 

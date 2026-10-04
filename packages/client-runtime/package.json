@@ -23,6 +23,10 @@
       "types": "./src/projectFaviconCache.ts",
       "default": "./src/projectFaviconCache.ts"
     },
+    "./papercut": {
+      "types": "./src/papercut/index.ts",
+      "default": "./src/papercut/index.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"

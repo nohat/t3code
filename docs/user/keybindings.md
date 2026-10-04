@@ -37,6 +37,17 @@ to copy its URL and `mod+shift+k` to copy its number with a `#` prefix.
 Both shortcuts can be changed in Settings. Search for “Copy Link or Thread ID”
 or “Copy Number”. They copy the selected PR and leave terminal input alone.
 
+## Report a papercut
+
+When the app does something small and unwanted, press `mod+alt+shift+r`, choose
+**Report a papercut** in the command palette, or use **Help → Report a Papercut**
+on desktop. Type a one-line note if you want, then press Enter. The report is
+saved on the environment you were using and never leaves it. It holds what the
+client and server were doing, the recent messages of the open thread, and, on
+desktop, a screenshot of the window. Browsers do not capture a screenshot.
+
+Run `t3 papercuts list` on that machine to see saved reports and their status.
+
 ## iPad
 
 With a hardware keyboard, use `Cmd+1` through `Cmd+9` to open the first nine

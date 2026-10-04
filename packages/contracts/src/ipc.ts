@@ -1230,6 +1230,11 @@ export interface DesktopBridge {
   probeRemoteEditors?: () => Promise<readonly EditorId[]>;
   /** Present when the desktop shell can perform an ordered plain-text paste. */
   pasteAsText?: () => Promise<void>;
+  /**
+   * JPEG of the main window, downscaled for a papercut report. Null when the
+   * window cannot be captured. Optional: older desktop builds lack it.
+   */
+  captureScreenshot?: () => Promise<{ mimeType: "image/jpeg"; dataBase64: string } | null>;
   onMenuAction: (listener: (action: string) => void) => () => void;
   onSnapShotEvent?: (listener: (event: DesktopSnapShotEvent) => void) => () => void;
   /**
