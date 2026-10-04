@@ -19,6 +19,7 @@ import {
 } from "./features/settings/appearance/AppearancePreferencesProvider";
 import { RootStack } from "./Stack";
 import { appAtomRegistry } from "./state/atom-registry";
+import { startComposerDraftCrashSafety } from "./state/use-composer-drafts";
 import { OverlayPortalHost } from "./components/OverlayPortal";
 import { shouldHandleAppLink } from "./lib/appLinking";
 import { useMobileNavigationTheme } from "./lib/useMobileNavigationTheme";
@@ -68,6 +69,8 @@ export default function App() {
 function AppContent() {
   const { themeAppearance } = useAppearancePreferences();
   const navigationTheme = useMobileNavigationTheme();
+
+  useEffect(() => startComposerDraftCrashSafety(), []);
 
   return (
     <>

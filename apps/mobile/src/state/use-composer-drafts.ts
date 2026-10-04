@@ -61,6 +61,10 @@ const COMPOSER_DRAFTS_SCHEMA_VERSION = 1;
 const COMPOSER_DRAFTS_DIRECTORY = "composer-drafts";
 const COMPOSER_DRAFTS_FILE = "drafts.json";
 const PERSIST_DEBOUNCE_MS = 200;
+// Continuous typing resets the debounce, so without a ceiling a long prompt
+// stays only in memory until the user pauses. This bounds how much typing a
+// hard crash can lose while never writing more than once per window.
+const PERSIST_MAX_WAIT_MS = 1000;
 
 export const composerContextImportsAtom = Atom.make<Record<string, boolean>>({}).pipe(
   Atom.keepAlive,
@@ -447,13 +451,27 @@ export const composerCloudDraftsAtom = Atom.make<ComposerCloudDraftState>({
 
 let loadPromise: Promise<void> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let persistMaxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let persistRetryNeeded = false;
+let appStateStop: (() => void) | null = null;
 const persistenceQueue = new SerializedAsyncQueue();
+
+function clearPersistTimers(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  if (persistMaxWaitTimer !== null) {
+    clearTimeout(persistMaxWaitTimer);
+    persistMaxWaitTimer = null;
+  }
+}
 
 /** Resets module-level state between test runs. */
 export function resetComposerDraftsLoadState(): void {
   loadPromise = null;
   persistRetryNeeded = false;
+  clearPersistTimers();
 }
 
 function attachmentContextRecord(
@@ -756,9 +774,8 @@ export async function flushComposerDrafts(): Promise<void> {
   // An edit during an awaited write schedules another debounced write, so
   // keep landing snapshots until no debounce is pending after a queue drain.
   do {
-    while (persistTimer !== null || persistRetryNeeded) {
-      if (persistTimer !== null) clearTimeout(persistTimer);
-      persistTimer = null;
+    while (persistTimer !== null || persistMaxWaitTimer !== null || persistRetryNeeded) {
+      clearPersistTimers();
       persistRetryNeeded = false;
       try {
         await persistenceQueue.run(() =>
@@ -775,7 +792,46 @@ export async function flushComposerDrafts(): Promise<void> {
     // Draining also waits for an already-fired debounce whose write is still
     // gated behind its own hydration await inside the queue.
     await persistenceQueue.run(() => Promise.resolve());
-  } while (persistTimer !== null || persistRetryNeeded);
+  } while (persistTimer !== null || persistMaxWaitTimer !== null || persistRetryNeeded);
+}
+
+interface ComposerAppState {
+  addEventListener(type: "change", listener: (state: string) => void): { remove(): void };
+}
+
+/**
+ * Lands drafts when the app leaves the foreground, covering a hard crash or OS
+ * kill the debounce never got to flush for. Registered once so a later feature
+ * cannot forget to arm it. Returns a stop function.
+ */
+export function startComposerDraftCrashSafety(appState?: ComposerAppState): () => void {
+  if (appStateStop !== null) {
+    return appStateStop;
+  }
+  let cancelled = false;
+  let subscription: { remove(): void } | null = null;
+  const stop = () => {
+    cancelled = true;
+    subscription?.remove();
+    subscription = null;
+    if (appStateStop === stop) appStateStop = null;
+  };
+  appStateStop = stop;
+  const attach = (AppState: ComposerAppState) => {
+    if (cancelled) return;
+    subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "background" && state !== "inactive") return;
+      void flushComposerDrafts().catch((error) => {
+        console.warn("[composer-drafts] failed to flush on background", error);
+      });
+    });
+  };
+  if (appState) {
+    attach(appState);
+  } else {
+    void import("react-native").then(({ AppState }) => attach(AppState));
+  }
+  return stop;
 }
 
 function signedOutAttachmentOwners() {
@@ -969,31 +1025,43 @@ registerComposerAttachmentUnusedHandler((attachment) => {
   scheduleUnusedComposerAttachmentCleanup([attachment]);
 });
 
+function runScheduledPersist(): void {
+  // The write enters the serialization queue before waiting on hydration,
+  // so flushComposerDrafts' queue drain cannot resolve ahead of it.
+  void persistenceQueue.run(async () => {
+    try {
+      await waitForComposerDraftsLoaded();
+      await writePersistedComposerState(
+        appAtomRegistry.get(composerDraftsAtom),
+        appAtomRegistry.get(stickyComposerModelSelectionAtom),
+      );
+      persistRetryNeeded = false;
+    } catch (error) {
+      // A failed debounce has no timer left. A later final flush must retry
+      // these edits after persisted ownership can be read safely.
+      persistRetryNeeded = true;
+      console.warn("[composer-drafts] failed to persist drafts", error);
+      // Draft persistence is best-effort; in-memory drafts still keep working.
+    }
+  });
+}
+
 function schedulePersistComposerState(): void {
   if (persistTimer !== null) {
     clearTimeout(persistTimer);
   }
   persistTimer = setTimeout(() => {
-    persistTimer = null;
-    // The write enters the serialization queue before waiting on hydration,
-    // so flushComposerDrafts' queue drain cannot resolve ahead of it.
-    void persistenceQueue.run(async () => {
-      try {
-        await waitForComposerDraftsLoaded();
-        await writePersistedComposerState(
-          appAtomRegistry.get(composerDraftsAtom),
-          appAtomRegistry.get(stickyComposerModelSelectionAtom),
-        );
-        persistRetryNeeded = false;
-      } catch (error) {
-        // A failed debounce has no timer left. A later final flush must retry
-        // these edits after persisted ownership can be read safely.
-        persistRetryNeeded = true;
-        console.warn("[composer-drafts] failed to persist drafts", error);
-        // Draft persistence is best-effort; in-memory drafts still keep working.
-      }
-    });
+    clearPersistTimers();
+    runScheduledPersist();
   }, PERSIST_DEBOUNCE_MS);
+  // A pause writes after the short debounce; the ceiling writes during
+  // continuous typing so a hard crash cannot take an unbounded prompt.
+  if (persistMaxWaitTimer === null) {
+    persistMaxWaitTimer = setTimeout(() => {
+      clearPersistTimers();
+      runScheduledPersist();
+    }, PERSIST_MAX_WAIT_MS);
+  }
 }
 
 export function ensureComposerDraftsLoaded(): void {
@@ -1617,10 +1685,7 @@ export async function mergeComposerDraftContent(
   if (loadPromise !== null) {
     await loadPromise;
   }
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
+  clearPersistTimers();
   const current = appAtomRegistry.get(composerDraftsAtom);
   const next = mergeComposerDraftContentState(current, draftKey, content);
   const currentAttachmentIds = new Set(
@@ -1654,10 +1719,7 @@ export async function restoreComposerDraftSnapshot(
   if (loadPromise !== null) {
     await loadPromise;
   }
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
+  clearPersistTimers();
   const next = restoreComposerDraftSnapshotState(
     appAtomRegistry.get(composerDraftsAtom),
     draftKey,
@@ -1746,10 +1808,7 @@ export async function undoComposerDraftMerge(
   if (loadPromise !== null) {
     await loadPromise;
   }
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
+  clearPersistTimers();
   const next = undoComposerDraftMergeState(
     appAtomRegistry.get(composerDraftsAtom),
     draftKey,
@@ -1911,10 +1970,7 @@ export async function clearComposerDraftsEnvironment(environmentId: EnvironmentI
     .filter(([draftKey]) => next[draftKey] === undefined)
     .flatMap(([, draft]) => draft.attachments);
 
-  if (persistTimer !== null) {
-    clearTimeout(persistTimer);
-    persistTimer = null;
-  }
+  clearPersistTimers();
   appAtomRegistry.set(composerDraftsAtom, next);
   await persistenceQueue.run(() =>
     writePersistedComposerState(next, appAtomRegistry.get(stickyComposerModelSelectionAtom)),

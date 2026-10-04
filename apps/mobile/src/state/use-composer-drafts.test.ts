@@ -189,6 +189,7 @@ import {
   setComposerDraftAttachmentUpload,
   waitForComposerDraftsLoaded,
   setStickyComposerModelSelection,
+  startComposerDraftCrashSafety,
   stickyComposerModelSelectionAtom,
   undoComposerDraftMerge,
   undoComposerDraftMergeState,
@@ -2353,6 +2354,82 @@ describe("mobile composer drafts", () => {
     expect(JSON.parse(composerDraftFileMocks.getDocument())).toMatchObject({
       drafts: { [draftKey]: { text: "typed right before the restart" } },
     });
+  });
+
+  it("flushes a continuously typed draft within the max wait instead of waiting for a pause", async () => {
+    vi.useFakeTimers();
+    composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
+    composerDraftFileMocks.resetWrites();
+    await waitForComposerDraftsLoaded();
+
+    const draftKey = "new-task:draft-continuous";
+    // Every keystroke arrives faster than the 200ms debounce, so a
+    // debounce-only writer leaves the whole prompt in memory.
+    for (let index = 0; index < 30; index += 1) {
+      setComposerDraftText(draftKey, `line ${index}`);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+
+    expect(composerDraftFileMocks.getWrites().length).toBeGreaterThan(0);
+  });
+
+  it("restores a long draft typed right up to a hard kill", async () => {
+    vi.useFakeTimers();
+    composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
+    composerDraftFileMocks.resetWrites();
+    await waitForComposerDraftsLoaded();
+
+    const draftKey = "new-task:draft-ipad";
+    const lines: string[] = [];
+    for (let index = 0; index < 15; index += 1) {
+      lines.push(`line ${index} of a long prompt`);
+      setComposerDraftText(draftKey, lines.join("\n"));
+      await vi.advanceTimersByTimeAsync(100);
+    }
+
+    // The app is hard-killed here: no timer runs again and no unload hook fires.
+    const persistedBeforeKill = decodePersistedComposerState(
+      JSON.parse(composerDraftFileMocks.getDocument()),
+    ).drafts[draftKey]?.text;
+    expect(persistedBeforeKill).toBeTruthy();
+
+    // Relaunch hydrates from disk only.
+    appAtomRegistry.set(composerDraftsAtom, {});
+    resetComposerDraftsLoadState();
+    await waitForComposerDraftsLoaded();
+
+    expect(getComposerDraftSnapshot(draftKey).text).toBe(persistedBeforeKill);
+  });
+
+  it("flushes drafts when the app leaves the foreground", async () => {
+    vi.useFakeTimers();
+    const listeners = new Set<(state: string) => void>();
+    const stop = startComposerDraftCrashSafety({
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+        return { remove: () => listeners.delete(listener) };
+      },
+    });
+    try {
+      composerDraftFileMocks.setDocument({ schemaVersion: 1, drafts: {} });
+      composerDraftFileMocks.resetWrites();
+      await waitForComposerDraftsLoaded();
+
+      const draftKey = "environment-1:backgrounded";
+      setComposerDraftText(draftKey, "typed, then the app backgrounded");
+
+      // The debounce has not fired; the background signal must land it now.
+      expect(composerDraftFileMocks.getWrites()).toHaveLength(0);
+      for (const listener of listeners) listener("background");
+      await vi.advanceTimersByTimeAsync(0);
+
+      const persisted = decodePersistedComposerState(
+        JSON.parse(composerDraftFileMocks.getDocument()),
+      );
+      expect(persisted.drafts[draftKey]?.text).toBe("typed, then the app backgrounded");
+    } finally {
+      stop();
+    }
   });
 
   it("propagates a flush write failure instead of resolving as saved", async () => {

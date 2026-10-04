@@ -124,11 +124,22 @@ const composerPersistStorage: PersistStorage<ComposerPersistState> = {
   removeItem: (name) => composerDebouncedStorage.removeItem(name),
 };
 
-// Flush pending composer draft writes before page unload to prevent data loss.
+// Flush pending composer draft writes whenever the page may be torn down or
+// frozen. `beforeunload` does not fire reliably on mobile Safari or after an OS
+// kill, so `pagehide` and a hidden `visibilitychange` also land the draft.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("beforeunload", () => {
+  const flushComposerDraftWrites = () => {
     composerDebouncedStorage.flush();
-  });
+  };
+  window.addEventListener("beforeunload", flushComposerDraftWrites);
+  window.addEventListener("pagehide", flushComposerDraftWrites);
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        flushComposerDraftWrites();
+      }
+    });
+  }
 }
 
 export const PersistedComposerImageAttachment = Schema.Struct({
