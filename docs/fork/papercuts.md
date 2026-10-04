@@ -1,6 +1,6 @@
 # Papercuts: one-tap capture when the app does something unwanted
 
-Status: **decided, stage 1 in progress**. A papercut is any small unwanted behavior: a dead Send button, a stalled turn, a wrong label, a layout glitch. Today I notice it, describe it from memory, and an agent reconstructs the evidence by hand from traces and logs (nohat/t3code#1 and #2 were each reconstructed that way). The goal is that reporting costs one tap and arrives with the evidence already attached. Two tests apply: lazy input, professional output.
+Status: **decided, stages 1 and 2 built; stage 2 awaiting a device check**. A papercut is any small unwanted behavior: a dead Send button, a stalled turn, a wrong label, a layout glitch. Today I notice it, describe it from memory, and an agent reconstructs the evidence by hand from traces and logs (nohat/t3code#1 and #2 were each reconstructed that way). The goal is that reporting costs one tap and arrives with the evidence already attached. Two tests apply: lazy input, professional output.
 
 ## What a papercut contains
 
@@ -18,8 +18,18 @@ Optional input: one line of text or a dictated note.
 ## Entry points (every surface, per AGENTS.md "Hit every surface")
 
 - Desktop and web: a global keybinding, a command palette item ("Report a papercut"), and a menu bar item on desktop.
-- iPad and iPhone: shake gesture (the iOS convention for "something went wrong"), a thread header menu action, and the command palette equivalent.
+- iPad and iPhone: the shake gesture (the iOS convention for "something went wrong"), a "Report a papercut" command palette item, and a row under Settings > Diagnostics. The Diagnostics row replaces the thread header action in the first version: it needs no keyboard and no shake, and the header is built from large upstream files. Android has the palette item and the Diagnostics row, without a screenshot.
 - Automatic offer: when the client detects a likely stall it shows a toast with one tap to report: Send disabled with no banner for 30 s, a send pending for 30 s, a turn running with no events for several minutes (needs stalled-turn detection, see below).
+
+## Reporting while the app is hung
+
+The iPad hang reports (#3, #16) are exactly when JavaScript cannot run, so a report that starts in JavaScript would fail when it matters most. On iOS a native module (`apps/mobile/modules/t3-papercut`) catches the shake and writes a bundle to the app's own storage at once: a screenshot, the last context JavaScript handed over (thread, state, event buffer, at most about a second old), and the age of JavaScript's last heartbeat. JavaScript ticks a one-second heartbeat, so a heartbeat older than three seconds means it was blocked. The bundle stays on the device until the server has it; JavaScript uploads leftover bundles on launch, on returning to the foreground, and after a failed upload.
+
+- JavaScript responding: a note prompt, then upload. Cancel discards the bundle.
+- JavaScript blocked: a haptic and a native alert ("saved on this device"), then the upload happens on recovery or relaunch. The record carries a `client.js-unresponsive` event with the heartbeat age.
+- The event buffer also records `client.js-stall` (with how late the tick was) whenever a blocked thread recovers, so a later report shows a stall that already ended.
+- The native hook cannot help if the main thread itself is blocked.
+- Known gap: `papercut.create` has no idempotency key, so if the connection drops after the server stored a report but before the reply, the retry stores a duplicate.
 
 ## Where it goes
 

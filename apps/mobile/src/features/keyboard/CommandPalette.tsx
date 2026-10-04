@@ -36,6 +36,7 @@ import {
   nextPaletteIndex,
   type CommandPaletteItem,
 } from "./commandPaletteItems";
+import { reportPapercut } from "../../papercuts/reportPapercut";
 import { parseActiveThreadPath, type HardwareKeyboardCommand } from "./hardwareKeyboardCommands";
 import { threadJumpIndex } from "./threadKeyboardShortcuts";
 
@@ -61,6 +62,7 @@ const ACTION_ICONS: Record<string, AppSymbolName> = {
   terminal: "terminal",
   review: "arrow.triangle.pull",
   copyThreadReference: "link",
+  reportPapercut: "exclamationmark.circle",
 };
 
 function itemIcon(item: CommandPaletteItem): AppSymbolName {
@@ -236,6 +238,13 @@ export function CommandPalette(props: {
             screen: "SettingsContent",
             params: { screen: "SettingsUsage" },
           }),
+      },
+      {
+        key: "reportPapercut",
+        kind: "action",
+        title: "Report a papercut",
+        searchTerms: ["bug", "problem", "feedback", "hang", "stall", "log"],
+        run: () => void reportPapercut(),
       },
       {
         key: "archive",

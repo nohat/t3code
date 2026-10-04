@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { tryCopyTextWithHaptic } from "../../lib/copyTextWithHaptic";
+import { reportPapercut } from "../../papercuts/reportPapercut";
 import { SettingsActionRow } from "../settings/components/SettingsActionRow";
 import { SettingsScreen } from "../settings/components/SettingsScreen";
 import { SettingsSection } from "../settings/components/SettingsSection";
@@ -114,6 +115,11 @@ export function SettingsDiagnosticsRouteScreen() {
               label={copied ? "Copied" : "Copy crash report"}
               disabled={state.status !== "ready"}
               onPress={() => void copyReport()}
+            />
+            <SettingsActionRow
+              icon="exclamationmark.circle"
+              label="Report a papercut"
+              onPress={() => void reportPapercut()}
             />
           </SettingsSection>
           <Text className="px-2 text-sm leading-normal text-foreground-muted">
