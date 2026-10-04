@@ -49,4 +49,41 @@ describe("model ordering", () => {
       }).map((item) => item.slug),
     ).toEqual(["gpt-5.4-mini", "gpt-5.5", "crest-alpha", "claude-opus-4-6"]);
   });
+
+  it("keeps favorites first inside one provider without losing catalog order", () => {
+    const items = [
+      { instanceId: CODEX_WORK_ID, slug: "gpt-5.5" },
+      { instanceId: CODEX_WORK_ID, slug: "gpt-5.4-mini" },
+      { instanceId: CODEX_WORK_ID, slug: "crest-alpha" },
+    ];
+
+    expect(
+      sortProviderModelItems(items, {
+        favoriteModelKeys: [providerModelKey(CODEX_WORK_ID, "crest-alpha")],
+        groupFavorites: true,
+      }).map((item) => item.slug),
+    ).toEqual(["crest-alpha", "gpt-5.5", "gpt-5.4-mini"]);
+  });
+
+  it("lists every provider's starred models together in instance order", () => {
+    const items = [
+      { instanceId: CLAUDE_ID, slug: "claude-opus-4-6" },
+      { instanceId: CODEX_WORK_ID, slug: "gpt-5.5" },
+      { instanceId: CLAUDE_ID, slug: "claude-haiku" },
+      { instanceId: CODEX_WORK_ID, slug: "gpt-5.4-mini" },
+    ];
+    const favoriteKeys = items.map((item) => providerModelKey(item.instanceId, item.slug));
+
+    expect(
+      sortProviderModelItems(items, {
+        favoriteModelKeys: favoriteKeys,
+        instanceOrder: [CODEX_WORK_ID, CLAUDE_ID],
+      }).map((item) => `${item.instanceId}:${item.slug}`),
+    ).toEqual([
+      `${CODEX_WORK_ID}:gpt-5.5`,
+      `${CODEX_WORK_ID}:gpt-5.4-mini`,
+      `${CLAUDE_ID}:claude-opus-4-6`,
+      `${CLAUDE_ID}:claude-haiku`,
+    ]);
+  });
 });

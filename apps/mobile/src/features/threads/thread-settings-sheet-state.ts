@@ -34,6 +34,22 @@ export function favoritesFirst(
   return [...favorites, ...others];
 }
 
+/** Every starred model across providers, in instance then catalog order. */
+export function collectStarredModels(
+  groups: ReadonlyArray<ProviderGroup>,
+  favoriteKeys: ReadonlySet<string>,
+): ReadonlyArray<ModelOption> {
+  const starred: ModelOption[] = [];
+  for (const group of groups) {
+    for (const model of group.models) {
+      if (favoriteKeys.has(model.key)) {
+        starred.push(model);
+      }
+    }
+  }
+  return starred;
+}
+
 /** Match the terms a user can actually see or recognize in the model picker. */
 export function modelMatchesCatalogQuery(input: {
   readonly model: ModelOption;
@@ -73,6 +89,28 @@ export function canCommitPendingModel(
   return groups.some((group) =>
     group.models.some((model) => model.key === pending.key && !model.isUnavailable),
   );
+}
+
+/**
+ * What a dismissal (Done, Save, swipe, backdrop, or back navigation) does with
+ * the staged model. Cancel never reaches here because it clears the staged
+ * model first.
+ */
+export type ThreadSettingsDismissAction =
+  | { readonly kind: "none" }
+  | { readonly kind: "commit"; readonly option: ModelOption }
+  | { readonly kind: "unavailable"; readonly option: ModelOption };
+
+export function resolveDismissAction(input: {
+  readonly pending: ModelOption | null;
+  readonly groups: ReadonlyArray<ProviderGroup>;
+}): ThreadSettingsDismissAction {
+  if (!input.pending) {
+    return { kind: "none" };
+  }
+  return canCommitPendingModel(input.pending, input.groups)
+    ? { kind: "commit", option: input.pending }
+    : { kind: "unavailable", option: input.pending };
 }
 
 /**

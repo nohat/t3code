@@ -80,6 +80,22 @@ export function resolveModelPickerSelectedModel(input: {
   return input.options.find((option) => option.slug === input.model);
 }
 
+/**
+ * The model a picker selection commits. A disabled or unavailable row never
+ * commits, so an applied selection is never replaced by an unavailable one.
+ */
+export function resolveModelPickerCommit(input: {
+  readonly disabledReason: string | null;
+  readonly driverKind: ProviderDriverKind;
+  readonly modelSlug: string;
+  readonly options: ReadonlyArray<ModelEsque>;
+}): string | null {
+  if (input.disabledReason) {
+    return null;
+  }
+  return resolveSelectableModel(input.driverKind, input.modelSlug, input.options);
+}
+
 export function shouldIncludeModelPickerOption(input: {
   readonly entry: ProviderInstanceEntry;
   readonly option: ModelEsque;
@@ -599,9 +615,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   const handleModelSelect = useCallback(
     (modelSlug: string, instanceId: ProviderInstanceId, additive = false) => {
-      if (getModelDisabledReason?.(instanceId, modelSlug)) {
-        return;
-      }
       const options = modelOptionsByInstance.get(instanceId);
       if (!options) {
         return;
@@ -610,16 +623,21 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (!entry) {
         return;
       }
-      // `resolveSelectableModel` uses the driver kind for normalization
-      // (slug casing etc.). Custom instances share their driver's
-      // normalization rules, so pass the driver kind here.
-      const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
-      if (resolvedModel) {
-        if (additive && onToggleModel) {
-          onToggleModel(instanceId, resolvedModel);
-        } else {
-          onInstanceModelChange(instanceId, resolvedModel);
-        }
+      // Custom instances share their driver's normalization rules, so resolve
+      // against the driver kind.
+      const resolvedModel = resolveModelPickerCommit({
+        disabledReason: getModelDisabledReason?.(instanceId, modelSlug) ?? null,
+        driverKind: entry.driverKind,
+        modelSlug,
+        options,
+      });
+      if (!resolvedModel) {
+        return;
+      }
+      if (additive && onToggleModel) {
+        onToggleModel(instanceId, resolvedModel);
+      } else {
+        onInstanceModelChange(instanceId, resolvedModel);
       }
     },
     [
