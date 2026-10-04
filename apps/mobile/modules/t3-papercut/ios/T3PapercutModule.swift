@@ -47,6 +47,11 @@ public final class T3PapercutModule: Module {
     AsyncFunction("discardPending") { (id: String) in
       T3PapercutStore.shared.discard(id: id)
     }
+
+    /// Keeps a note typed for a report whose upload failed, so the retry still has it.
+    AsyncFunction("setNote") { (id: String, note: String) in
+      T3PapercutStore.shared.setNote(id: id, note: note)
+    }
   }
 }
 
@@ -66,12 +71,15 @@ final class T3PapercutStore {
   private var onShake: ((String) -> Void)?
   private var installed = false
 
-  private lazy var directory: URL = {
+  /// Created in `init`, not lazily: the main thread (shake) and the module queue
+  /// (`listPending`) can both need it first.
+  private let directory: URL
+
+  private init() {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    let url = base.appendingPathComponent("t3-papercuts", isDirectory: true)
-    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    return url
-  }()
+    directory = base.appendingPathComponent("t3-papercuts", isDirectory: true)
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  }
 
   func markHeartbeat() {
     lock.lock()
@@ -181,9 +189,10 @@ final class T3PapercutStore {
     ]
     if let context { bundle["context"] = context }
     if let screenshotFile { bundle["screenshotFile"] = screenshotFile }
-    if let data = try? JSONSerialization.data(withJSONObject: bundle) {
-      try? data.write(to: directory.appendingPathComponent("\(id).json"), options: .atomic)
-    }
+    let wrote = (try? JSONSerialization.data(withJSONObject: bundle))
+      .flatMap { try? $0.write(to: directory.appendingPathComponent("\(id).json"), options: .atomic) } != nil
+    // Without its JSON a screenshot would never be listed, so it would never be removed.
+    if !wrote { try? FileManager.default.removeItem(at: directory.appendingPathComponent("\(id).jpg")) }
     return (id, ageMs)
   }
 
@@ -214,6 +223,18 @@ final class T3PapercutStore {
     }
     guard let out = try? JSONSerialization.data(withJSONObject: bundle) else { return nil }
     return String(data: out, encoding: .utf8)
+  }
+
+  func setNote(id: String, note: String) {
+    let file = directory.appendingPathComponent("\(id).json")
+    guard
+      let data = try? Data(contentsOf: file),
+      var bundle = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    else { return }
+    bundle["note"] = note
+    if let out = try? JSONSerialization.data(withJSONObject: bundle) {
+      try? out.write(to: file, options: .atomic)
+    }
   }
 
   func discard(id: String) {
@@ -285,7 +306,7 @@ extension UIWindow {
     }
   }
 
-  @objc fileprivate func t3MotionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+  @objc dynamic fileprivate func t3MotionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
     // After the exchange this calls the original implementation.
     t3MotionEnded(motion, with: event)
     if motion == .motionShake { T3PapercutStore.shared.handleShake() }

@@ -9,6 +9,7 @@ declare class T3PapercutNativeModule extends NativeModule<{
   listPending(): Promise<string[]>;
   readPending(id: string): Promise<string | null>;
   discardPending(id: string): Promise<void>;
+  setNote(id: string, note: string): Promise<void>;
 }
 
 /**

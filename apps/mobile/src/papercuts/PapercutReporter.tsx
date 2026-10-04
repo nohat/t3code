@@ -20,8 +20,9 @@ import { createStallDetector } from "./jsStallDetector";
 import { papercutNative } from "./papercutNative";
 import {
   bundleToCreateInput,
-  isJsUnresponsive,
+  isOwnedByLiveFlow,
   parseBundle,
+  routeLabel,
   type PapercutBundle,
   type PapercutContextSnapshot,
   type PapercutSurfaceInput,
@@ -31,6 +32,8 @@ import { registerPapercutReporter } from "./reportPapercut";
 const HEARTBEAT_INTERVAL_MS = 1000;
 /** A tick this much later than scheduled means the JavaScript thread was blocked. */
 const STALL_THRESHOLD_MS = 1500;
+/** Building the context walks the thread's messages and activities, so it is not done every tick. */
+const CONTEXT_REFRESH_TICKS = 3;
 /** How often leftover bundles are retried when nothing else prompts it. */
 const PENDING_RETRY_INTERVAL_MS = 30_000;
 /** Lets a closing sheet or palette finish dismissing before the screen is captured. */
@@ -123,7 +126,7 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       const context = papercutThreadContext({
         environmentId: current.environmentId ?? undefined,
         thread: current.threadState.data._tag === "Some" ? current.threadState.data.value : null,
-        route: current.pathname,
+        route: routeLabel(current.pathname),
         threadStatus: current.threadStatus,
         connectionPhase: current.connectionPhase,
       });
@@ -144,10 +147,20 @@ export function PapercutReporter(props: { readonly pathname: string }) {
 
     /** Uploads one bundle and removes it from the device only once the server has it. */
     const upload = async (bundle: PapercutBundle, note: string | undefined, persisted: boolean) => {
-      const live = isJsUnresponsive(bundle) ? undefined : snapshot();
-      const input = bundleToCreateInput(bundle, { note, live, fallback: surfaceInput() });
+      const input = bundleToCreateInput(bundle, {
+        note: note ?? bundle.note,
+        live: snapshot(),
+        nowMs: Date.now(),
+        fallback: surfaceInput(),
+      });
+      // The environment the report was about, unless it is gone: then the one in use now.
+      const current = latest.current;
+      const recordedEnvironmentId = input.evidence.where?.environmentId;
       const targetEnvironmentId =
-        input.evidence.where?.environmentId ?? latest.current.environmentId;
+        recordedEnvironmentId &&
+        current.connectedEnvironmentIds.some((id) => id === recordedEnvironmentId)
+          ? recordedEnvironmentId
+          : current.environmentId;
       if (!targetEnvironmentId) return false;
       const result = await runAtomCommand(
         appAtomRegistry,
@@ -160,7 +173,7 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       return true;
     };
 
-    const notifyOutcome = (saved: boolean) => {
+    const notifyOutcome = (saved: boolean, persisted: boolean) => {
       if (saved) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
           () => undefined,
@@ -169,48 +182,57 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       }
       Alert.alert(
         "Could not save the papercut",
-        "It is kept on this device and uploads when the environment is reachable.",
+        persisted
+          ? "It is kept on this device and uploads when the environment is reachable."
+          : "Check the connection to the environment and try again.",
       );
     };
 
-    /** The reporter owns `bundle` while it asks for a note and uploads. */
+    /**
+     * Asks for a note and uploads. The caller has put `bundle.id` in
+     * `inFlightBundleIds`, so a drain leaves it alone while the prompt is open.
+     */
     const reportBundle = async (bundle: PapercutBundle, persisted: boolean) => {
-      if (inFlightBundleIds.has(bundle.id)) return;
-      inFlightBundleIds.add(bundle.id);
-      try {
-        const note = await askForNote();
-        if (note === null) {
-          if (persisted) await papercutNative?.discardPending(bundle.id);
-          return;
-        }
-        notifyOutcome(await upload(bundle, note.trim() || undefined, persisted));
-      } finally {
-        inFlightBundleIds.delete(bundle.id);
+      const note = await askForNote();
+      if (note === null) {
+        if (persisted) await papercutNative?.discardPending(bundle.id);
+        return;
       }
+      const trimmed = note.trim() || undefined;
+      const saved = await upload(bundle, trimmed, persisted);
+      // A note typed for a failed upload must survive until the retry.
+      if (!saved && persisted && trimmed) await papercutNative?.setNote(bundle.id, trimmed);
+      notifyOutcome(saved, persisted);
     };
 
     const reportFromMenu = async () => {
       await delay(MENU_DISMISS_SETTLE_MS);
-      if (papercutNative) {
-        const raw = await papercutNative.readPending(await papercutNative.capture("manual"));
-        const bundle = raw === null ? null : parseBundle(raw);
-        if (bundle) await reportBundle(bundle, true);
+      if (!papercutNative) {
+        // No native module (Android, or an older iOS build): report without a screenshot.
+        await reportBundle(
+          {
+            id: `js-${Date.now()}`,
+            trigger: "manual",
+            capturedAtMs: Date.now(),
+            jsHeartbeatAgeMs: null,
+          },
+          false,
+        );
         return;
       }
-      // No native module (Android, or an older iOS build): report without a screenshot.
-      await reportBundle(
-        {
-          id: `js-${Date.now()}`,
-          trigger: "manual",
-          capturedAtMs: Date.now(),
-          jsHeartbeatAgeMs: null,
-        },
-        false,
-      );
+      const id = await papercutNative.capture("manual");
+      inFlightBundleIds.add(id);
+      try {
+        const raw = await papercutNative.readPending(id);
+        const bundle = raw === null ? null : parseBundle(raw);
+        if (bundle) await reportBundle(bundle, true);
+      } finally {
+        inFlightBundleIds.delete(id);
+      }
     };
 
     let draining = false;
-    /** Uploads bundles left from a shake while JavaScript was blocked, or a failed upload. */
+    /** Uploads bundles left from a shake while JavaScript was blocked, or from a failed upload. */
     const drainPending = async () => {
       if (!papercutNative || draining) return;
       draining = true;
@@ -223,9 +245,14 @@ export function PapercutReporter(props: { readonly pathname: string }) {
             await papercutNative.discardPending(id);
             continue;
           }
+          // A bundle from a responsive shake belongs to the prompt flow for a while.
+          if (isOwnedByLiveFlow(bundle, Date.now())) continue;
+          // Re-checked: the live flow may have claimed it while the file was read.
+          if (inFlightBundleIds.has(id)) continue;
           inFlightBundleIds.add(id);
           try {
-            if (!(await upload(bundle, undefined, true))) return;
+            // One bundle that cannot upload must not hold back the ones behind it.
+            await upload(bundle, undefined, true);
           } finally {
             inFlightBundleIds.delete(id);
           }
@@ -236,10 +263,17 @@ export function PapercutReporter(props: { readonly pathname: string }) {
     };
 
     const shakeSubscription = papercutNative?.addListener("onShake", ({ id }) => {
+      // Claimed before any await so a concurrent drain cannot upload it without the prompt.
+      if (inFlightBundleIds.has(id)) return;
+      inFlightBundleIds.add(id);
       void (async () => {
-        const raw = await papercutNative?.readPending(id);
-        const bundle = raw ? parseBundle(raw) : null;
-        if (bundle) await reportBundle(bundle, true);
+        try {
+          const raw = await papercutNative?.readPending(id);
+          const bundle = raw ? parseBundle(raw) : null;
+          if (bundle) await reportBundle(bundle, true);
+        } finally {
+          inFlightBundleIds.delete(id);
+        }
       })();
     });
 
@@ -265,10 +299,10 @@ export function PapercutReporter(props: { readonly pathname: string }) {
       } else if (tickCount % (PENDING_RETRY_INTERVAL_MS / HEARTBEAT_INTERVAL_MS) === 0) {
         void drainPending();
       }
-      if (papercutNative) {
+      if (papercutNative && tickCount % CONTEXT_REFRESH_TICKS === 0) {
         // Hand over a fresh context only when something worth reporting changed.
         const current = snapshot();
-        const key = `${JSON.stringify(current.input.where)}|${JSON.stringify(current.input.clientState)}|${current.events.at(-1)?.at ?? 0}`;
+        const key = `${JSON.stringify(current.input.where)}|${JSON.stringify(current.input.clientState)}|${current.events.at(-1)?.at ?? 0}|${current.input.messages?.length ?? 0}`;
         if (key !== storedContextKey) {
           storedContextKey = key;
           papercutNative.setContext(JSON.stringify(current));

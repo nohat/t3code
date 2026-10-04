@@ -10,6 +10,11 @@ import {
   type PapercutScreenshotUpload,
 } from "@t3tools/contracts";
 
+/** A bundle from a responsive app stays with the prompt that created it for this long. */
+export const LIVE_FLOW_GRACE_MS = 10_000;
+/** The live snapshot describes the app now, so it only fits a report made now. */
+export const LIVE_CONTEXT_MAX_AGE_MS = 30_000;
+
 /** A shake bundle with a heartbeat older than this was written while JavaScript was blocked. */
 export const JS_UNRESPONSIVE_MS = 3000;
 
@@ -27,6 +32,8 @@ export interface PapercutBundle {
   /** JSON of a `PapercutContextSnapshot`. */
   readonly context?: string | undefined;
   readonly screenshot?: PapercutScreenshotUpload | undefined;
+  /** Typed for a report whose upload failed, kept until the retry. */
+  readonly note?: string | undefined;
 }
 
 export type PapercutSurfaceInput = Omit<PapercutCaptureInput, "note" | "screenshot">;
@@ -39,6 +46,19 @@ export interface PapercutContextSnapshot {
 
 export function isJsUnresponsive(bundle: PapercutBundle): boolean {
   return bundle.jsHeartbeatAgeMs !== null && bundle.jsHeartbeatAgeMs >= JS_UNRESPONSIVE_MS;
+}
+
+/** True while the prompt flow that created the bundle may still be asking for a note. */
+export function isOwnedByLiveFlow(bundle: PapercutBundle, nowMs: number): boolean {
+  return !isJsUnresponsive(bundle) && nowMs - bundle.capturedAtMs < LIVE_FLOW_GRACE_MS;
+}
+
+/**
+ * The route without its tail: deeper segments can hold file paths, which are
+ * not evidence. `/threads/<env>/<thread>/files/src/a.ts` reads as `/threads/<env>/<thread>/files`.
+ */
+export function routeLabel(pathname: string): string {
+  return (pathname.split("?")[0] ?? "").split("/").slice(0, 5).join("/") || "/";
 }
 
 export function parseBundle(raw: string): PapercutBundle | null {
@@ -59,6 +79,7 @@ export function parseBundle(raw: string): PapercutBundle | null {
       jsHeartbeatAgeMs: typeof value.jsHeartbeatAgeMs === "number" ? value.jsHeartbeatAgeMs : null,
       context: typeof value.context === "string" ? value.context : undefined,
       screenshot: value.screenshot,
+      note: typeof value.note === "string" ? value.note : undefined,
     };
   } catch {
     return null;
@@ -79,21 +100,26 @@ function parseContext(json: string | undefined): PapercutContextSnapshot | null 
 /**
  * Builds the `papercut.create` payload for a bundle. A bundle written while
  * JavaScript was blocked can only carry the context from before the block, so
- * it gets an explicit event saying so; a bundle from a responsive app uses the
- * `live` snapshot taken now, which is fresher than the stored one.
+ * it gets an explicit event saying so; a recent bundle from a responsive app
+ * uses the `live` snapshot taken now. A bundle retried later keeps its stored
+ * context: a live snapshot would describe a different moment than its screenshot.
  */
 export function bundleToCreateInput(
   bundle: PapercutBundle,
   options: {
     readonly note?: string | undefined;
     readonly live?: PapercutContextSnapshot | undefined;
+    /** The clock for judging whether `live` still fits; defaults to the wall clock. */
+    readonly nowMs?: number | undefined;
     /** Used when the bundle's own context is missing or unreadable. */
     readonly fallback: PapercutSurfaceInput;
   },
 ): PapercutCreateInput {
   const unresponsive = isJsUnresponsive(bundle);
+  const liveFits =
+    !unresponsive && (options.nowMs ?? Date.now()) - bundle.capturedAtMs < LIVE_CONTEXT_MAX_AGE_MS;
   const snapshot =
-    (unresponsive ? null : options.live) ??
+    (liveFits ? options.live : null) ??
     parseContext(bundle.context) ??
     ({ input: options.fallback, events: [] } satisfies PapercutContextSnapshot);
 
