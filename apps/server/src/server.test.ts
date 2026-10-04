@@ -1248,8 +1248,7 @@ const buildAppUnderTest = (options?: {
           ),
         };
       }),
-      Layer.provideMerge(makeAuthTestLayer()),
-      Layer.provideMerge(ServerSecretStore.layer),
+      Layer.provideMerge(Layer.mergeAll(makeAuthTestLayer(), ServerSecretStore.layer)),
       Layer.provide(workspaceAndProjectServicesLayer),
       Layer.provideMerge(
         options?.layers?.httpClient === undefined

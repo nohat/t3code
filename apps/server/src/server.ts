@@ -578,12 +578,17 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   ),
 );
 
+const PapercutsLive = Papercuts.layer.pipe(
+  Layer.provide(PersistenceLayerLive.pipe(Layer.provide(PlatformServicesLive))),
+  Layer.provide(PlatformServicesLive),
+);
+
 const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),
   Layer.provideMerge(UsageLayerLive),
-  Layer.provideMerge(Papercuts.layer),
+  Layer.provideMerge(PapercutsLive),
   Layer.provideMerge(TraceDiagnostics.layer),
   Layer.provideMerge(AnalyticsService.layer),
   Layer.provideMerge(ExternalLauncher.layer),
