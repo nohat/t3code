@@ -4213,7 +4213,13 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       ];
 
       const openedEventsFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.threadId === threadId),
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "session.started" ||
+              event.type === "thread.started" ||
+              event.type === "request.opened"),
+        ),
         Stream.take(3),
         Stream.runCollect,
         Effect.forkChild,
@@ -4513,7 +4519,13 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       ];
 
       const requestedEventsFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.threadId === threadId),
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "session.started" ||
+              event.type === "thread.started" ||
+              event.type === "user-input.requested"),
+        ),
         Stream.take(3),
         Stream.runCollect,
         Effect.forkChild,
@@ -6916,6 +6928,304 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         NodeAssert.equal(yield* sameDirectory(link, real), true);
         NodeAssert.equal(yield* sameDirectory(link, path.join(base, "other")), false);
       }).pipe(Effect.scoped),
+  );
+
+  it.effect("emits child task.started on session.created with the subtask seed", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-child-started");
+      const parentId = "http://127.0.0.1:9999/session";
+      const created = promiseWithResolvers<OpenCodeEvent>();
+      const tool = promiseWithResolvers<OpenCodeEvent>();
+      const usage = promiseWithResolvers<OpenCodeEvent>();
+      const idle = promiseWithResolvers<OpenCodeEvent>();
+      const deleted = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.subscribedEvents = [
+        created.promise,
+        tool.promise,
+        usage.promise,
+        idle.promise,
+        deleted.promise,
+      ];
+
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "task.started" ||
+              event.type === "task.progress" ||
+              event.type === "task.updated"),
+        ),
+        Stream.take(5),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      created.resolve({
+        id: "evt-child-created",
+        type: "session.created",
+        properties: {
+          sessionID: "ses_child_started",
+          info: {
+            id: "ses_child_started",
+            parentID: parentId,
+            title: "Explore helpers",
+            agent: "explore",
+            model: { id: "sonnet", providerID: "anthropic" },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      // Duplicate delivery must not reopen: metadata-only update instead.
+      tool.resolve({
+        id: "evt-child-tool",
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_child_started",
+          time: 1,
+          part: {
+            id: "part-child-tool",
+            sessionID: "ses_child_started",
+            messageID: "msg-child",
+            type: "tool",
+            callID: "call-child-tool",
+            tool: "bash",
+            state: {
+              status: "running",
+              input: { command: "rg foo" },
+              title: "Search",
+              time: { start: 1 },
+            },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      usage.resolve({
+        id: "evt-child-usage",
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_child_started",
+          time: 2,
+          part: {
+            id: "part-child-step",
+            sessionID: "ses_child_started",
+            messageID: "msg-child",
+            type: "step-finish",
+            reason: "stop",
+            cost: 0,
+            tokens: {
+              total: 120,
+              input: 90,
+              output: 20,
+              reasoning: 10,
+              cache: { read: 5, write: 0 },
+            },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      idle.resolve({
+        id: "evt-child-idle",
+        type: "session.idle",
+        properties: { sessionID: "ses_child_started" },
+      } as unknown as OpenCodeEvent);
+      deleted.resolve({
+        id: "evt-child-deleted",
+        type: "session.deleted",
+        properties: {
+          sessionID: "ses_child_started",
+          info: { id: "ses_child_started", parentID: parentId },
+        },
+      } as unknown as OpenCodeEvent);
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("5 seconds")));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        ["task.started", "task.progress", "task.progress", "task.updated", "task.updated"],
+      );
+      const started = events[0];
+      NodeAssert.equal(started?.type, "task.started");
+      if (started?.type === "task.started") {
+        NodeAssert.equal(started.payload.taskId, "ses_child_started");
+        NodeAssert.equal(started.payload.taskType, "subagent");
+        NodeAssert.equal(started.payload.timelineBypass, true);
+        NodeAssert.equal(started.payload.title, "Explore helpers");
+        NodeAssert.equal(started.payload.role, "explore");
+        NodeAssert.equal(started.payload.model, "anthropic/sonnet");
+        NodeAssert.equal(started.payload.parentAgentId, parentId);
+      }
+      const toolProgress = events[1];
+      NodeAssert.equal(toolProgress?.type, "task.progress");
+      if (toolProgress?.type === "task.progress") {
+        NodeAssert.equal(toolProgress.payload.taskId, "ses_child_started");
+        NodeAssert.equal(toolProgress.payload.lastToolName, "bash");
+        NodeAssert.equal(toolProgress.payload.taskType, "subagent");
+        NodeAssert.equal(toolProgress.payload.timelineBypass, true);
+      }
+      const usageProgress = events[2];
+      NodeAssert.equal(usageProgress?.type, "task.progress");
+      if (usageProgress?.type === "task.progress") {
+        NodeAssert.deepEqual(usageProgress.payload.typedUsage, {
+          totalTokens: 120,
+          inputTokens: 90,
+          cachedInputTokens: 5,
+          outputTokens: 20,
+          reasoningOutputTokens: 10,
+        });
+      }
+      const idleUpdated = events[3];
+      NodeAssert.equal(idleUpdated?.type, "task.updated");
+      if (idleUpdated?.type === "task.updated") {
+        NodeAssert.equal(idleUpdated.payload.status, "idle");
+        NodeAssert.equal(idleUpdated.payload.taskType, "subagent");
+      }
+      const deletedUpdated = events[4];
+      NodeAssert.equal(deletedUpdated?.type, "task.updated");
+      if (deletedUpdated?.type === "task.updated") {
+        NodeAssert.equal(deletedUpdated.payload.status, "interrupted");
+      }
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("matches a subtask seed to the child on session.created", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-child-seed");
+      const parentId = "http://127.0.0.1:9999/session";
+      const seed = promiseWithResolvers<OpenCodeEvent>();
+      const created = promiseWithResolvers<OpenCodeEvent>();
+      const idle = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.subscribedEvents = [seed.promise, created.promise, idle.promise];
+
+      const taskFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "task.started" || event.type === "task.updated"),
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      seed.resolve({
+        id: "evt-subtask-seed",
+        type: "message.part.updated",
+        properties: {
+          sessionID: parentId,
+          time: 1,
+          part: {
+            id: "part-subtask-seed",
+            sessionID: parentId,
+            messageID: "msg-parent",
+            type: "subtask",
+            prompt: "Explore the repo",
+            description: "Seed title",
+            agent: "explore",
+            model: { providerID: "anthropic", modelID: "sonnet" },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      yield* Effect.yieldNow;
+      created.resolve({
+        id: "evt-seed-child-created",
+        type: "session.created",
+        properties: {
+          sessionID: "ses_seed_child",
+          info: { id: "ses_seed_child", parentID: parentId, title: "Child session - seed" },
+        },
+      } as unknown as OpenCodeEvent);
+      yield* Effect.yieldNow;
+      // Duplicate delivery must not reopen: metadata-only update instead.
+      idle.resolve({
+        id: "evt-seed-child-duplicate",
+        type: "session.created",
+        properties: {
+          sessionID: "ses_seed_child",
+          info: { id: "ses_seed_child", parentID: parentId, title: "Child session - seed" },
+        },
+      } as unknown as OpenCodeEvent);
+
+      const taskEvents = Array.from(yield* Fiber.join(taskFiber).pipe(Effect.timeout("5 seconds")));
+      NodeAssert.deepEqual(
+        taskEvents.map((event) => event.type),
+        ["task.started", "task.updated"],
+      );
+      const started = taskEvents[0];
+      NodeAssert.equal(started?.type, "task.started");
+      if (started?.type === "task.started") {
+        // The launch-time seed wins over the session payload for identity.
+        NodeAssert.equal(started.payload.title, "Seed title");
+        NodeAssert.equal(started.payload.role, "explore");
+        NodeAssert.equal(started.payload.model, "anthropic/sonnet");
+      }
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("sweeps live children with task.updated interrupted on stopSession", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-child-sweep");
+      const parentId = "http://127.0.0.1:9999/session";
+      const created = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.subscribedEvents = [created.promise];
+
+      const sweepFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => {
+          if (event.threadId !== threadId) {
+            return false;
+          }
+          const payload = event.payload as { taskId?: string; status?: string };
+          if (event.type === "task.started") {
+            return payload.taskId === "ses_sweep_child";
+          }
+          return (
+            event.type === "task.updated" &&
+            payload.taskId === "ses_sweep_child" &&
+            payload.status === "interrupted"
+          );
+        }),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      created.resolve({
+        id: "evt-sweep-child-created",
+        type: "session.created",
+        properties: {
+          sessionID: "ses_sweep_child",
+          info: { id: "ses_sweep_child", parentID: parentId, title: "Sweep me" },
+        },
+      } as unknown as OpenCodeEvent);
+      yield* Effect.yieldNow;
+      yield* Effect.yieldNow;
+      yield* adapter.stopSession(threadId);
+
+      const events = Array.from(yield* Fiber.join(sweepFiber).pipe(Effect.timeout("5 seconds")));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        ["task.started", "task.updated"],
+      );
+      NodeAssert.equal(
+        (events[1]?.type === "task.updated" && (events[1].payload as { status?: string }).status) ??
+          undefined,
+        "interrupted",
+      );
+    }),
   );
 
   it.effect("reconciles assistant text snapshots", () =>
