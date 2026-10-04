@@ -2127,8 +2127,9 @@ export function makeOpenCodeAdapter(
      * Handles a `message.part.updated` part that arrived on a known child
      * session: `subtask` on the parent queues a launch seed, `tool` and
      * `step-finish` on a child become `task.progress` rows addressed to the
-     * child taskId. Returns true when the event was consumed and the parent
-     * branch must not run.
+     * child taskId. Every other child part is consumed silently so it cannot
+     * reach the parent branch. Returns true when the event was consumed and
+     * the parent branch must not run.
      */
     const handleChildPartUpdated = Effect.fn("handleChildPartUpdated")(function* (
       context: OpenCodeSessionContext,
@@ -2189,7 +2190,10 @@ export function makeOpenCodeAdapter(
         );
         return true;
       }
-      return false;
+      // Any other part on a known child (text, reasoning, …) is consumed here
+      // without an emission: it must not fall through to the parent text/item
+      // path and surface as parent-turn output.
+      return true;
     });
 
     const isRelatedOpenCodeSession = Effect.fn("isRelatedOpenCodeSession")(function* (
@@ -2825,6 +2829,11 @@ export function makeOpenCodeAdapter(
 
       switch (event.type) {
         case "session.updated": {
+          // Only the parent session titles this thread; a child's generated
+          // title must not rename the parent (child traffic stays on task rows).
+          if (isChildSessionEvent) {
+            break;
+          }
           const title = openCodeEventSessionTitle(event);
           if (title) {
             yield* emit({

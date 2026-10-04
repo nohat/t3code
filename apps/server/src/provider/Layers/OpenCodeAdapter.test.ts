@@ -7228,6 +7228,136 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
+  it.effect("keeps child-session text and reasoning out of the parent turn", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-child-isolation");
+      const parentId = "http://127.0.0.1:9999/session";
+      const created = promiseWithResolvers<OpenCodeEvent>();
+      const childUpdated = promiseWithResolvers<OpenCodeEvent>();
+      const childAssistant = promiseWithResolvers<OpenCodeEvent>();
+      const childText = promiseWithResolvers<OpenCodeEvent>();
+      const childReasoning = promiseWithResolvers<OpenCodeEvent>();
+      const parentAssistant = promiseWithResolvers<OpenCodeEvent>();
+      const parentText = promiseWithResolvers<OpenCodeEvent>();
+      runtimeMock.state.subscribedEvents = [
+        created.promise,
+        childUpdated.promise,
+        childAssistant.promise,
+        childText.promise,
+        childReasoning.promise,
+        parentAssistant.promise,
+        parentText.promise,
+      ];
+
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.takeUntil(
+          (event) => event.type === "content.delta" && event.payload.delta === "Parent answer",
+        ),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      created.resolve({
+        id: "evt-isolation-child-created",
+        type: "session.created",
+        properties: {
+          sessionID: "ses_isolation_child",
+          info: { id: "ses_isolation_child", parentID: parentId, title: "Quiet child" },
+        },
+      } as unknown as OpenCodeEvent);
+      childUpdated.resolve({
+        id: "evt-isolation-child-updated",
+        type: "session.updated",
+        properties: {
+          sessionID: "ses_isolation_child",
+          info: { id: "ses_isolation_child", parentID: parentId, title: "Child renamed parent" },
+        },
+      } as unknown as OpenCodeEvent);
+      childAssistant.resolve({
+        id: "evt-isolation-child-assistant",
+        type: "message.updated",
+        properties: {
+          sessionID: "ses_isolation_child",
+          info: { id: "msg-isolation-child", role: "assistant" },
+        },
+      } as unknown as OpenCodeEvent);
+      childText.resolve({
+        id: "evt-isolation-child-text",
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_isolation_child",
+          time: 1,
+          part: {
+            id: "part-isolation-child-text",
+            sessionID: "ses_isolation_child",
+            messageID: "msg-isolation-child",
+            type: "text",
+            text: "Child secret text",
+            time: { start: 1, end: 2 },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      childReasoning.resolve({
+        id: "evt-isolation-child-reasoning",
+        type: "message.part.updated",
+        properties: {
+          sessionID: "ses_isolation_child",
+          time: 2,
+          part: {
+            id: "part-isolation-child-reasoning",
+            sessionID: "ses_isolation_child",
+            messageID: "msg-isolation-child",
+            type: "reasoning",
+            text: "Child secret reasoning",
+            time: { start: 2 },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+      parentAssistant.resolve({
+        id: "evt-isolation-parent-assistant",
+        type: "message.updated",
+        properties: {
+          sessionID: parentId,
+          info: { id: "msg-isolation-parent", role: "assistant" },
+        },
+      } as unknown as OpenCodeEvent);
+      parentText.resolve({
+        id: "evt-isolation-parent-text",
+        type: "message.part.updated",
+        properties: {
+          sessionID: parentId,
+          time: 3,
+          part: {
+            id: "part-isolation-parent-text",
+            sessionID: parentId,
+            messageID: "msg-isolation-parent",
+            type: "text",
+            text: "Parent answer",
+            time: { start: 3 },
+          },
+        },
+      } as unknown as OpenCodeEvent);
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("5 seconds")));
+      const deltaTexts = events
+        .filter((event) => event.type === "content.delta")
+        .map((event) => (event.type === "content.delta" ? event.payload.delta : ""));
+      NodeAssert.deepEqual(deltaTexts, ["Parent answer"]);
+      const metadataNames = events
+        .filter((event) => event.type === "thread.metadata.updated")
+        .map((event) => (event.type === "thread.metadata.updated" ? event.payload.name : ""));
+      NodeAssert.deepEqual(metadataNames, []);
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("reconciles assistant text snapshots", () =>
     Effect.sync(() => {
       const firstUpdate = mergeOpenCodeAssistantText(undefined, "Hello");
