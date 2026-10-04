@@ -16,6 +16,7 @@ import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildModelSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -54,7 +55,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateModelSummary";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -263,10 +265,38 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateModelSummary: TextGeneration.TextGeneration["Service"]["generateModelSummary"] =
+    Effect.fn("GrokTextGeneration.generateModelSummary")(function* (input) {
+      const { prompt, outputSchema } = buildModelSummaryPrompt({
+        kind: input.kind,
+        modelName: input.modelName,
+        sourceText: input.sourceText,
+      });
+
+      const generated = yield* runGrokJson({
+        operation: "generateModelSummary",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      const evidenceQuote =
+        "evidenceQuote" in generated && typeof generated.evidenceQuote === "string"
+          ? generated.evidenceQuote.trim()
+          : undefined;
+
+      return {
+        text: generated.text.trim(),
+        ...(evidenceQuote !== undefined && evidenceQuote.length > 0 ? { evidenceQuote } : {}),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateModelSummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

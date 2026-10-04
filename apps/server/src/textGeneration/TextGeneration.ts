@@ -75,6 +75,30 @@ export interface ThreadTitleGenerationResult {
   needsRefinement?: boolean | undefined;
 }
 
+export type ModelSummaryKind = "providerIntent" | "observedProfile";
+
+/**
+ * Generate a short, source-grounded summary of a model for the catalog.
+ *
+ * `sourceText` is the only material the model may draw on; `providerIntent`
+ * additionally requires an exact quote proving the generated sentence is
+ * grounded. Summaries are generated during ingestion, never during rendering.
+ */
+export interface ModelSummaryGenerationInput {
+  cwd: string;
+  kind: ModelSummaryKind;
+  modelName: string;
+  sourceText: string;
+  /** What model and provider to use for generation. */
+  modelSelection: ModelSelection;
+}
+
+export interface ModelSummaryGenerationResult {
+  text: string;
+  /** Required for `providerIntent`: a verbatim span of `sourceText`. */
+  evidenceQuote?: string | undefined;
+}
+
 /**
  * TextGeneration - Service tag for commit and change request text generation.
  */
@@ -106,6 +130,11 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /** Generate a short, evidence-grounded model summary for the catalog. */
+    readonly generateModelSummary: (
+      input: ModelSummaryGenerationInput,
+    ) => Effect.Effect<ModelSummaryGenerationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -113,7 +142,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateModelSummary";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -165,6 +195,10 @@ export const make = Effect.gen(function* () {
             return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });
           }),
         ),
+      ),
+    generateModelSummary: (input) =>
+      resolveInstance(registry, "generateModelSummary", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.generateModelSummary(input)),
       ),
   });
 });

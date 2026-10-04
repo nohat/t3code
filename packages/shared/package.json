@@ -31,6 +31,10 @@
       "types": "./src/model.ts",
       "import": "./src/model.ts"
     },
+    "./modelCatalog": {
+      "types": "./src/modelCatalog/index.ts",
+      "import": "./src/modelCatalog/index.ts"
+    },
     "./advertisedEndpoint": {
       "types": "./src/advertisedEndpoint.ts",
       "import": "./src/advertisedEndpoint.ts"

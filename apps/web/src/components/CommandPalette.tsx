@@ -42,6 +42,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  BoxesIcon,
   ChartNoAxesColumnIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
@@ -570,6 +571,13 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         event.stopPropagation();
         setOpen(false);
         void navigate({ to: "/usage" });
+        return;
+      }
+      if (command === "models.open") {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        void navigate({ to: "/models" });
         return;
       }
       const mode = overlayModeForCommand(command);
@@ -2078,6 +2086,18 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "usage.open",
     run: async () => {
       await navigate({ to: "/usage" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:models",
+    searchTerms: ["models", "model", "catalog", "capability", "benchmark", "price", "blended"],
+    title: "Open models",
+    icon: <BoxesIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "models.open",
+    run: async () => {
+      await navigate({ to: "/models" });
     },
   });
 

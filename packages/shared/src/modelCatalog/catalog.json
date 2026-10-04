@@ -1,0 +1,1779 @@
+{
+  "version": 1,
+  "catalogVersion": "2026-10-01T21:10:06.637Z",
+  "generatedAt": "2026-10-01T21:10:06.637Z",
+  "methodology": {
+    "blendMethodologyVersion": "blend-70-20-10-v1",
+    "blend": {
+      "cachedInput": 0.7,
+      "input": 0.2,
+      "output": 0.1
+    },
+    "capabilityMethodologyVersion": "capability-frontier-mean-v1",
+    "specializationMethodologyVersion": "specialization-ols-residual-v1",
+    "adoptionMethodologyVersion": "openrouter-adoption-ccby-v1",
+    "publication": {
+      "requiredFamilies": ["generalReasoning", "coding"],
+      "minimumFamilies": 4,
+      "frontierClusterSize": 5
+    }
+  },
+  "sources": [
+    {
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceKind": "officialModelPage",
+      "label": "Anthropic — Claude Sonnet 5.5 overview",
+      "url": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview"
+    },
+    {
+      "sourceId": "openai.gpt-6.1-sol",
+      "sourceKind": "officialModelPage",
+      "label": "OpenAI — GPT-6.1 Sol",
+      "url": "https://platform.openai.com/docs/models/gpt-6.1-sol"
+    },
+    {
+      "sourceId": "openrouter.models",
+      "sourceKind": "openrouterModels",
+      "label": "OpenRouter — model catalog API",
+      "url": "https://openrouter.ai/api/v1/models"
+    },
+    {
+      "sourceId": "openrouter.benchmarks",
+      "sourceKind": "openrouterBenchmarks",
+      "label": "OpenRouter Data API — benchmarks",
+      "url": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "license": "CC BY 4.0",
+      "citation": "OpenRouter Data API, benchmarks endpoint"
+    },
+    {
+      "sourceId": "openrouter.rankings",
+      "sourceKind": "openrouterRankings",
+      "label": "OpenRouter Data API — daily rankings",
+      "url": "https://openrouter.ai/api/v1/datasets/rankings-daily",
+      "license": "CC BY 4.0",
+      "citation": "OpenRouter Data API, rankings-daily dataset"
+    },
+    {
+      "sourceId": "openrouter.tasks",
+      "sourceKind": "openrouterTasks",
+      "label": "OpenRouter Data API — task classifications",
+      "url": "https://openrouter.ai/api/v1/classifications/task",
+      "license": "CC BY 4.0",
+      "citation": "OpenRouter Data API, task classifications endpoint"
+    },
+    {
+      "sourceId": "artificialanalysis.intelligence",
+      "sourceKind": "artificialAnalysis",
+      "label": "Artificial Analysis — Intelligence Index",
+      "url": "https://artificialanalysis.ai/"
+    },
+    {
+      "sourceId": "designarena.elo",
+      "sourceKind": "designArena",
+      "label": "Design Arena — category Elo",
+      "url": "https://www.designarena.ai/"
+    },
+    {
+      "sourceId": "litellm.model_prices",
+      "sourceKind": "litellmPrices",
+      "label": "LiteLLM model price table",
+      "url": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+    }
+  ],
+  "sourceSnapshots": [],
+  "makers": [
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "homepage": "https://www.anthropic.com"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "homepage": "https://openai.com"
+    },
+    {
+      "id": "google",
+      "name": "Google",
+      "homepage": "https://deepmind.google"
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "homepage": "https://www.deepseek.com"
+    },
+    {
+      "id": "meta",
+      "name": "Meta",
+      "homepage": "https://ai.meta.com"
+    }
+  ],
+  "servingProviders": [
+    {
+      "id": "anthropic-api",
+      "name": "Anthropic API",
+      "kind": "makerDirect"
+    },
+    {
+      "id": "openai-api",
+      "name": "OpenAI API",
+      "kind": "makerDirect"
+    },
+    {
+      "id": "google-api",
+      "name": "Google AI API",
+      "kind": "makerDirect"
+    },
+    {
+      "id": "deepseek-api",
+      "name": "DeepSeek API",
+      "kind": "makerDirect"
+    },
+    {
+      "id": "openrouter-anthropic",
+      "name": "OpenRouter → Anthropic",
+      "kind": "aggregator",
+      "note": "Routed serving offer; rates are OpenRouter's, not Anthropic's direct rate card."
+    },
+    {
+      "id": "openrouter-openai",
+      "name": "OpenRouter → OpenAI",
+      "kind": "aggregator",
+      "note": "Routed serving offer; rates are OpenRouter's, not OpenAI's direct rate card."
+    }
+  ],
+  "models": [
+    {
+      "id": "anthropic/claude-sonnet-5.5",
+      "canonicalName": "Claude Sonnet 5.5",
+      "familyId": "claude-sonnet",
+      "makerId": "anthropic",
+      "version": "5.5",
+      "aliases": [
+        {
+          "source": "openrouter",
+          "sourceId": "anthropic/claude-sonnet-5.5"
+        },
+        {
+          "source": "anthropic",
+          "sourceId": "claude-sonnet-5-5"
+        },
+        {
+          "source": "litellm",
+          "sourceId": "claude-sonnet-5-5"
+        }
+      ],
+      "releasedAt": "2026-09-18",
+      "knowledgeCutoff": "2026-04-01",
+      "technical": {
+        "contextWindow": 1000000,
+        "maxOutputTokens": 64000,
+        "modalities": ["text", "image"],
+        "supportsTools": true,
+        "supportsStructuredOutput": true,
+        "supportsReasoningControl": true
+      },
+      "offers": [
+        {
+          "id": "anthropic-direct",
+          "servingProviderId": "anthropic-api",
+          "label": "Anthropic API",
+          "isCanonical": true,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 2,
+            "output": 10,
+            "cacheRead": 0.2
+          },
+          "blendedPrice": {
+            "value": 1.54,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "anthropic/claude-sonnet-5.5:anthropic-direct:price.input",
+              "anthropic/claude-sonnet-5.5:anthropic-direct:price.output",
+              "anthropic/claude-sonnet-5.5:anthropic-direct:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["anthropic.sonnet-5-5"],
+          "performance": {
+            "ttftMs": {
+              "metric": "ttftMs",
+              "median": 720,
+              "p25": 640,
+              "p75": 820,
+              "sampleCount": 120,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            },
+            "outputTokensPerSecond": {
+              "metric": "outputTokensPerSecond",
+              "median": 118,
+              "p25": 105,
+              "p75": 132,
+              "sampleCount": 120,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            }
+          }
+        },
+        {
+          "id": "openrouter-anthropic",
+          "servingProviderId": "openrouter-anthropic",
+          "label": "OpenRouter → Anthropic",
+          "isCanonical": false,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 2.2,
+            "output": 11,
+            "cacheRead": 0.22
+          },
+          "blendedPrice": {
+            "value": 1.694,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.input",
+              "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.output",
+              "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["openrouter.models"]
+        }
+      ],
+      "primaryOfferId": "anthropic-direct",
+      "capability": {
+        "overall": {
+          "score": 103.55498010340446,
+          "frontierReference": 100.46823962710803,
+          "coverage": {
+            "familiesCovered": [
+              "agenticCoding",
+              "coding",
+              "generalReasoning",
+              "instructionFollowing",
+              "mathScience"
+            ],
+            "familiesRequired": ["generalReasoning", "coding"],
+            "observationCount": 5
+          },
+          "methodologyVersion": "capability-frontier-mean-v1",
+          "inputObservationIds": [
+            "anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic",
+            "anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified",
+            "anthropic/claude-sonnet-5.5:benchmark:gpqaDiamond",
+            "anthropic/claude-sonnet-5.5:benchmark:ifBench",
+            "anthropic/claude-sonnet-5.5:benchmark:aime"
+          ]
+        },
+        "dimensions": [
+          {
+            "family": "agenticCoding",
+            "score": 101.35135135135135,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "score": 105.39845758354757,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "score": 116.92935390540441,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "score": 98.15950920245399,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:ifBench"]
+          },
+          {
+            "family": "mathScience",
+            "score": 98.36065573770492,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:aime"]
+          }
+        ],
+        "specializations": [
+          {
+            "family": "agenticCoding",
+            "observed": 101.35135135135135,
+            "expected": 96.9182552098508,
+            "residual": 4.433096141500556,
+            "label": "relativeStrength",
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "observed": 105.39845758354757,
+            "expected": 100.73143885109904,
+            "residual": 4.6670187324485255,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "observed": 116.92935390540441,
+            "expected": 123.531824368343,
+            "residual": -6.602470462938584,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "observed": 98.15950920245399,
+            "expected": 99.05174207594813,
+            "residual": -0.8922328734941374,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-sonnet-5.5:benchmark:ifBench"]
+          }
+        ],
+        "published": true
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 1,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "taskRank",
+            "task": "coding",
+            "value": 1,
+            "sourceId": "openrouter.tasks",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "momentum",
+            "value": 0.31,
+            "unit": "fraction",
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "30d",
+            "metric": "momentum",
+            "value": 0.74,
+            "unit": "fraction",
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "description": {
+        "providerIntentId": "anthropic/claude-sonnet-5.5:providerIntent",
+        "observedProfileId": "anthropic/claude-sonnet-5.5:observedProfile"
+      },
+      "evidence": [
+        "anthropic/claude-sonnet-5.5:anthropic-direct:price.input",
+        "anthropic/claude-sonnet-5.5:anthropic-direct:price.output",
+        "anthropic/claude-sonnet-5.5:anthropic-direct:price.cacheRead",
+        "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.input",
+        "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.output",
+        "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.cacheRead",
+        "anthropic/claude-sonnet-5.5:benchmark:gpqaDiamond",
+        "anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified",
+        "anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic",
+        "anthropic/claude-sonnet-5.5:benchmark:ifBench",
+        "anthropic/claude-sonnet-5.5:benchmark:aime"
+      ]
+    },
+    {
+      "id": "openai/gpt-6.1-sol",
+      "canonicalName": "GPT-6.1 Sol",
+      "familyId": "gpt-6.1-sol",
+      "makerId": "openai",
+      "version": "6.1",
+      "aliases": [
+        {
+          "source": "openai",
+          "sourceId": "gpt-6.1-sol"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "openai/gpt-6.1-sol"
+        },
+        {
+          "source": "litellm",
+          "sourceId": "gpt-6.1-sol"
+        }
+      ],
+      "releasedAt": "2026-08-20",
+      "technical": {
+        "contextWindow": 1050000,
+        "maxOutputTokens": 100000,
+        "modalities": ["text", "image"],
+        "supportsTools": true,
+        "supportsStructuredOutput": true,
+        "supportsReasoningControl": true
+      },
+      "offers": [
+        {
+          "id": "openai-direct",
+          "servingProviderId": "openai-api",
+          "label": "OpenAI API",
+          "isCanonical": true,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 2,
+            "output": 10,
+            "cacheRead": 0.1
+          },
+          "blendedPrice": {
+            "value": 1.47,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "openai/gpt-6.1-sol:openai-direct:price.input",
+              "openai/gpt-6.1-sol:openai-direct:price.output",
+              "openai/gpt-6.1-sol:openai-direct:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["openai.gpt-6.1-sol"],
+          "performance": {
+            "ttftMs": {
+              "metric": "ttftMs",
+              "median": 880,
+              "sampleCount": 96,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            },
+            "outputTokensPerSecond": {
+              "metric": "outputTokensPerSecond",
+              "median": 96,
+              "sampleCount": 96,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            }
+          }
+        }
+      ],
+      "primaryOfferId": "openai-direct",
+      "capability": {
+        "overall": {
+          "score": 103.22040042445322,
+          "frontierReference": 100.46823962710803,
+          "coverage": {
+            "familiesCovered": [
+              "agenticCoding",
+              "coding",
+              "generalReasoning",
+              "instructionFollowing",
+              "mathScience"
+            ],
+            "familiesRequired": ["generalReasoning", "coding"],
+            "observationCount": 5
+          },
+          "methodologyVersion": "capability-frontier-mean-v1",
+          "inputObservationIds": [
+            "openai/gpt-6.1-sol:benchmark:tauBenchAgentic",
+            "openai/gpt-6.1-sol:benchmark:sweBenchVerified",
+            "openai/gpt-6.1-sol:benchmark:gpqaDiamond",
+            "openai/gpt-6.1-sol:benchmark:ifBench",
+            "openai/gpt-6.1-sol:benchmark:aime"
+          ]
+        },
+        "dimensions": [
+          {
+            "family": "agenticCoding",
+            "score": 95.94594594594595,
+            "observationCount": 1,
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "score": 100.25706940874036,
+            "observationCount": 1,
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "score": 118.83574579797305,
+            "observationCount": 1,
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "score": 101.84049079754601,
+            "observationCount": 1,
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:ifBench"]
+          },
+          {
+            "family": "mathScience",
+            "score": 101.63934426229508,
+            "observationCount": 1,
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:aime"]
+          }
+        ],
+        "specializations": [
+          {
+            "family": "agenticCoding",
+            "observed": 95.94594594594595,
+            "expected": 97.20829598434356,
+            "residual": -1.2623500383976136,
+            "label": "typical",
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "observed": 100.25706940874036,
+            "expected": 100.89849319715356,
+            "residual": -0.6414237884131921,
+            "label": "typical",
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "observed": 118.83574579797305,
+            "expected": 121.30155805362062,
+            "residual": -2.4658122556475774,
+            "label": "typical",
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "observed": 101.84049079754601,
+            "expected": 99.14098809774397,
+            "residual": 2.6995026998020393,
+            "label": "relativeStrength",
+            "inputObservationIds": ["openai/gpt-6.1-sol:benchmark:ifBench"]
+          }
+        ],
+        "published": true
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 2,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "taskRank",
+            "task": "coding",
+            "value": 2,
+            "sourceId": "openrouter.tasks",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "momentum",
+            "value": 0.15,
+            "unit": "fraction",
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "description": {
+        "providerIntentId": "openai/gpt-6.1-sol:providerIntent"
+      },
+      "evidence": [
+        "openai/gpt-6.1-sol:openai-direct:price.input",
+        "openai/gpt-6.1-sol:openai-direct:price.output",
+        "openai/gpt-6.1-sol:openai-direct:price.cacheRead",
+        "openai/gpt-6.1-sol:benchmark:gpqaDiamond",
+        "openai/gpt-6.1-sol:benchmark:sweBenchVerified",
+        "openai/gpt-6.1-sol:benchmark:tauBenchAgentic",
+        "openai/gpt-6.1-sol:benchmark:ifBench",
+        "openai/gpt-6.1-sol:benchmark:aime"
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-5.5",
+      "canonicalName": "Claude Opus 5.5",
+      "familyId": "claude-opus",
+      "makerId": "anthropic",
+      "version": "5.5",
+      "aliases": [
+        {
+          "source": "anthropic",
+          "sourceId": "claude-opus-5-5"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "anthropic/claude-opus-5.5"
+        },
+        {
+          "source": "litellm",
+          "sourceId": "claude-opus-5-5"
+        }
+      ],
+      "releasedAt": "2026-06-10",
+      "technical": {
+        "contextWindow": 500000,
+        "maxOutputTokens": 64000,
+        "modalities": ["text", "image"],
+        "supportsTools": true,
+        "supportsStructuredOutput": true,
+        "supportsReasoningControl": true
+      },
+      "offers": [
+        {
+          "id": "anthropic-opus-direct",
+          "servingProviderId": "anthropic-api",
+          "label": "Anthropic API",
+          "isCanonical": true,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 5,
+            "output": 25,
+            "cacheRead": 0.5
+          },
+          "blendedPrice": {
+            "value": 3.85,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "anthropic/claude-opus-5.5:anthropic-opus-direct:price.input",
+              "anthropic/claude-opus-5.5:anthropic-opus-direct:price.output",
+              "anthropic/claude-opus-5.5:anthropic-opus-direct:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["anthropic.sonnet-5-5"]
+        }
+      ],
+      "primaryOfferId": "anthropic-opus-direct",
+      "capability": {
+        "overall": {
+          "score": 94.21426578215153,
+          "frontierReference": 100.46823962710803,
+          "coverage": {
+            "familiesCovered": [
+              "agenticCoding",
+              "coding",
+              "generalReasoning",
+              "instructionFollowing",
+              "threeD"
+            ],
+            "familiesRequired": ["generalReasoning", "coding"],
+            "observationCount": 5
+          },
+          "methodologyVersion": "capability-frontier-mean-v1",
+          "inputObservationIds": [
+            "anthropic/claude-opus-5.5:benchmark:tauBenchAgentic",
+            "anthropic/claude-opus-5.5:benchmark:sweBenchVerified",
+            "anthropic/claude-opus-5.5:benchmark:artificialAnalysisIntelligence",
+            "anthropic/claude-opus-5.5:benchmark:ifBench",
+            "anthropic/claude-opus-5.5:benchmark:designArenaThreeD"
+          ]
+        },
+        "dimensions": [
+          {
+            "family": "agenticCoding",
+            "score": 108.10810810810811,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "score": 109.25449871465295,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "score": 52.846980059324515,
+            "observationCount": 1,
+            "inputObservationIds": [
+              "anthropic/claude-opus-5.5:benchmark:artificialAnalysisIntelligence"
+            ]
+          },
+          {
+            "family": "instructionFollowing",
+            "score": 103.06748466257669,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:ifBench"]
+          },
+          {
+            "family": "threeD",
+            "score": 100,
+            "observationCount": 1,
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:designArenaThreeD"]
+          }
+        ],
+        "specializations": [
+          {
+            "family": "agenticCoding",
+            "observed": 108.10810810810811,
+            "expected": 105.01554319979655,
+            "residual": 3.0925649083115587,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "observed": 109.25449871465295,
+            "expected": 105.39522156351637,
+            "residual": 3.859277151136581,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "observed": 52.846980059324515,
+            "expected": 61.267790367727684,
+            "residual": -8.42081030840317,
+            "label": "typical",
+            "inputObservationIds": [
+              "anthropic/claude-opus-5.5:benchmark:artificialAnalysisIntelligence"
+            ]
+          },
+          {
+            "family": "instructionFollowing",
+            "observed": 103.06748466257669,
+            "expected": 101.54329086491337,
+            "residual": 1.5241937976633153,
+            "label": "typical",
+            "inputObservationIds": ["anthropic/claude-opus-5.5:benchmark:ifBench"]
+          }
+        ],
+        "published": true
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 3,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "evidence": [
+        "anthropic/claude-opus-5.5:anthropic-opus-direct:price.input",
+        "anthropic/claude-opus-5.5:anthropic-opus-direct:price.output",
+        "anthropic/claude-opus-5.5:anthropic-opus-direct:price.cacheRead",
+        "anthropic/claude-opus-5.5:benchmark:artificialAnalysisIntelligence",
+        "anthropic/claude-opus-5.5:benchmark:sweBenchVerified",
+        "anthropic/claude-opus-5.5:benchmark:tauBenchAgentic",
+        "anthropic/claude-opus-5.5:benchmark:ifBench",
+        "anthropic/claude-opus-5.5:benchmark:designArenaThreeD"
+      ]
+    },
+    {
+      "id": "google/gemini-3.5-pro",
+      "canonicalName": "Gemini 3.5 Pro",
+      "familyId": "gemini-3.5",
+      "makerId": "google",
+      "version": "3.5",
+      "aliases": [
+        {
+          "source": "google",
+          "sourceId": "gemini-3.5-pro"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "google/gemini-3.5-pro"
+        },
+        {
+          "source": "litellm",
+          "sourceId": "gemini-3.5-pro"
+        }
+      ],
+      "releasedAt": "2026-07-15",
+      "technical": {
+        "contextWindow": 2000000,
+        "maxOutputTokens": 65536,
+        "modalities": ["text", "image", "audio", "video"],
+        "supportsTools": true,
+        "supportsStructuredOutput": true,
+        "supportsReasoningControl": true
+      },
+      "offers": [
+        {
+          "id": "google-direct",
+          "servingProviderId": "google-api",
+          "label": "Google AI API",
+          "isCanonical": true,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 1.25,
+            "output": 10,
+            "cacheRead": 0.31
+          },
+          "blendedPrice": {
+            "value": 1.467,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "google/gemini-3.5-pro:google-direct:price.input",
+              "google/gemini-3.5-pro:google-direct:price.output",
+              "google/gemini-3.5-pro:google-direct:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["litellm.model_prices"],
+          "performance": {
+            "ttftMs": {
+              "metric": "ttftMs",
+              "median": 610,
+              "sampleCount": 88,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            },
+            "outputTokensPerSecond": {
+              "metric": "outputTokensPerSecond",
+              "median": 212,
+              "sampleCount": 88,
+              "sourceId": "artificialanalysis.intelligence",
+              "sourceUrl": "https://artificialanalysis.ai/",
+              "measuredAt": "2026-09-30T00:00:00.000Z",
+              "observedAt": "2026-09-30"
+            }
+          }
+        }
+      ],
+      "primaryOfferId": "google-direct",
+      "capability": {
+        "overall": {
+          "score": 99.0103536899908,
+          "frontierReference": 100.46823962710803,
+          "coverage": {
+            "familiesCovered": [
+              "agenticCoding",
+              "coding",
+              "generalReasoning",
+              "instructionFollowing",
+              "longContext"
+            ],
+            "familiesRequired": ["generalReasoning", "coding"],
+            "observationCount": 5
+          },
+          "methodologyVersion": "capability-frontier-mean-v1",
+          "inputObservationIds": [
+            "google/gemini-3.5-pro:benchmark:tauBenchAgentic",
+            "google/gemini-3.5-pro:benchmark:sweBenchVerified",
+            "google/gemini-3.5-pro:benchmark:gpqaDiamond",
+            "google/gemini-3.5-pro:benchmark:ifBench",
+            "google/gemini-3.5-pro:benchmark:rulerLongContext"
+          ]
+        },
+        "dimensions": [
+          {
+            "family": "agenticCoding",
+            "score": 94.5945945945946,
+            "observationCount": 1,
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "score": 95.11568123393316,
+            "observationCount": 1,
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "score": 110.72700583858469,
+            "observationCount": 1,
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "score": 96.93251533742331,
+            "observationCount": 1,
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:ifBench"]
+          },
+          {
+            "family": "longContext",
+            "score": 100,
+            "observationCount": 1,
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:rulerLongContext"]
+          }
+        ],
+        "specializations": [
+          {
+            "family": "agenticCoding",
+            "observed": 94.5945945945946,
+            "expected": 100.857905606009,
+            "residual": -6.263311011414402,
+            "label": "relativeWeakness",
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:tauBenchAgentic"]
+          },
+          {
+            "family": "coding",
+            "observed": 95.11568123393316,
+            "expected": 103.00055332910514,
+            "residual": -7.8848720951719855,
+            "label": "relativeWeakness",
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "observed": 110.72700583858469,
+            "expected": 93.23791281159527,
+            "residual": 17.489093026989423,
+            "label": "relativeStrength",
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:gpqaDiamond"]
+          },
+          {
+            "family": "instructionFollowing",
+            "observed": 96.93251533742331,
+            "expected": 100.26397896139453,
+            "residual": -3.331463623971217,
+            "label": "relativeWeakness",
+            "inputObservationIds": ["google/gemini-3.5-pro:benchmark:ifBench"]
+          }
+        ],
+        "published": true
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 4,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "evidence": [
+        "google/gemini-3.5-pro:google-direct:price.input",
+        "google/gemini-3.5-pro:google-direct:price.output",
+        "google/gemini-3.5-pro:google-direct:price.cacheRead",
+        "google/gemini-3.5-pro:benchmark:gpqaDiamond",
+        "google/gemini-3.5-pro:benchmark:sweBenchVerified",
+        "google/gemini-3.5-pro:benchmark:tauBenchAgentic",
+        "google/gemini-3.5-pro:benchmark:ifBench",
+        "google/gemini-3.5-pro:benchmark:rulerLongContext"
+      ]
+    },
+    {
+      "id": "openai/gpt-6-luna",
+      "canonicalName": "GPT-6 Luna",
+      "familyId": "gpt-6-luna",
+      "makerId": "openai",
+      "version": "6",
+      "aliases": [
+        {
+          "source": "openai",
+          "sourceId": "gpt-6-luna"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "openai/gpt-6-luna"
+        },
+        {
+          "source": "litellm",
+          "sourceId": "gpt-6-luna"
+        }
+      ],
+      "releasedAt": "2026-09-25",
+      "technical": {
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "modalities": ["text", "image"],
+        "supportsTools": true,
+        "supportsStructuredOutput": true,
+        "supportsReasoningControl": true
+      },
+      "offers": [
+        {
+          "id": "openai-luna-direct",
+          "servingProviderId": "openai-api",
+          "label": "OpenAI API",
+          "isCanonical": true,
+          "rateCard": {
+            "currency": "USD",
+            "unit": "1M tokens",
+            "input": 0.15,
+            "output": 0.6,
+            "cacheRead": 0.015
+          },
+          "blendedPrice": {
+            "value": 0.1005,
+            "methodologyVersion": "blend-70-20-10-v1",
+            "inputObservationIds": [
+              "openai/gpt-6-luna:openai-luna-direct:price.input",
+              "openai/gpt-6-luna:openai-luna-direct:price.output",
+              "openai/gpt-6-luna:openai-luna-direct:price.cacheRead"
+            ]
+          },
+          "priceSourceIds": ["litellm.model_prices"]
+        }
+      ],
+      "primaryOfferId": "openai-luna-direct",
+      "capability": {
+        "dimensions": [],
+        "specializations": [],
+        "published": false,
+        "withheldReason": "Not measured"
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 5,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          },
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "momentum",
+            "value": 0.5,
+            "unit": "fraction",
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "evidence": [
+        "openai/gpt-6-luna:openai-luna-direct:price.input",
+        "openai/gpt-6-luna:openai-luna-direct:price.output",
+        "openai/gpt-6-luna:openai-luna-direct:price.cacheRead"
+      ]
+    },
+    {
+      "id": "deepseek/deepseek-v4",
+      "canonicalName": "DeepSeek V4",
+      "familyId": "deepseek-v4",
+      "makerId": "deepseek",
+      "version": "4",
+      "aliases": [
+        {
+          "source": "deepseek",
+          "sourceId": "deepseek-v4"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "deepseek/deepseek-v4"
+        }
+      ],
+      "releasedAt": "2026-05-01",
+      "technical": {
+        "contextWindow": 128000,
+        "maxOutputTokens": 32768,
+        "modalities": ["text"],
+        "supportsTools": true,
+        "openWeights": true
+      },
+      "offers": [
+        {
+          "id": "deepseek-direct",
+          "servingProviderId": "deepseek-api",
+          "label": "DeepSeek API",
+          "isCanonical": true,
+          "priceSourceIds": []
+        }
+      ],
+      "primaryOfferId": "deepseek-direct",
+      "capability": {
+        "dimensions": [
+          {
+            "family": "coding",
+            "score": 89.97429305912597,
+            "observationCount": 1,
+            "inputObservationIds": ["deepseek/deepseek-v4:benchmark:sweBenchVerified"]
+          },
+          {
+            "family": "generalReasoning",
+            "score": 100.66091439871336,
+            "observationCount": 1,
+            "inputObservationIds": ["deepseek/deepseek-v4:benchmark:gpqaDiamond"]
+          }
+        ],
+        "specializations": [],
+        "published": false,
+        "withheldReason": "Insufficient coverage: 2 of 4 families"
+      },
+      "adoption": {
+        "signals": [
+          {
+            "platform": "OpenRouter",
+            "universe": "Public OpenRouter model variants (top 50 plus an aggregate 'other')",
+            "window": "7d",
+            "metric": "usageRank",
+            "value": 8,
+            "sourceId": "openrouter.rankings",
+            "asOf": "2026-10-01",
+            "license": "CC BY 4.0",
+            "citation": "OpenRouter Data API"
+          }
+        ]
+      },
+      "evidence": [
+        "deepseek/deepseek-v4:benchmark:gpqaDiamond",
+        "deepseek/deepseek-v4:benchmark:sweBenchVerified"
+      ]
+    },
+    {
+      "id": "meta/llama-5-70b",
+      "canonicalName": "Llama 5 70B",
+      "familyId": "llama-5",
+      "makerId": "meta",
+      "version": "5",
+      "aliases": [
+        {
+          "source": "meta",
+          "sourceId": "llama-5-70b"
+        },
+        {
+          "source": "openrouter",
+          "sourceId": "meta/llama-5-70b"
+        }
+      ],
+      "releasedAt": "2026-03-01",
+      "technical": {
+        "contextWindow": 128000,
+        "maxOutputTokens": 16384,
+        "modalities": ["text"],
+        "supportsTools": false,
+        "openWeights": true
+      },
+      "offers": [
+        {
+          "id": "meta-open-weights",
+          "servingProviderId": "deepseek-api",
+          "label": "Open weights",
+          "isCanonical": true,
+          "priceSourceIds": []
+        }
+      ],
+      "primaryOfferId": "meta-open-weights",
+      "capability": {
+        "dimensions": [],
+        "specializations": [],
+        "published": false,
+        "withheldReason": "Not measured"
+      },
+      "evidence": []
+    }
+  ],
+  "observations": [
+    {
+      "id": "anthropic/claude-sonnet-5.5:anthropic-direct:price.input",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "anthropic-direct",
+      "metric": "price.input",
+      "value": 2,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:anthropic-direct:price.output",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "anthropic-direct",
+      "metric": "price.output",
+      "value": 10,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:anthropic-direct:price.cacheRead",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "anthropic-direct",
+      "metric": "price.cacheRead",
+      "value": 0.2,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.input",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "openrouter-anthropic",
+      "metric": "price.input",
+      "value": 2.2,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openrouter.models",
+      "sourceUrl": "https://openrouter.ai/api/v1/models",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.output",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "openrouter-anthropic",
+      "metric": "price.output",
+      "value": 11,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openrouter.models",
+      "sourceUrl": "https://openrouter.ai/api/v1/models",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:openrouter-anthropic:price.cacheRead",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "offerId": "openrouter-anthropic",
+      "metric": "price.cacheRead",
+      "value": 0.22,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openrouter.models",
+      "sourceUrl": "https://openrouter.ai/api/v1/models",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:benchmark:gpqaDiamond",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "metric": "benchmark.gpqaDiamond",
+      "value": 0.929293,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "generalReasoning",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "metric": "benchmark.sweBenchVerified",
+      "value": 0.82,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "coding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "metric": "benchmark.tauBenchAgentic",
+      "value": 0.75,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "agenticCoding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:benchmark:ifBench",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "metric": "benchmark.ifBench",
+      "value": 0.8,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "instructionFollowing",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:benchmark:aime",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "metric": "benchmark.aime",
+      "value": 0.9,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "mathScience",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:openai-direct:price.input",
+      "modelId": "openai/gpt-6.1-sol",
+      "offerId": "openai-direct",
+      "metric": "price.input",
+      "value": 2,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openai.gpt-6.1-sol",
+      "sourceUrl": "https://platform.openai.com/docs/models/gpt-6.1-sol",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:openai-direct:price.output",
+      "modelId": "openai/gpt-6.1-sol",
+      "offerId": "openai-direct",
+      "metric": "price.output",
+      "value": 10,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openai.gpt-6.1-sol",
+      "sourceUrl": "https://platform.openai.com/docs/models/gpt-6.1-sol",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:openai-direct:price.cacheRead",
+      "modelId": "openai/gpt-6.1-sol",
+      "offerId": "openai-direct",
+      "metric": "price.cacheRead",
+      "value": 0.1,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "openai.gpt-6.1-sol",
+      "sourceUrl": "https://platform.openai.com/docs/models/gpt-6.1-sol",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:benchmark:gpqaDiamond",
+      "modelId": "openai/gpt-6.1-sol",
+      "metric": "benchmark.gpqaDiamond",
+      "value": 0.944444,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "generalReasoning",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:benchmark:sweBenchVerified",
+      "modelId": "openai/gpt-6.1-sol",
+      "metric": "benchmark.sweBenchVerified",
+      "value": 0.78,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "coding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:benchmark:tauBenchAgentic",
+      "modelId": "openai/gpt-6.1-sol",
+      "metric": "benchmark.tauBenchAgentic",
+      "value": 0.71,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "agenticCoding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:benchmark:ifBench",
+      "modelId": "openai/gpt-6.1-sol",
+      "metric": "benchmark.ifBench",
+      "value": 0.83,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "instructionFollowing",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:benchmark:aime",
+      "modelId": "openai/gpt-6.1-sol",
+      "metric": "benchmark.aime",
+      "value": 0.93,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "mathScience",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:anthropic-opus-direct:price.input",
+      "modelId": "anthropic/claude-opus-5.5",
+      "offerId": "anthropic-opus-direct",
+      "metric": "price.input",
+      "value": 5,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:anthropic-opus-direct:price.output",
+      "modelId": "anthropic/claude-opus-5.5",
+      "offerId": "anthropic-opus-direct",
+      "metric": "price.output",
+      "value": 25,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:anthropic-opus-direct:price.cacheRead",
+      "modelId": "anthropic/claude-opus-5.5",
+      "offerId": "anthropic-opus-direct",
+      "metric": "price.cacheRead",
+      "value": 0.5,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "anthropic.sonnet-5-5",
+      "sourceUrl": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:benchmark:artificialAnalysisIntelligence",
+      "modelId": "anthropic/claude-opus-5.5",
+      "metric": "benchmark.artificialAnalysisIntelligence",
+      "value": 42,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "generalReasoning",
+      "sourceId": "artificialanalysis.intelligence",
+      "sourceUrl": "https://artificialanalysis.ai/",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:benchmark:sweBenchVerified",
+      "modelId": "anthropic/claude-opus-5.5",
+      "metric": "benchmark.sweBenchVerified",
+      "value": 0.85,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "coding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:benchmark:tauBenchAgentic",
+      "modelId": "anthropic/claude-opus-5.5",
+      "metric": "benchmark.tauBenchAgentic",
+      "value": 0.8,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "agenticCoding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:benchmark:ifBench",
+      "modelId": "anthropic/claude-opus-5.5",
+      "metric": "benchmark.ifBench",
+      "value": 0.84,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "instructionFollowing",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "anthropic/claude-opus-5.5:benchmark:designArenaThreeD",
+      "modelId": "anthropic/claude-opus-5.5",
+      "metric": "benchmark.designArenaThreeD",
+      "value": 1300,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "threeD",
+      "sourceId": "designarena.elo",
+      "sourceUrl": "https://www.designarena.ai/",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:google-direct:price.input",
+      "modelId": "google/gemini-3.5-pro",
+      "offerId": "google-direct",
+      "metric": "price.input",
+      "value": 1.25,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:google-direct:price.output",
+      "modelId": "google/gemini-3.5-pro",
+      "offerId": "google-direct",
+      "metric": "price.output",
+      "value": 10,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:google-direct:price.cacheRead",
+      "modelId": "google/gemini-3.5-pro",
+      "offerId": "google-direct",
+      "metric": "price.cacheRead",
+      "value": 0.31,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:benchmark:gpqaDiamond",
+      "modelId": "google/gemini-3.5-pro",
+      "metric": "benchmark.gpqaDiamond",
+      "value": 0.88,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "generalReasoning",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:benchmark:sweBenchVerified",
+      "modelId": "google/gemini-3.5-pro",
+      "metric": "benchmark.sweBenchVerified",
+      "value": 0.74,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "coding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:benchmark:tauBenchAgentic",
+      "modelId": "google/gemini-3.5-pro",
+      "metric": "benchmark.tauBenchAgentic",
+      "value": 0.7,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "agenticCoding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:benchmark:ifBench",
+      "modelId": "google/gemini-3.5-pro",
+      "metric": "benchmark.ifBench",
+      "value": 0.79,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "instructionFollowing",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "google/gemini-3.5-pro:benchmark:rulerLongContext",
+      "modelId": "google/gemini-3.5-pro",
+      "metric": "benchmark.rulerLongContext",
+      "value": 0.85,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "longContext",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6-luna:openai-luna-direct:price.input",
+      "modelId": "openai/gpt-6-luna",
+      "offerId": "openai-luna-direct",
+      "metric": "price.input",
+      "value": 0.15,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6-luna:openai-luna-direct:price.output",
+      "modelId": "openai/gpt-6-luna",
+      "offerId": "openai-luna-direct",
+      "metric": "price.output",
+      "value": 0.6,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "openai/gpt-6-luna:openai-luna-direct:price.cacheRead",
+      "modelId": "openai/gpt-6-luna",
+      "offerId": "openai-luna-direct",
+      "metric": "price.cacheRead",
+      "value": 0.015,
+      "unit": "USD per 1M tokens",
+      "metricClass": "pricing",
+      "sourceId": "litellm.model_prices",
+      "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+      "observedAt": "2026-09-28",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "deepseek/deepseek-v4:benchmark:gpqaDiamond",
+      "modelId": "deepseek/deepseek-v4",
+      "metric": "benchmark.gpqaDiamond",
+      "value": 0.8,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "generalReasoning",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    },
+    {
+      "id": "deepseek/deepseek-v4:benchmark:sweBenchVerified",
+      "modelId": "deepseek/deepseek-v4",
+      "metric": "benchmark.sweBenchVerified",
+      "value": 0.7,
+      "metricClass": "benchmark",
+      "benchmarkFamily": "coding",
+      "sourceId": "openrouter.benchmarks",
+      "sourceUrl": "https://openrouter.ai/docs/cookbook/administration/data-api",
+      "observedAt": "2026-10-01",
+      "retrievedAt": "2026-10-01T21:10:06.637Z"
+    }
+  ],
+  "generatedText": [
+    {
+      "id": "anthropic/claude-sonnet-5.5:providerIntent",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "kind": "providerIntent",
+      "text": "The provider presents Claude Sonnet 5.5 as offering a combination of speed and intelligence.",
+      "promptVersion": "provider-intent-summary-v1",
+      "providerModelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "providerDriver": "codex",
+      "sourceObservationIds": [],
+      "sourceUrls": ["https://platform.claude.com/docs/en/models/sonnet-5-5/overview"],
+      "generatedAt": "2026-10-01T21:10:06.637Z",
+      "validation": {
+        "schemaValid": true,
+        "sourceQuoteCheck": "passed",
+        "unsupportedClaims": false
+      },
+      "reviewStatus": "approved"
+    },
+    {
+      "id": "anthropic/claude-sonnet-5.5:observedProfile",
+      "modelId": "anthropic/claude-sonnet-5.5",
+      "kind": "observedProfile",
+      "text": "Strong agentic-coding and coding results relative to models of comparable overall capability; instruction-following sits near the peer average.",
+      "promptVersion": "observed-profile-summary-v1",
+      "providerModelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "providerDriver": "codex",
+      "sourceObservationIds": [
+        "anthropic/claude-sonnet-5.5:benchmark:sweBenchVerified",
+        "anthropic/claude-sonnet-5.5:benchmark:tauBenchAgentic",
+        "anthropic/claude-sonnet-5.5:benchmark:ifBench"
+      ],
+      "sourceUrls": ["https://openrouter.ai/docs/cookbook/administration/data-api"],
+      "generatedAt": "2026-10-01T21:10:06.637Z",
+      "validation": {
+        "schemaValid": true,
+        "sourceQuoteCheck": "notApplicable",
+        "unsupportedClaims": false
+      },
+      "reviewStatus": "approved"
+    },
+    {
+      "id": "openai/gpt-6.1-sol:providerIntent",
+      "modelId": "openai/gpt-6.1-sol",
+      "kind": "providerIntent",
+      "text": "OpenAI positions GPT-6.1 Sol as a high-throughput model for reasoning-heavy work.",
+      "promptVersion": "provider-intent-summary-v1",
+      "providerModelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "providerDriver": "codex",
+      "sourceObservationIds": [],
+      "sourceUrls": ["https://platform.openai.com/docs/models/gpt-6.1-sol"],
+      "generatedAt": "2026-10-01T21:10:06.637Z",
+      "validation": {
+        "schemaValid": true,
+        "sourceQuoteCheck": "passed",
+        "unsupportedClaims": false
+      },
+      "reviewStatus": "pending"
+    }
+  ]
+}

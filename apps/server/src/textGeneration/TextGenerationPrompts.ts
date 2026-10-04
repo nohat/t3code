@@ -311,6 +311,54 @@ function threadTitlePromptSuffix(input: ThreadTitlePromptInput): string {
   return suffix;
 }
 
+// ---------------------------------------------------------------------------
+// Model catalog summary
+// ---------------------------------------------------------------------------
+
+/** Prompt length cap for provider-intent summaries. */
+export const MODEL_SUMMARY_MAX_WORDS = 40;
+export const MODEL_SUMMARY_EVIDENCE_MAX_WORDS = 80;
+
+export interface ModelSummaryPromptInput {
+  kind: "providerIntent" | "observedProfile";
+  modelName: string;
+  sourceText: string;
+}
+
+export function buildModelSummaryPrompt(input: ModelSummaryPromptInput) {
+  const rules =
+    input.kind === "providerIntent"
+      ? [
+          "Paraphrase only what the source states about how the provider positions this model.",
+          "Do not add specifications, benchmark results, prices, or opinions the source does not state.",
+          `text must be a single sentence of at most ${MODEL_SUMMARY_MAX_WORDS} words.`,
+          "evidenceQuote must be a verbatim span copied from the source text that supports text.",
+          "Return a JSON object with keys: text, evidenceQuote.",
+        ]
+      : [
+          "Describe only what the structured evidence shows about relative strengths and weaknesses.",
+          "Do not introduce any number, benchmark, or claim that is not present in the evidence.",
+          `text must be one or two sentences, at most ${MODEL_SUMMARY_EVIDENCE_MAX_WORDS} words.`,
+          "Return a JSON object with keys: text.",
+        ];
+  const prompt = [
+    "You write one short, source-grounded summary for a model catalog entry.",
+    ...rules,
+    "",
+    `Model: ${input.modelName}`,
+    "",
+    input.kind === "providerIntent" ? "Provider source text:" : "Structured evidence:",
+    limitSection(input.sourceText, 12_000),
+  ].join("\n");
+
+  const outputSchema =
+    input.kind === "providerIntent"
+      ? Schema.Struct({ text: Schema.String, evidenceQuote: Schema.String })
+      : Schema.Struct({ text: Schema.String });
+
+  return { prompt, outputSchema };
+}
+
 export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
   let prompt: string;
   if (input.previousTitle === undefined) {

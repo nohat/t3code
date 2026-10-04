@@ -17,6 +17,7 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildModelSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -34,6 +35,7 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generatePrContent",
   "generateBranchName",
   "generateThreadTitle",
+  "generateModelSummary",
 ]);
 
 type OpenCodeTextGenerationOperation = typeof OpenCodeTextGenerationOperation.Type;
@@ -453,10 +455,37 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       };
     });
 
+  const generateModelSummary: TextGeneration.TextGeneration["Service"]["generateModelSummary"] =
+    Effect.fn("OpenCodeTextGeneration.generateModelSummary")(function* (input) {
+      const { prompt, outputSchema } = buildModelSummaryPrompt({
+        kind: input.kind,
+        modelName: input.modelName,
+        sourceText: input.sourceText,
+      });
+      const generated = yield* runOpenCodeJson({
+        operation: "generateModelSummary",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+
+      const evidenceQuote =
+        "evidenceQuote" in generated && typeof generated.evidenceQuote === "string"
+          ? generated.evidenceQuote.trim()
+          : undefined;
+
+      return {
+        text: generated.text.trim(),
+        ...(evidenceQuote !== undefined && evidenceQuote.length > 0 ? { evidenceQuote } : {}),
+      };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateModelSummary,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
