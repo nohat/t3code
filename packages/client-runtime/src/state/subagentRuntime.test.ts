@@ -205,6 +205,54 @@ describe("foldSubagentActivities", () => {
     expect(agents[0]!.status).toBe("running");
   });
 
+  it("folds OpenCode child rows: seed-titled start, tool progress, idle, interrupted", () => {
+    const agents = fold([
+      activity("task.started", {
+        taskId: "ses_opencode_child",
+        taskType: "subagent",
+        title: "Explore helpers",
+        role: "explore",
+        model: "anthropic/sonnet",
+        parentAgentId: "ses_opencode_parent",
+        timelineBypass: true,
+      }),
+      activity("task.progress", {
+        taskId: "ses_opencode_child",
+        description: "Search",
+        summary: "rg foo",
+        lastToolName: "bash",
+        status: "running",
+        taskType: "subagent",
+        timelineBypass: true,
+      }),
+      activity("task.progress", {
+        taskId: "ses_opencode_child",
+        description: "Explore helpers",
+        typedUsage: { totalTokens: 120, inputTokens: 90, outputTokens: 20 },
+        taskType: "subagent",
+        timelineBypass: true,
+      }),
+      activity("task.updated", {
+        taskId: "ses_opencode_child",
+        status: "idle",
+        taskType: "subagent",
+        timelineBypass: true,
+      }),
+      activity("task.updated", {
+        taskId: "ses_opencode_child",
+        status: "interrupted",
+        taskType: "subagent",
+        timelineBypass: true,
+      }),
+    ]);
+    expect(agents).toHaveLength(1);
+    const agent = agents[0]!;
+    expect(agent.title).toBe("Explore helpers");
+    expect(agent.role).toBe("explore");
+    expect(agent.status).toBe("interrupted");
+    expect(agent.usage?.totalTokens).toBe(120);
+  });
+
   it("cumulative usage max-merges: duplicate and late frames never shrink or double-count", () => {
     const agents = fold([
       activity("task.started", { taskId: "task-5", taskType: "local_agent" }),

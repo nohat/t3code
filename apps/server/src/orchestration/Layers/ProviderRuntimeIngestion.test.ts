@@ -4872,6 +4872,50 @@ describe("ProviderRuntimeIngestion", () => {
     expect(completedPayload?.detail).toBe("Typecheck finished without errors.");
   });
 
+  it("stamps an OpenCode subagent task.started with agentKind agent", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "task.started",
+      eventId: asEventId("evt-opencode-subagent-started"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: {
+        taskId: "ses_opencode_child",
+        description: "Explore helpers",
+        title: "Explore helpers",
+        taskType: "subagent",
+        role: "explore",
+        model: "anthropic/sonnet",
+        parentAgentId: "ses_opencode_parent",
+        timelineBypass: true,
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) => activity.id === "evt-opencode-subagent-started",
+      ),
+    );
+
+    const started = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.id === "evt-opencode-subagent-started",
+    );
+    const startedPayload =
+      started?.payload && typeof started.payload === "object"
+        ? (started.payload as Record<string, unknown>)
+        : undefined;
+
+    expect(started?.kind).toBe("task.started");
+    expect(started?.summary).toBe("subagent task started");
+    expect(startedPayload?.agentKind).toBe("agent");
+    expect(startedPayload?.taskType).toBe("subagent");
+    expect(startedPayload?.title).toBe("Explore helpers");
+    expect(startedPayload?.timelineBypass).toBe(true);
+  });
+
   it("titles task completion from task.started when no progress event carried the name", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
