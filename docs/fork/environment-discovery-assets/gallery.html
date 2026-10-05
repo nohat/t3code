@@ -1,0 +1,1451 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>T3 Code — discovery and device access proposals</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #fafafa;
+        --panel: #fff;
+        --ink: #27272a;
+        --sub: #52525b;
+        --line: #d4d4d8;
+        --soft: #f4f4f5;
+        --action: #254bd8;
+        --on: #fff;
+        --ok: #056348;
+        --warn: #82410c;
+        --bad: #a3202b;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      body[data-theme="dark"] {
+        --bg: #111113;
+        --panel: #1b1b1e;
+        --ink: #f4f4f5;
+        --sub: #c4c4cc;
+        --line: #52525b;
+        --soft: #29292e;
+        --action: #a6bcff;
+        --on: #111113;
+        --ok: #74dcb3;
+        --warn: #f6c68b;
+        --bad: #ffa1a9;
+        color-scheme: dark;
+      }
+      body[data-profile="warm"] {
+        --radius: 4px;
+        --bg: oklch(0.985 0.005 250);
+        --panel: oklch(0.97 0.005 250);
+        --ink: oklch(0.2 0.015 250);
+        --sub: oklch(0.4 0.01 250);
+        --action: oklch(0.49 0.139 250);
+      }
+      body[data-profile="warm"][data-theme="dark"] {
+        --bg: oklch(0.145 0.015 250);
+        --panel: oklch(0.185 0.015 250);
+        --ink: oklch(0.94 0.01 250);
+        --sub: oklch(0.76 0.01 250);
+        --action: oklch(0.76 0.12 250);
+      }
+      .masthead {
+        padding: 48px 5vw 24px;
+        max-width: 1500px;
+        margin: auto;
+      }
+      .eyebrow,
+      .spec-label {
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        font:
+          11px/1.5 ui-monospace,
+          monospace;
+        color: var(--sub);
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: -0.025em;
+        margin: 12px 0;
+      }
+      h2 {
+        font-size: 20px;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+        margin: 2px 0;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 24px 0 10px;
+      }
+      p {
+        margin: 10px 0;
+      }
+      small,
+      .muted {
+        color: var(--sub);
+        font-size: 12px;
+      }
+      small {
+        display: block;
+      }
+      .controls {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 24px 0;
+      }
+      .controls label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+      }
+      select,
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      select,
+      button {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 8px 12px;
+        border-radius: calc(var(--radius) - 2px);
+      }
+      button {
+        min-height: 36px;
+        white-space: normal;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 550;
+      }
+      button.primary {
+        background: var(--action);
+        color: var(--on);
+        border-color: var(--action);
+      }
+      button.danger {
+        color: var(--bad);
+      }
+      button:focus-visible,
+      a:focus-visible,
+      select:focus-visible {
+        outline: 3px solid var(--action);
+        outline-offset: 3px;
+      }
+      nav {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        color: var(--sub);
+        font:
+          12px ui-monospace,
+          monospace;
+        padding: 6px;
+        text-decoration: underline;
+      }
+      main {
+        max-width: 1500px;
+        padding: 16px 5vw 64px;
+        margin: auto;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 36px 28px;
+      }
+      .spec {
+        scroll-margin-top: 20px;
+        min-width: 0;
+      }
+      .spec-label {
+        display: flex;
+        justify-content: space-between;
+        margin: 0 0 10px;
+        gap: 8px;
+      }
+      .surface {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 28px;
+        min-height: 430px;
+        box-shadow: 0 4px 18px #00000005;
+      }
+      .surface header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 18px;
+      }
+      .surface header > svg {
+        width: 24px;
+        height: 24px;
+        color: var(--sub);
+      }
+      .intro {
+        color: var(--sub);
+        margin: 16px 0 24px;
+        max-width: 55ch;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .row > svg {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        color: var(--sub);
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .grow strong {
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .grow small {
+        margin-top: 3px;
+        overflow-wrap: anywhere;
+      }
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 24px;
+      }
+      .section-title h3 {
+        margin: 0;
+      }
+      .tag {
+        background: var(--soft);
+        color: var(--sub);
+        border: 1px solid var(--line);
+        font-size: 11px;
+        padding: 3px 7px;
+        border-radius: 5px;
+        white-space: nowrap;
+      }
+      .tag.ok {
+        color: var(--ok);
+      }
+      .notice {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        padding: 12px 14px;
+        border-radius: calc(var(--radius) - 2px);
+        margin: 18px 0;
+        font-size: 13px;
+      }
+      .notice.warn {
+        color: var(--warn);
+      }
+      .notice.error {
+        color: var(--bad);
+      }
+      dl {
+        margin: 20px 0;
+      }
+      dl > div {
+        display: grid;
+        grid-template-columns: 125px 1fr;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      dt {
+        color: var(--sub);
+        font-size: 12px;
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 13px;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        margin-top: 24px;
+      }
+      .stack {
+        display: grid;
+        gap: 10px;
+        margin-top: 24px;
+      }
+      label {
+        display: block;
+        color: var(--sub);
+        font-size: 12px;
+        margin: 16px 0;
+      }
+      input {
+        display: block;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) - 2px);
+        width: 100%;
+        padding: 10px 12px;
+        margin-top: 6px;
+        font-size: 14px;
+      }
+      .phone {
+        max-width: 390px;
+        min-height: 610px;
+        margin: 0 auto;
+        padding: 20px;
+        border-radius: 24px;
+      }
+      .phone button {
+        min-height: 44px;
+        font-size: 14px;
+      }
+      .phone h2 {
+        font-size: 22px;
+      }
+      .phone .row {
+        flex-wrap: wrap;
+      }
+      .hero-icon {
+        display: grid;
+        place-items: center;
+        height: 120px;
+      }
+      .hero-icon svg {
+        width: 56px;
+        height: 56px;
+        color: var(--sub);
+      }
+      .switch {
+        width: 44px;
+        height: 26px;
+        min-height: 26px;
+        border-radius: 16px;
+        background: var(--soft);
+        padding: 3px;
+      }
+      .switch span {
+        display: block;
+        width: 18px;
+        height: 18px;
+        background: var(--sub);
+        border-radius: 50%;
+      }
+      .legend {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        max-width: 900px;
+        color: var(--sub);
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+        .surface {
+          padding: 20px;
+        }
+        .masthead {
+          padding-top: 28px;
+        }
+      }
+      @media (max-width: 440px) {
+        .row {
+          flex-wrap: wrap;
+        }
+        .row button {
+          width: 100%;
+        }
+        .surface {
+          min-height: 0;
+        }
+        .phone {
+          min-height: 580px;
+        }
+        dl > div {
+          grid-template-columns: 100px 1fr;
+        }
+      }
+      @media print {
+        .controls {
+          display: none;
+        }
+        main {
+          display: block;
+        }
+        .spec {
+          break-inside: avoid;
+          margin-bottom: 24px;
+        }
+        .surface {
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="light" data-profile="upstream">
+    <div class="masthead">
+      <div class="eyebrow">T3 Code / proposed product design / 2026-10-05</div>
+      <h1>Find an environment.<br />Know what you are allowing.</h1>
+      <p>Discovery makes setup easier. Access remains explicit and inspectable.</p>
+      <div class="controls">
+        <label
+          >Appearance
+          <select id="theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select></label
+        ><label
+          >Profile
+          <select id="profile">
+            <option value="upstream">Upstream baseline</option>
+            <option value="warm">Optional warm brutalism</option>
+          </select></label
+        >
+      </div>
+      <div class="legend">
+        All screens are proposals with fictional data. D screens use existing pairing. T screens
+        depend on the gated trust track. “Nearby” indicates discovery only; “Connected”, “Allowed”,
+        and “Revoked” describe separately confirmed states. The gallery controls work; screen
+        actions are visual samples.
+      </div>
+      <nav aria-label="Mockup screens">
+        <a href="#D01">D01</a><a href="#D02">D02</a><a href="#D04">D04</a><a href="#D05">D05</a
+        ><a href="#D03-M">D03-M</a><a href="#D01-M">D01-M</a><a href="#D05-M">D05-M</a
+        ><a href="#T01">T01</a><a href="#T02">T02</a><a href="#T03">T03</a><a href="#T04">T04</a
+        ><a href="#T05">T05</a><a href="#S01">S01</a><a href="#T02-M">T02-M</a
+        ><a href="#D06">D06</a>
+      </nav>
+    </div>
+    <main>
+      <article id="D01" class="spec">
+        <div class="spec-label"><span>D01 · Discovery</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Connections</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Your saved environments and local candidates.</p>
+          <div class="section-title">
+            <h3>Saved environments</h3>
+            <button class="primary">Add environment</button>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+            <div class="grow">
+              <strong>Studio Mac</strong><small>Tailscale · studio.tailnet.example</small>
+            </div>
+            <span class="tag ok">Connected</span><button>Open</button>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+            <div class="grow"><strong>Build server</strong><small>SSH · build-host</small></div>
+            <span class="tag">Offline</span><button>Open</button>
+          </div>
+          <div class="section-title">
+            <h3>Nearby</h3>
+            <button class="">Refresh</button>
+          </div>
+          <p class="muted">Found on your local network. Pairing is still required.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+            <div class="grow">
+              <strong>Workshop</strong><small>workshop.local:3773 · Not paired</small>
+            </div>
+            <button>Set up connection</button>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+            <div class="grow">
+              <strong>Studio Mac</strong
+              ><small>Matches a saved environment · Use saved route</small>
+            </div>
+            <button>Open saved connection</button>
+          </div>
+        </div>
+      </article>
+      <article id="D02" class="spec">
+        <div class="spec-label"><span>D02 · Discovery</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Workshop</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Found on your local network. Pairing is still required.</p>
+          <div class="notice">This is a connection candidate, not an allowed environment.</div>
+          <dl>
+            <div>
+              <dt>Discovery</dt>
+              <dd>Local network</dd>
+            </div>
+            <div>
+              <dt>Address</dt>
+              <dd>workshop.local:3773</dd>
+            </div>
+            <div>
+              <dt>Reported ID</dt>
+              <dd>env_7a2…</dd>
+            </div>
+            <div>
+              <dt>Access</dt>
+              <dd>Not paired</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">Back</button><button class="primary">Set up connection</button>
+          </div>
+        </div>
+      </article>
+      <article id="D04" class="spec">
+        <div class="spec-label"><span>D04 · Discovery</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Local network discovery</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Make this environment visible to other devices nearby.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+            <div class="grow">
+              <strong>Network access</strong
+              ><small>Enabled · HTTP server exposed on local interfaces</small>
+            </div>
+            <span class="tag">Enabled</span>
+          </div>
+          <div class="row">
+            <div class="grow">
+              <strong>Advertise on local network</strong
+              ><small>Other devices on this network can see this environment’s name.</small>
+            </div>
+            <button
+              class="switch"
+              role="switch"
+              aria-checked="false"
+              aria-label="Advertise on local network"
+            >
+              <span></span>
+            </button>
+          </div>
+          <div class="notice">Advertising is off. Existing saved connections still work.</div>
+          <dl>
+            <div>
+              <dt>Environment</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Advertised label</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Restart</dt>
+              <dd>Only if required by the final server implementation</dd>
+            </div>
+          </dl>
+        </div>
+      </article>
+      <article id="D05" class="spec">
+        <div class="spec-label"><span>D05 · Discovery</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Add environment</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Workshop’s address is filled in. Use your existing pairing code.</p>
+          <label>Host<input value="studio.local:3773" readonly /></label
+          ><label
+            >Pairing code<input placeholder="Enter the code from your server" readonly
+          /></label>
+          <div class="notice">
+            A pairing code is issued by the server. Nearby discovery does not issue one.
+          </div>
+          <div class="actions">
+            <button class="">Use pairing link</button
+            ><button class="primary">Add environment</button>
+          </div>
+        </div>
+      </article>
+      <article id="D03-M" class="spec">
+        <div class="spec-label"><span>D03-M · Discovery</span><span>Mobile · 390 px</span></div>
+        <div class="surface phone">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Find nearby environments</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+          </header>
+          <p class="intro">Allow local network access to look for T3 Code environments.</p>
+          <div class="hero-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+          </div>
+          <div class="notice">
+            Local network access is off. You can still add an environment with a link or host.
+          </div>
+          <div class="stack">
+            <button class="primary">Open system settings</button
+            ><button class="">Enter host or pairing link</button>
+          </div>
+          <p class="muted">
+            The native permission prompt appears only after you choose to search nearby.
+          </p>
+        </div>
+      </article>
+      <article id="D01-M" class="spec">
+        <div class="spec-label"><span>D01-M · Discovery</span><span>Mobile · 390 px</span></div>
+        <div class="surface phone">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Add environment</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+          </header>
+          <p class="intro">Choose a local candidate or use a saved address.</p>
+          <h3>Nearby</h3>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+            <div class="grow"><strong>Workshop</strong><small>Not paired</small></div>
+            <button>Set up</button>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+            <div class="grow"><strong>Studio Mac</strong><small>Already saved</small></div>
+            <button>Open saved</button>
+          </div>
+          <h3>Other ways to connect</h3>
+          <div class="stack">
+            <button class="">Scan QR code</button
+            ><button class="">Enter host or pairing link</button>
+          </div>
+          <div class="notice">
+            Nothing nearby? Check the network and server advertising setting.
+          </div>
+        </div>
+      </article>
+      <article id="D05-M" class="spec">
+        <div class="spec-label"><span>D05-M · Discovery</span><span>Mobile · 390 px</span></div>
+        <div class="surface phone">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Add environment</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+          </header>
+          <p class="intro">Pair with Workshop.</p>
+          <label>Host<input value="studio.local:3773" readonly /></label
+          ><label
+            >Pairing code<input placeholder="Enter the code from your server" readonly
+          /></label>
+          <div class="notice">Expired code? Create a new code on the server, then try again.</div>
+          <div class="stack">
+            <button class="primary">Add environment</button><button class="">Scan QR code</button>
+          </div>
+        </div>
+      </article>
+      <article id="T01" class="spec">
+        <div class="spec-label"><span>T01 · Gated trust</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Allow this device?</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">A registered device is asking to access Studio Mac.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+            <div class="grow">
+              <strong>Personal iPad</strong><small>Same iCloud account · New installation</small>
+            </div>
+            <span class="tag">Not allowed</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Environment</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Access preset</dt>
+              <dd>Standard client access</dd>
+            </div>
+            <div>
+              <dt>Includes</dt>
+              <dd>Read threads, send messages and operate agents</dd>
+            </div>
+            <div>
+              <dt>Expires</dt>
+              <dd>After 7 days · illustrative fixture</dd>
+            </div>
+            <div>
+              <dt>Device key</dt>
+              <dd>P-256 · fingerprint available in details</dd>
+            </div>
+          </dl>
+          <div class="notice">
+            Allowing this device permits it to run agents in this environment. Approval may require
+            system authentication.
+          </div>
+          <div class="actions">
+            <button class="">Not now</button><button class="primary">Allow device</button>
+          </div>
+        </div>
+      </article>
+      <article id="T02" class="spec">
+        <div class="spec-label"><span>T02 · Gated trust</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Personal iPad</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Access and current sessions are separate records.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 2 8 3v6c0 5-8 11-8 11S4 16 4 11V5z" />
+              <path d="m8 11 3 3 5-6" />
+            </svg>
+            <div class="grow">
+              <strong>Access grant</strong
+              ><small>Studio Mac · Standard access · Expires 12 Oct</small>
+            </div>
+            <span class="tag ok">Allowed</span>
+          </div>
+          <h3>Sessions</h3>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+            <div class="grow">
+              <strong>Personal iPad</strong><small>Tailscale · Last active just now</small>
+            </div>
+            <span class="tag ok">Connected</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Grant issued</dt>
+              <dd>5 Oct, 10:42</dd>
+            </div>
+            <div>
+              <dt>Environment</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Authorizer</dt>
+              <dd>This Mac</dd>
+            </div>
+            <div>
+              <dt>Device key</dt>
+              <dd>Installation-specific, retained on device</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">End session</button><button class="danger">Revoke access</button>
+          </div>
+        </div>
+      </article>
+      <article id="T03" class="spec">
+        <div class="spec-label"><span>T03 · Gated trust</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Revocation pending</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Build server has not confirmed this device’s revocation.</p>
+          <div class="notice warn">
+            Access may continue until the grant expires on 12 Oct, 10:42.
+          </div>
+          <dl>
+            <div>
+              <dt>Device</dt>
+              <dd>Personal iPad</dd>
+            </div>
+            <div>
+              <dt>Environment</dt>
+              <dd>Build server</dd>
+            </div>
+            <div>
+              <dt>Last confirmed</dt>
+              <dd>5 Oct, 10:42</dd>
+            </div>
+            <div>
+              <dt>State</dt>
+              <dd>Revocation pending</dd>
+            </div>
+            <div>
+              <dt>Sessions</dt>
+              <dd>Termination not confirmed</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">Close</button><button class="primary">Retry delivery</button>
+          </div>
+          <p class="muted">Show “Revoked” only after the enforcing environment confirms it.</p>
+        </div>
+      </article>
+      <article id="T04" class="spec">
+        <div class="spec-label"><span>T04 · Gated trust</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Trusted identity changed</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">
+            The trusted HTTPS origin or authorizer identity differs from the saved trust.
+          </p>
+          <div class="notice error">
+            Connection paused. No credentials were sent to the new identity.
+          </div>
+          <dl>
+            <div>
+              <dt>Environment</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Expected authorizer</dt>
+              <dd>a73c…9f21</dd>
+            </div>
+            <div>
+              <dt>Received authorizer</dt>
+              <dd>d801…a70b</dd>
+            </div>
+            <div>
+              <dt>Possible cause</dt>
+              <dd>Authorizer rotation, origin change, or an impersonated endpoint</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">Cancel</button
+            ><button class="primary">Recover through trusted enrollment</button>
+          </div>
+        </div>
+      </article>
+      <article id="T05" class="spec">
+        <div class="spec-label"><span>T05 · Later broker</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Enroll Build server</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Use this Mac to approve devices for a non-Mac environment.</p>
+          <div class="notice">
+            Enroll through the existing authenticated SSH provisioning connection.
+          </div>
+          <dl>
+            <div>
+              <dt>Environment</dt>
+              <dd>Build server · Linux</dd>
+            </div>
+            <div>
+              <dt>Authorizer</dt>
+              <dd>Studio Mac · local signing key</dd>
+            </div>
+            <div>
+              <dt>Scope ceiling</dt>
+              <dd>Standard client access · no administration</dd>
+            </div>
+            <div>
+              <dt>Data route</dt>
+              <dd>Client connects directly over Tailscale</dd>
+            </div>
+            <div>
+              <dt>When this Mac sleeps</dt>
+              <dd>Unexpired grants remain usable</dd>
+            </div>
+            <div>
+              <dt>Revocation</dt>
+              <dd>Must be confirmed by Build server</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">Cancel</button><button class="primary">Enroll authorizer</button>
+          </div>
+        </div>
+      </article>
+      <article id="S01" class="spec">
+        <div class="spec-label"><span>S01 · All phases</span><span>Desktop · flexible</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>States and recovery</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Status always names the underlying evidence.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="2" />
+              <path
+                d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"
+              />
+            </svg>
+            <div class="grow">
+              <strong>No environments found</strong
+              ><small>Search completed · Advertising may be disabled</small>
+            </div>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 3 21 21M8 5a12 12 0 0 1 13 4M3 9l2-2m2 6a7 7 0 0 1 5-2m5 2 1 1m-8 3 2-1 2 1"
+              />
+              <circle cx="12" cy="20" r=".5" />
+            </svg>
+            <div class="grow">
+              <strong>Discovery unavailable</strong
+              ><small>Native browsing is not supported here</small>
+            </div>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 3 21 21M8 5a12 12 0 0 1 13 4M3 9l2-2m2 6a7 7 0 0 1 5-2m5 2 1 1m-8 3 2-1 2 1"
+              />
+              <circle cx="12" cy="20" r=".5" />
+            </svg>
+            <div class="grow">
+              <strong>Account unavailable</strong><small>Manual pairing remains available</small>
+            </div>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            <div class="grow">
+              <strong>Awaiting approval</strong
+              ><small>Request sent · This device is not allowed yet</small>
+            </div>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            <div class="grow">
+              <strong>Grant expired</strong><small>Renew using the trusted authorizer</small>
+            </div>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 2 8 3v6c0 5-8 11-8 11S4 16 4 11V5z" />
+              <path d="m8 11 3 3 5-6" />
+            </svg>
+            <div class="grow">
+              <strong>Revoked</strong><small>Confirmed by the enforcing environment</small>
+            </div>
+            <span class="tag">Revoked</span>
+          </div>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M3 3 21 21M8 5a12 12 0 0 1 13 4M3 9l2-2m2 6a7 7 0 0 1 5-2m5 2 1 1m-8 3 2-1 2 1"
+              />
+              <circle cx="12" cy="20" r=".5" />
+            </svg>
+            <div class="grow">
+              <strong>Server unreachable</strong
+              ><small>Saved route failed · Retry or check Tailscale</small>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article id="T02-M" class="spec">
+        <div class="spec-label"><span>T02-M · Gated trust</span><span>Mobile · 390 px</span></div>
+        <div class="surface phone">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Personal iPad</h2>
+            </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8m-4-4v4" />
+            </svg>
+          </header>
+          <p class="intro">Access and current sessions are separate records.</p>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 2 8 3v6c0 5-8 11-8 11S4 16 4 11V5z" />
+              <path d="m8 11 3 3 5-6" />
+            </svg>
+            <div class="grow">
+              <strong>Access grant</strong
+              ><small>Studio Mac · Standard access · Expires 12 Oct</small>
+            </div>
+            <span class="tag ok">Allowed</span>
+          </div>
+          <h3>Sessions</h3>
+          <div class="row">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="6" y="2" width="12" height="20" rx="3" />
+              <path d="M10 18h4" />
+            </svg>
+            <div class="grow">
+              <strong>Personal iPad</strong><small>Tailscale HTTPS · Last active just now</small>
+            </div>
+            <span class="tag ok">Connected</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Grant issued</dt>
+              <dd>5 Oct, 10:42</dd>
+            </div>
+            <div>
+              <dt>Environment</dt>
+              <dd>Studio Mac</dd>
+            </div>
+            <div>
+              <dt>Authorizer</dt>
+              <dd>This Mac</dd>
+            </div>
+            <div>
+              <dt>Device key</dt>
+              <dd>Installation-specific, retained on device</dd>
+            </div>
+          </dl>
+          <div class="actions">
+            <button class="">End session</button><button class="danger">Revoke access</button>
+          </div>
+        </div>
+      </article>
+      <article id="D06" class="spec">
+        <div class="spec-label"><span>D06 · Discovery fallback</span><span>Browser</span></div>
+        <div class="surface desktop">
+          <header>
+            <div>
+              <small>Settings / Connections</small>
+              <h2>Add environment</h2>
+            </div>
+          </header>
+          <p class="intro">Use an existing pairing link or enter a host and pairing code.</p>
+          <label>Host<input placeholder="https://studio.example-tailnet.ts.net" readonly /></label
+          ><label>Pairing code<input placeholder="Code issued by your server" readonly /></label>
+          <div class="actions">
+            <button>Use pairing link</button><button class="primary">Add environment</button>
+          </div>
+          <p class="muted">
+            Nearby discovery is available in supported desktop and mobile clients. Browser pairing
+            keeps its existing transport requirements.
+          </p>
+        </div>
+      </article>
+    </main>
+    <script>
+      document
+        .getElementById("theme")
+        .addEventListener("change", (e) => (document.body.dataset.theme = e.target.value));
+      document
+        .getElementById("profile")
+        .addEventListener("change", (e) => (document.body.dataset.profile = e.target.value));
+      document.querySelectorAll(".surface button").forEach((b) =>
+        b.addEventListener("click", () => {
+          document.getElementById("demo-status").textContent =
+            "Visual sample: " +
+            (b.getAttribute("aria-label") || b.textContent) +
+            ". No connection or access changes were made.";
+        }),
+      );
+    </script>
+    <p id="demo-status" role="status" aria-live="polite" style="padding: 0 5vw 32px; margin: 0">
+      Screen actions are visual samples.
+    </p>
+  </body>
+</html>
