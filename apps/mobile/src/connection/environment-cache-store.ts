@@ -19,6 +19,10 @@ import {
 
 const SERVER_CONFIG_CACHE_SCHEMA_VERSION = 1;
 const VCS_REFS_CACHE_SCHEMA_VERSION = 1;
+// A cached thread decodes synchronously on the JS thread. Past this size the
+// record is dropped and the thread is fetched fresh instead of risking a stall
+// on open.
+const THREAD_SNAPSHOT_CACHE_MAX_CHARS = 8 * 1024 * 1024;
 
 const StoredServerConfig = Schema.Struct({
   schemaVersion: Schema.Literal(SERVER_CONFIG_CACHE_SCHEMA_VERSION),
@@ -67,6 +71,7 @@ function loadDecodedCache<A, B>(input: {
   readonly kind: MobileDatabase.ClientCacheKind;
   readonly cacheKey: string;
   readonly operation: CacheOperation;
+  readonly maxRawChars?: number;
   readonly decode: (raw: string) => Effect.Effect<A, unknown>;
   readonly select: (value: A) => Option.Option<B>;
 }): Effect.Effect<Option.Option<B>, Persistence.ConnectionPersistenceError> {
@@ -76,7 +81,10 @@ function loadDecodedCache<A, B>(input: {
       Option.match({
         onNone: () => Effect.succeed(Option.none<B>()),
         onSome: (raw) =>
-          input.decode(raw).pipe(
+          (input.maxRawChars !== undefined && raw.length > input.maxRawChars
+            ? Effect.fail(`record is ${raw.length} characters, over the ${input.maxRawChars} limit`)
+            : input.decode(raw)
+          ).pipe(
             Effect.map(input.select),
             Effect.catch((cause) =>
               Effect.logWarning("Discarding corrupt mobile client cache record.", {
@@ -132,6 +140,7 @@ export const make = Effect.fn("MobileEnvironmentCacheStore.make")(function* () {
         kind: "thread",
         cacheKey: threadId,
         operation: "load-thread",
+        maxRawChars: THREAD_SNAPSHOT_CACHE_MAX_CHARS,
         decode: decodeStoredThreadSnapshot,
         select: (stored) =>
           stored.environmentId === environmentId && stored.threadId === threadId

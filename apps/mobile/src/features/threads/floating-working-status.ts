@@ -88,8 +88,8 @@ export function connectionFloatingStatus(input: {
 }
 
 /**
- * A sync that has run past the stall limit with no error. The tap target is
- * the environment reconnect, which resubscribes the thread.
+ * A sync that has run past the stall limit with no error. The tap target
+ * reloads the thread from the server.
  */
 export function syncStalledFloatingStatus(input: {
   readonly onRetry: () => void;

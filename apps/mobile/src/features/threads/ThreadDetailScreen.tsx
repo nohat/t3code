@@ -13,6 +13,7 @@ import type {
   CodexFeedbackSubmission,
   EnvironmentThreadStatus,
 } from "@t3tools/client-runtime/state/threads";
+import { requestThreadResync } from "@t3tools/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -104,6 +105,7 @@ import {
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
+import { useStalled } from "../../lib/useStalled";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -122,7 +124,11 @@ import {
   FLOATING_WORKING_CONTROL_COVERAGE,
   FloatingWorkingControl,
 } from "./floating-working-control";
-import { connectionFloatingStatus, type FloatingWorkingStatus } from "./floating-working-status";
+import {
+  connectionFloatingStatus,
+  syncStalledFloatingStatus,
+  type FloatingWorkingStatus,
+} from "./floating-working-status";
 import {
   derivePendingUserInputMaxHeight,
   ESTIMATED_KEYBOARD_HEIGHT,
@@ -308,6 +314,10 @@ function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedE
   }, [threadId, feed]);
 }
 
+// A sync pill that has not cleared by now means the thread is not coming; the
+// pill turns into a retry that reloads the thread from the server.
+const THREAD_SYNC_STALL_MS = 20_000;
+
 const USER_INPUT_TOGGLE_TIMING = {
   duration: USER_INPUT_TOGGLE_DURATION_MS,
   easing: Easing.out(Easing.cubic),
@@ -445,6 +455,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // Opening a running thread resyncs for a few frames. The pill shows the
   // sync label only when the sync lasts, so it does not flash before the timer.
   const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
+  const threadSyncStalled = useStalled(
+    selectedThreadKey,
+    realThreadSyncLabel !== null,
+    THREAD_SYNC_STALL_MS,
+  );
   // One floating pill above the composer: it reads the connection phase while
   // disconnected, the sync state while messages load, then the working timer
   // once the feed is settled.
@@ -476,6 +491,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }
     if (props.creationState?.kind === "failed") {
       return null;
+    }
+    if (threadSyncStalled) {
+      // An explicit reconnect now probes a healthy session and leaves it, so the retry reloads
+      // the thread itself (fresh snapshot, fresh subscription).
+      return syncStalledFloatingStatus({
+        onRetry: () => {
+          requestThreadResync(props.environmentId, props.selectedThread.id);
+        },
+      });
     }
     if (threadSyncLabel !== null) {
       return { kind: "syncing", label: threadSyncLabel };

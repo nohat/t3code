@@ -281,6 +281,21 @@ describe("mobile SQLite environment cache store", () => {
     }),
   );
 
+  it.effect("drops an oversized thread record instead of decoding it on the JS thread", () =>
+    Effect.gen(function* () {
+      const memory = makeDatabase();
+      const store = yield* make().pipe(
+        Effect.provideService(MobileDatabase.MobileDatabase, memory.database),
+      );
+      const id = cacheId(ENVIRONMENT_ID, "thread", THREAD_ID);
+      // Never parsed: the size check runs before the decode.
+      memory.values.set(id, "x".repeat(8 * 1024 * 1024 + 1));
+
+      expect(yield* store.loadThread(ENVIRONMENT_ID, THREAD_ID)).toEqual(Option.none());
+      expect(memory.removed).toEqual([id]);
+    }),
+  );
+
   it.effect("removes one persisted VCS ref snapshot", () =>
     Effect.gen(function* () {
       const memory = makeDatabase();

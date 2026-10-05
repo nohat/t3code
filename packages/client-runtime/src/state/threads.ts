@@ -189,6 +189,9 @@ export function requestThreadResync(
   return true;
 }
 
+/** How long opening a thread waits on its local cache before fetching from the server instead. */
+const THREAD_CACHE_LOAD_TIMEOUT = "5 seconds";
+
 export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
   threadId: ThreadIdType,
   resumeCache?: ThreadResumeCache,
@@ -212,6 +215,12 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const cached =
     retained === undefined
       ? yield* cache.loadThread(environmentId, threadId).pipe(
+          // A cache that cannot answer quickly is skipped: the fresh fetch
+          // below is the source of truth, so a slow disk must not hold the
+          // thread open. (A synchronous decode cannot be interrupted; the
+          // mobile store bounds the record size for that.)
+          Effect.timeoutOption(THREAD_CACHE_LOAD_TIMEOUT),
+          Effect.map(Option.flatten),
           Effect.catch((error) =>
             Effect.logWarning("Could not load cached thread.").pipe(
               Effect.annotateLogs({
