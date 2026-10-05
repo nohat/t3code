@@ -1,16 +1,18 @@
 import type {
-  OrchestrationThread,
+  OrchestrationV2ThreadProjection,
   PapercutClientState,
   PapercutMessage,
   PapercutWhere,
 } from "@t3tools/contracts";
 import { PAPERCUT_MAX_MESSAGES } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
-import { derivePendingRequests } from "../pendingRequests.ts";
+import { derivePendingThreadRequests } from "../state/threadRequests.ts";
 
 export interface PapercutThreadContextInput {
   readonly environmentId?: string | undefined;
-  readonly thread: OrchestrationThread | null;
+  /** The open thread's projection, as held in the client's thread state. */
+  readonly thread: OrchestrationV2ThreadProjection | null;
   readonly route?: string | undefined;
   /** The thread's sync status, such as "live" or "synchronizing". */
   readonly threadStatus?: string | undefined;
@@ -31,19 +33,20 @@ export interface PapercutThreadContext {
  */
 export function papercutThreadContext(input: PapercutThreadContextInput): PapercutThreadContext {
   const { thread } = input;
-  const turnId = thread?.latestTurn?.turnId ?? thread?.session?.activeTurnId ?? undefined;
-  const pending = thread ? derivePendingRequests(thread.activities) : undefined;
+  // The newest run stands in for the turn: it is the active one while a turn runs.
+  const turnId = thread?.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0]?.id;
+  const pending = thread ? derivePendingThreadRequests(thread) : undefined;
 
   return {
     where: {
       ...(input.environmentId ? { environmentId: input.environmentId } : {}),
-      ...(thread ? { threadId: thread.id } : {}),
+      ...(thread ? { threadId: thread.thread.id } : {}),
       ...(turnId ? { turnId } : {}),
       ...(thread
         ? {
-            provider: thread.modelSelection.instanceId,
-            model: thread.modelSelection.model,
-            runtimeMode: thread.runtimeMode,
+            provider: thread.thread.modelSelection.instanceId,
+            model: thread.thread.modelSelection.model,
+            runtimeMode: thread.thread.runtimeMode,
           }
         : {}),
       ...(input.route ? { route: input.route } : {}),
@@ -58,12 +61,10 @@ export function papercutThreadContext(input: PapercutThreadContextInput): Paperc
           }
         : {}),
     },
-    messages: (thread?.messages ?? [])
-      .flatMap((message) =>
-        message.role === "reasoning"
-          ? []
-          : [{ role: message.role, text: message.text, at: message.createdAt }],
-      )
-      .slice(-PAPERCUT_MAX_MESSAGES),
+    messages: (thread?.messages ?? []).slice(-PAPERCUT_MAX_MESSAGES).map((message) => ({
+      role: message.role,
+      text: message.text,
+      at: DateTime.formatIso(message.createdAt),
+    })),
   };
 }

@@ -1,25 +1,22 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type PapercutCreateInput, PapercutRecord, ThreadId, TurnId } from "@t3tools/contracts";
+import { type PapercutCreateInput, PapercutRecord } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import * as ServerConfig from "../config.ts";
-import { ProjectionThreadSessionRepositoryLive } from "../persistence/Layers/ProjectionThreadSessions.ts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
-import { ProjectionThreadSessionRepository } from "../persistence/Services/ProjectionThreadSessions.ts";
 import * as Papercuts from "./Papercuts.ts";
 
 const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeRecord = Schema.decodeUnknownSync(Schema.fromJsonString(PapercutRecord));
 
 const testLayer = Papercuts.layer.pipe(
-  Layer.provideMerge(ProjectionThreadSessionRepositoryLive),
   Layer.provideMerge(SqlitePersistenceMemory),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-papercuts-test-" })),
   Layer.provideMerge(NodeServices.layer),
@@ -105,35 +102,62 @@ describe("Papercuts", () => {
       const path = yield* Path.Path;
       const config = yield* ServerConfig.ServerConfig;
       const sql = yield* SqlClient.SqlClient;
-      const sessions = yield* ProjectionThreadSessionRepository;
       const papercuts = yield* Papercuts.Papercuts;
 
-      const upsertSession = (
-        threadId: string,
-        status: "running" | "ready",
-        turnId: string | null,
-      ) =>
-        sessions.upsert({
-          threadId: ThreadId.make(threadId),
-          status,
-          providerName: "codex",
-          providerInstanceId: null,
-          runtimeMode: "full-access",
-          activeTurnId: turnId === null ? null : TurnId.make(turnId),
-          lastError: null,
-          updatedAt: "2026-10-02T11:59:00.000Z",
-        });
-      yield* upsertSession("thread-1", "running", "turn-7");
-      yield* upsertSession("thread-2", "running", "turn-8");
-      yield* upsertSession("thread-3", "ready", null);
+      const insertRun = (input: {
+        readonly runId: string;
+        readonly threadId: string;
+        readonly ordinal: number;
+        readonly status: string;
+        readonly payload?: object;
+      }) => sql`
+        INSERT INTO orchestration_v2_projection_runs (
+          run_id, thread_id, ordinal, provider, status, requested_at, payload_json
+        )
+        VALUES (
+          ${input.runId}, ${input.threadId}, ${input.ordinal}, 'codex', ${input.status},
+          '2026-10-02T11:00:00.000Z', ${encodeJson(input.payload ?? {})}
+        )
+      `;
+      // thread-1: a finished run, then the active one.
+      yield* insertRun({ runId: "run-6", threadId: "thread-1", ordinal: 1, status: "completed" });
+      yield* insertRun({ runId: "run-7", threadId: "thread-1", ordinal: 2, status: "running" });
+      // Count toward running turns: an active run elsewhere and a queued run
+      // whose queue is not held.
+      yield* insertRun({ runId: "run-8", threadId: "thread-2", ordinal: 1, status: "starting" });
+      yield* insertRun({ runId: "run-9", threadId: "thread-2", ordinal: 2, status: "queued" });
+      // Do not count: a held queue and post-turn background work.
+      yield* insertRun({
+        runId: "run-10",
+        threadId: "thread-3",
+        ordinal: 1,
+        status: "queued",
+        payload: { queueHeld: true },
+      });
+      yield* insertRun({ runId: "run-11", threadId: "thread-4", ordinal: 1, status: "waiting" });
+
       yield* sql`
-        INSERT INTO projection_thread_activities (
-          activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at
+        INSERT INTO orchestration_v2_projection_provider_sessions (
+          provider_session_id, thread_id, provider, status, updated_at, payload_json
         )
         VALUES
-          ('a1', 'thread-1', 'turn-7', 'info', 'tool.started', 's', '{}', 1, '2026-10-02T11:50:00.000Z'),
-          ('a2', 'thread-1', 'turn-7', 'info', 'tool.completed', 's', '{}', 2, '2026-10-02T11:58:00.000Z'),
-          ('a3', 'thread-2', 'turn-8', 'info', 'tool.completed', 's', '{}', 3, '2026-10-02T11:59:30.000Z')
+          ('session-old', 'thread-1', 'codex', 'stopped', '2026-10-02T10:00:00.000Z', '{}'),
+          ('session-new', 'thread-1', 'codex', 'running', '2026-10-02T11:59:00.000Z', '{}')
+      `;
+      yield* sql`
+        INSERT INTO orchestration_v2_projection_provider_session_bindings (
+          provider_session_id, thread_id
+        )
+        VALUES ('session-old', 'thread-1'), ('session-new', 'thread-1')
+      `;
+      yield* sql`
+        INSERT INTO orchestration_v2_events (
+          event_id, thread_id, run_id, event_type, occurred_at, payload_json
+        )
+        VALUES
+          ('e1', 'thread-1', 'run-7', 'run.started', '2026-10-02T11:50:00.000Z', '{}'),
+          ('e2', 'thread-1', 'run-7', 'turn-item.updated', '2026-10-02T11:58:00.000Z', '{}'),
+          ('e3', 'thread-2', 'run-8', 'run.started', '2026-10-02T11:59:30.000Z', '{}')
       `;
 
       const nowMs = yield* Clock.currentTimeMillis;
@@ -174,10 +198,11 @@ describe("Papercuts", () => {
         ),
       );
 
-      assert.strictEqual(record.evidence.server?.sessionStatus, "running");
-      assert.strictEqual(record.evidence.server?.activeTurnId, "turn-7");
+      assert.strictEqual(record.evidence.server?.sessionStatus, "run=running session=running");
+      assert.strictEqual(record.evidence.server?.activeTurnId, "run-7");
+      assert.strictEqual(record.evidence.server?.sessionUpdatedAt, "2026-10-02T11:59:00.000Z");
       assert.strictEqual(record.evidence.server?.lastProviderEventAt, "2026-10-02T11:58:00.000Z");
-      assert.strictEqual(record.evidence.server?.runningTurnCount, 2);
+      assert.strictEqual(record.evidence.server?.runningTurnCount, 3);
       assert.deepStrictEqual(
         record.evidence.server?.recentFailedSpans?.map((span) => span.name),
         ["ws.send"],

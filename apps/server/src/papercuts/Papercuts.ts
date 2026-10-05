@@ -27,14 +27,14 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64 from "effect/encoding/Base64";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { writeFileStringAtomically } from "../atomicWrite.ts";
 import { ServerConfig } from "../config.ts";
@@ -156,41 +156,71 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const directory = papercutsDirectory(path, config.stateDir);
 
+  // Reads the orchestration V2 projections. `sessionStatus` joins the latest
+  // run's status with the newest bound provider session's status, for
+  // example "run=running session=running"; either half is left out when the
+  // thread has no run or no provider session.
   const readSessionSnapshot = (threadId: string) =>
     Effect.gen(function* () {
-      const [session] = yield* sql<{
-        readonly status: string;
-        readonly activeTurnId: string | null;
-        readonly updatedAt: string;
-      }>`
-        SELECT status, active_turn_id AS "activeTurnId", updated_at AS "updatedAt"
-        FROM projection_thread_sessions
+      const [run] = yield* sql<{ readonly status: string }>`
+        SELECT status
+        FROM orchestration_v2_projection_runs
         WHERE thread_id = ${threadId}
+        ORDER BY ordinal DESC
+        LIMIT 1
       `;
-      // Activities are projected from provider events, so the newest one is
-      // the closest cheap stand-in for the last provider event.
-      const [activity] = yield* sql<{ readonly at: string | null }>`
-        SELECT MAX(created_at) AS "at"
-        FROM projection_thread_activities
+      // Matches the shell's activeRunId: `waiting` is post-turn background work.
+      const [activeRun] = yield* sql<{ readonly runId: string }>`
+        SELECT run_id AS "runId"
+        FROM orchestration_v2_projection_runs
         WHERE thread_id = ${threadId}
+          AND status IN ('preparing', 'starting', 'running')
+        ORDER BY ordinal DESC
+        LIMIT 1
       `;
+      const [session] = yield* sql<{ readonly status: string; readonly updatedAt: string }>`
+        SELECT sessions.status AS "status", sessions.updated_at AS "updatedAt"
+        FROM orchestration_v2_projection_provider_session_bindings AS bindings
+        JOIN orchestration_v2_projection_provider_sessions AS sessions
+          ON sessions.provider_session_id = bindings.provider_session_id
+        WHERE bindings.thread_id = ${threadId}
+        ORDER BY sessions.updated_at DESC
+        LIMIT 1
+      `;
+      // The last persisted event of any kind, user events included, so it is
+      // the thread's last event rather than strictly its last provider event.
+      const [event] = yield* sql<{ readonly occurredAt: string }>`
+        SELECT occurred_at AS "occurredAt"
+        FROM orchestration_v2_events
+        WHERE thread_id = ${threadId}
+        ORDER BY sequence DESC
+        LIMIT 1
+      `;
+      const sessionStatus = [
+        ...(run ? [`run=${run.status}`] : []),
+        ...(session ? [`session=${session.status}`] : []),
+      ].join(" ");
       return {
-        ...(session
-          ? {
-              sessionStatus: session.status,
-              ...(session.activeTurnId === null ? {} : { activeTurnId: session.activeTurnId }),
-              sessionUpdatedAt: session.updatedAt,
-            }
-          : {}),
-        ...(activity?.at ? { lastProviderEventAt: activity.at } : {}),
+        ...(sessionStatus === "" ? {} : { sessionStatus }),
+        ...(activeRun ? { activeTurnId: activeRun.runId } : {}),
+        ...(session ? { sessionUpdatedAt: session.updatedAt } : {}),
+        ...(event ? { lastProviderEventAt: event.occurredAt } : {}),
       } satisfies PapercutServerSnapshot;
     });
 
+  // Runs holding the provider now or about to: active runs plus queued runs
+  // whose queue is not held. `waiting` runs are post-turn background work.
   const readRunningTurnCount = Effect.gen(function* () {
     const [row] = yield* sql<{ readonly count: number }>`
       SELECT COUNT(*) AS "count"
-      FROM projection_thread_sessions
-      WHERE status = 'running'
+      FROM orchestration_v2_projection_runs
+      WHERE status IN ('preparing', 'starting', 'running')
+        OR (
+          status = 'queued'
+          AND CASE WHEN json_valid(payload_json)
+            THEN json_extract(payload_json, '$.queueHeld') IS NOT 1
+            ELSE 1 END
+        )
     `;
     return row?.count ?? 0;
   });
@@ -241,7 +271,7 @@ export const make = Effect.gen(function* () {
 
     let screenshot: PapercutStoredScreenshot | undefined;
     if (input.screenshot) {
-      const bytes = Encoding.decodeBase64(input.screenshot.dataBase64);
+      const bytes = Base64.decode(input.screenshot.dataBase64);
       // A broken screenshot must not lose the rest of the report.
       if (Result.isSuccess(bytes)) {
         const file = `${id}.screenshot.${SCREENSHOT_EXTENSIONS[input.screenshot.mimeType]}`;

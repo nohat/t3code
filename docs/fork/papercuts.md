@@ -10,7 +10,7 @@ Captured automatically, with no typing:
 - When and what build: timestamp, app build (the fork version, see [versioning.md](./versioning.md); the wire field is still named `buildSha`), platform and client surface (web, desktop, iPad, iPhone).
 - Client state: connection state, thread sync phase, the Send button's disabled reason and label, whether a local dispatch or command is pending and for how long, pending question or approval state.
 - A bounded ring buffer of the last few minutes of client events: dispatch start and acknowledgment, command lane queue, resync, reconnect, errors. Timestamps and ids only.
-- Server snapshot, added by the server on receipt: session status, active turn, time of the last provider event, recent failed spans for that thread, running turn count.
+- Server snapshot, added by the server on receipt: latest run and provider session status, active run, time of the thread's last event (user events included; the wire field is still named `lastProviderEventAt`), recent failed spans for that thread, running turn count. The turn id fields carry orchestration V2 run ids.
 - A screenshot of the client, and the text of the thread's recent messages. Both are on by default and stay on my own server (see "Decisions" for why they never go into an issue).
 
 Optional input: one line of text or a dictated note.

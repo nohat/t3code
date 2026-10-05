@@ -5,7 +5,7 @@ import {
   recordPapercutEvent,
 } from "@t3tools/client-runtime/papercut";
 import { useLocation, useParams } from "@tanstack/react-router";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useEffect, useRef, useState } from "react";
 
 import { readSendButtonState } from "../papercuts/readSendButtonState";
