@@ -55,6 +55,8 @@ export class OpenCodeServerLedger extends Context.Service<
       /** The argv after the binary, e.g. `["serve", "--hostname=127.0.0.1", "--port=4096"]`. */
       readonly args: ReadonlyArray<string>;
     }) => Effect.Effect<Effect.Effect<void>>;
+    /** How many server groups are recorded right now (one directory read). For error detail only. */
+    readonly trackedCount: Effect.Effect<number>;
   }
 >()("t3/provider/OpenCodeServerLedger") {}
 
@@ -312,7 +314,12 @@ export const make = Effect.fn("OpenCodeServerLedger.make")(function* (input: {
     );
   });
 
-  return { track, reapOrphans };
+  const trackedCount = fs.readDirectory(directory).pipe(
+    Effect.map((names) => names.filter((name) => ENTRY_FILE.test(name)).length),
+    Effect.orElseSucceed(() => 0),
+  );
+
+  return { track, reapOrphans, trackedCount };
 });
 
 export const layer = Layer.effect(
@@ -322,12 +329,15 @@ export const layer = Layer.effect(
     const ledger = yield* make({ stateDir: config.stateDir });
     // Reaping waits for orphans to exit, so it must not hold up startup.
     yield* ledger.reapOrphans.pipe(Effect.forkScoped);
-    return OpenCodeServerLedger.of({ track: ledger.track });
+    return OpenCodeServerLedger.of({ track: ledger.track, trackedCount: ledger.trackedCount });
   }),
 );
 
 /** Records nothing. For tests that start OpenCode servers without a state directory. */
 export const layerTest = Layer.succeed(
   OpenCodeServerLedger,
-  OpenCodeServerLedger.of({ track: () => Effect.succeed(Effect.void) }),
+  OpenCodeServerLedger.of({
+    track: () => Effect.succeed(Effect.void),
+    trackedCount: Effect.succeed(0),
+  }),
 );

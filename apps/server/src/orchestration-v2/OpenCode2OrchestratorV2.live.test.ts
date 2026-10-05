@@ -92,6 +92,7 @@ const spawnedServers = Layer.succeed(
         spawnedPids.push(pid);
         return Effect.void;
       }),
+    trackedCount: Effect.sync(() => spawnedPids.length),
   }),
 );
 
