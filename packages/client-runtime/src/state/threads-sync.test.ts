@@ -41,6 +41,7 @@ import * as ThreadHistoryController from "./threadHistoryController.ts";
 import {
   EMPTY_ENVIRONMENT_THREAD_STATE,
   makeEnvironmentThreadState,
+  requestThreadResync,
   type EnvironmentThreadState,
   type ThreadSnapshotLoadResult,
 } from "./threads.ts";
@@ -351,6 +352,61 @@ describe("EnvironmentThreads", () => {
         );
         expect(yield* Ref.get(nextSaved)).toEqual([]);
       }),
+  );
+
+  it.effect("reloads from a fresh server snapshot when a resync is requested", () =>
+    Effect.gen(function* () {
+      const fresh: OrchestrationV2ThreadProjection = {
+        ...BASE_PROJECTION,
+        thread: { ...BASE_PROJECTION.thread, title: "Fresh from server" },
+      };
+      const h = yield* makeHarness({
+        cached: BASE_PROJECTION,
+        completionMarker: true,
+        httpSnapshot: {
+          _tag: "present",
+          snapshot: { snapshotSequence: 20, projection: fresh },
+        },
+      });
+      yield* Queue.offer(h.inputs, titleUpdated("Stale title", CACHED_SNAPSHOT_SEQUENCE + 1));
+      yield* Queue.offer(h.inputs, synchronized());
+      yield* awaitThreadState(
+        h.observed,
+        (value) =>
+          value.status === "live" &&
+          Option.isSome(value.data) &&
+          value.data.value.thread.title === "Stale title",
+      );
+      expect(yield* Ref.get(h.loaderCalls)).toBe(0);
+
+      expect(requestThreadResync(TARGET.environmentId, THREAD_ID)).toBe(true);
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(h.subscriptionCount)) >= 2) break;
+        yield* Effect.yieldNow;
+      }
+
+      // The retained projection and its cached row were discarded: the snapshot came from the
+      // server, and the subscription restarted from its sequence, not the last applied event.
+      expect(yield* Ref.get(h.subscriptionCount)).toBe(2);
+      expect(yield* Ref.get(h.loaderCalls)).toBe(1);
+      expect(yield* Ref.get(h.lastSubscribeAfterSequence)).toBe(20);
+      expect(yield* Ref.get(h.removedThreads)).toContain(THREAD_ID);
+      yield* Queue.offer(h.inputs, synchronized());
+      const reloaded = yield* awaitThreadState(
+        h.observed,
+        (value) =>
+          value.status === "live" &&
+          Option.isSome(value.data) &&
+          value.data.value.thread.title === "Fresh from server",
+      );
+      expect(Option.getOrThrow(reloaded.data).thread.title).toBe("Fresh from server");
+    }),
+  );
+
+  it.effect("reports no live thread to resync once its state machine is gone", () =>
+    Effect.sync(() => {
+      expect(requestThreadResync(TARGET.environmentId, ThreadId.make("never-opened"))).toBe(false);
+    }),
   );
 
   it.effect("persists a complete bounded HTTP window only once", () =>

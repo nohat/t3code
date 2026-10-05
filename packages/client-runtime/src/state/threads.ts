@@ -166,6 +166,29 @@ function cachedThreadState(value: EnvironmentThreadState): EnvironmentThreadStat
   };
 }
 
+/**
+ * Live per-thread state machines, keyed by thread key, that a "reload thread" action can reach.
+ * Module-level so synchronous UI handlers (menus, the command palette, a stall pill) can call it
+ * without an Effect runtime.
+ */
+const threadResyncHandlers = new Map<string, () => void>();
+
+/**
+ * Drops what this client knows about `threadId` and loads it again from the server: the cached
+ * projection is discarded, a fresh (bounded) snapshot is fetched, and the live subscription
+ * restarts from it. Returns false when no state machine is live for the thread (nothing is open
+ * to reload).
+ */
+export function requestThreadResync(
+  environmentId: EnvironmentIdType,
+  threadId: ThreadIdType,
+): boolean {
+  const handler = threadResyncHandlers.get(threadKey({ environmentId, threadId }));
+  if (handler === undefined) return false;
+  handler();
+  return true;
+}
+
 export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make")(function* (
   threadId: ThreadIdType,
   resumeCache?: ThreadResumeCache,
@@ -809,6 +832,26 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       service.changes.pipe(Stream.filter(ConnectionWakeups.shouldResubscribeAfterWakeup)),
   });
 
+  // A user-requested reload restarts the subscription like a foreground wakeup, but also marks the
+  // retained state as untrustworthy so the next subscribe starts from a fresh snapshot.
+  const reloadRequested = yield* Ref.make(false);
+  const resyncRequests = yield* Queue.sliding<void>(1);
+  const resyncKey = threadKey({ environmentId, threadId });
+  const resyncHandler = () => {
+    Queue.offerUnsafe(resyncRequests, undefined);
+  };
+  threadResyncHandlers.set(resyncKey, resyncHandler);
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      if (threadResyncHandlers.get(resyncKey) === resyncHandler) {
+        threadResyncHandlers.delete(resyncKey);
+      }
+    }),
+  );
+  const resyncSignals = Stream.fromQueue(resyncRequests).pipe(
+    Stream.tap(() => Ref.set(reloadRequested, true)),
+  );
+
   // Only the first subscription after a warm live resume keeps the retained
   // status. A replacement session or foreground resubscribe on the same scope
   // may have missed events, so those show sync progress until confirmed.
@@ -844,6 +887,39 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         yield* Ref.set(awaitingCompletion, supportsCompletionMarker);
         yield* markSynchronizing;
         yield* Ref.set(resumingLive, false);
+
+        // Reload: forget the projection, its cursor, and the cached row, so the branch below
+        // fetches a fresh bounded snapshot instead of resuming with afterSequence.
+        if (yield* Ref.getAndSet(reloadRequested, false)) {
+          yield* applyLock.withPermits(1)(
+            Effect.gen(function* () {
+              yield* SubscriptionRef.update(state, (value) =>
+                value.status === "deleted"
+                  ? value
+                  : {
+                      ...value,
+                      data: Option.none(),
+                      status: "synchronizing" as const,
+                      error: Option.none(),
+                      history: EMPTY_THREAD_HISTORY_META,
+                    },
+              );
+              yield* SubscriptionRef.set(lastSequence, 0);
+              yield* Ref.set(acceptsBoundedSocketSnapshots, canLoadHistory);
+              yield* remember;
+            }),
+          );
+          yield* cache
+            .removeThread(environmentId, threadId)
+            .pipe(
+              Effect.catch((error) =>
+                Effect.logWarning("Could not remove the cached thread before a reload.").pipe(
+                  Effect.annotateLogs({ environmentId, threadId, error: error.message }),
+                ),
+              ),
+            );
+          current = yield* SubscriptionRef.get(state);
+        }
 
         if (Option.isNone(current.data)) {
           const prepared = yield* SubscriptionRef.get(supervisor.prepared).pipe(
@@ -926,7 +1002,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         onDefect: () => setStreamError("Could not synchronize the thread."),
         onExpectedFailure: (cause) => setStreamError(formatThreadError(cause)),
         retryExpectedFailureAfter: "250 millis",
-        resubscribe: foregroundResubscriptions,
+        resubscribe: Stream.merge(foregroundResubscriptions, resyncSignals),
       },
     ).pipe(Stream.runForEachArray(applyItems)),
   );

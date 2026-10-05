@@ -106,6 +106,7 @@ import { threadSupportsProviderHandoff } from "@t3tools/client-runtime/state/thr
 import {
   codexFeedbackMessage,
   parseCodexFeedbackCommand,
+  requestThreadResync,
   shouldShowLoadEarlierControl,
   submitCodexFeedback,
   type CodexFeedbackSubmission,
@@ -7677,6 +7678,15 @@ export default function ChatView(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) copyActiveThreadReference();
+        return;
+      }
+
+      if (command === "thread.reload") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat && isServerThread && activeThreadRef) {
+          requestThreadResync(activeThreadRef.environmentId, activeThreadRef.threadId);
+        }
         return;
       }
 
