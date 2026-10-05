@@ -70,6 +70,12 @@ returns to the remembered selection.
 
 Leaving reasoning level or service tier unset uses the provider's own configuration.
 
+On mobile, the model picker shows known API-equivalent rates in USD per million
+tokens. Choose input/output rates, blended rates, or both; the choice is saved on
+your device. Blended input assumes 90% cache reads and excludes cache-write
+premiums. These rates help compare models, not measure subscription charges;
+models without a known rate show “Price unavailable”.
+
 ## Quote an assistant response
 
 On web and desktop, select text within one assistant response and choose
