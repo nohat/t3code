@@ -1,0 +1,3922 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>T3 Code: notifications visual proposals</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #fcfcfc;
+        --panel: #ffffff;
+        --soft: #f4f4f5;
+        --ink: #27272a;
+        --sub: #52525b;
+        --line: #e4e4e7;
+        --lines: #8a8a93;
+        --action: #1b4ed8;
+        --on: #ffffff;
+        --ring: #1b4ed8;
+        --warn: #b45309;
+        --ind: #4f46e5;
+        --bad: #b91c1c;
+        --ok: #047857;
+        --radius: 10px;
+        --shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+        --os: #e8e8ec;
+        --os-ink: #1c1c1e;
+        --os-sub: #48484a;
+        color-scheme: light;
+      }
+      body[data-theme="dark"] {
+        --bg: #0a0a0a;
+        --panel: #111111;
+        --soft: #1c1c1e;
+        --ink: #f5f5f5;
+        --sub: #a3a3a3;
+        --line: #262626;
+        --lines: #7a7a7a;
+        --action: #346bf1;
+        --on: #ffffff;
+        --ring: #7b93ff;
+        --warn: #fbbf24;
+        --ind: #a5b4fc;
+        --bad: #f87171;
+        --ok: #34d399;
+        --shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+        --os: #2a2a2e;
+        --os-ink: #f2f2f7;
+        --os-sub: #c7c7cc;
+        color-scheme: dark;
+      }
+      body[data-profile="warm"] {
+        --radius: 4px;
+        --bg: #f8fafd;
+        --panel: #f3f5f8;
+        --soft: #e9edf2;
+        --ink: #11171d;
+        --sub: #44484d;
+        --line: #ccd2d7;
+        --lines: #7d8792;
+        --action: #0062ab;
+        --on: #f8fafd;
+        --ring: #0062ab;
+        --warn: #694900;
+        --ind: #0062ab;
+        --bad: #a21921;
+        --ok: #005725;
+      }
+      body[data-profile="warm"][data-theme="dark"] {
+        --bg: #060b10;
+        --panel: #0e1319;
+        --soft: #1a2026;
+        --ink: #e6ecf2;
+        --sub: #acb2b7;
+        --line: #2d343a;
+        --lines: #5e6771;
+        --action: #73b6fa;
+        --on: #060b10;
+        --ring: #73b6fa;
+        --warn: #e6b55d;
+        --ind: #73b6fa;
+        --bad: #fe8b83;
+        --ok: #6fc884;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      .masthead {
+        padding: 48px 5vw 24px;
+        max-width: 1500px;
+        margin: auto;
+      }
+      .eyebrow,
+      .spec-label {
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        font:
+          11px/1.5 ui-monospace,
+          monospace;
+        color: var(--sub);
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: -0.025em;
+        margin: 12px 0;
+      }
+      h2 {
+        font-size: 20px;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+        margin: 2px 0;
+      }
+      h3 {
+        font-size: 14px;
+        margin: 20px 0 8px;
+      }
+      p {
+        margin: 10px 0;
+      }
+      small,
+      .muted {
+        color: var(--sub);
+        font-size: 12px;
+      }
+      small {
+        display: block;
+      }
+      code {
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .controls {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 24px 0;
+        align-items: center;
+      }
+      .controls label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        color: var(--ink);
+        font-size: 14px;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        border: 1px solid var(--lines);
+        background: var(--panel);
+        padding: 4px 12px;
+        border-radius: calc(var(--radius) - 2px);
+        min-height: 28px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 550;
+        white-space: normal;
+      }
+      .controls button {
+        min-height: 36px;
+        font-size: 13px;
+      }
+      button.primary {
+        background: var(--action);
+        color: var(--on);
+        border-color: var(--action);
+      }
+      button.ghost {
+        border-color: transparent;
+        background: transparent;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      .focus-demo {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+      nav {
+        display: flex;
+        gap: 4px 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      nav a {
+        color: var(--sub);
+        font:
+          12px ui-monospace,
+          monospace;
+        padding: 6px 4px;
+        text-decoration: underline;
+      }
+      .group {
+        max-width: 1500px;
+        margin: auto;
+        padding: 8px 5vw 8px;
+      }
+      .group > h2 {
+        margin: 28px 0 4px;
+      }
+      .group > p.muted {
+        margin: 0 0 16px;
+        max-width: 80ch;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 32px 28px;
+      }
+      .span2 {
+        grid-column: 1 / -1;
+      }
+      .spec {
+        scroll-margin-top: 20px;
+        min-width: 0;
+      }
+      .spec-label {
+        display: flex;
+        justify-content: space-between;
+        margin: 0 0 8px;
+        gap: 8px;
+        align-items: center;
+      }
+      .phase {
+        border: 1px solid var(--lines);
+        border-radius: 4px;
+        padding: 0 5px;
+        margin-left: 6px;
+        color: var(--ink);
+        letter-spacing: 0.04em;
+      }
+      .surface {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 20px;
+        min-height: 260px;
+      }
+      .cap {
+        color: var(--sub);
+        font-size: 12px;
+        margin: 12px 0 0;
+        line-height: 1.5;
+      }
+      .cap b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .legend {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        max-width: 980px;
+        color: var(--sub);
+      }
+      .ic {
+        width: 20px;
+        height: 20px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .ic.s16 {
+        width: 16px;
+        height: 16px;
+      }
+      .ic.s14 {
+        width: 14px;
+        height: 14px;
+      }
+      .ic.s24 {
+        width: 24px;
+        height: 24px;
+      }
+      .ic.s32 {
+        width: 32px;
+        height: 32px;
+      }
+      .ic.s48 {
+        width: 48px;
+        height: 48px;
+      }
+      .k-approval {
+        color: var(--warn);
+      }
+      .k-input {
+        color: var(--ind);
+      }
+      .k-failed {
+        color: var(--bad);
+      }
+      .k-completed {
+        color: var(--ok);
+      }
+      .k-quiet {
+        color: var(--sub);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row > .ic {
+        color: var(--sub);
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .grow strong {
+        font-size: 14px;
+        font-weight: 550;
+      }
+      .grow small {
+        margin-top: 2px;
+        overflow-wrap: anywhere;
+      }
+      .tag {
+        background: var(--soft);
+        color: var(--ink);
+        border: 1px solid var(--lines);
+        font-size: 11px;
+        line-height: 16px;
+        padding: 0 5px;
+        border-radius: 4px;
+        white-space: nowrap;
+        font-weight: 600;
+      }
+      .notice {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        border-radius: calc(var(--radius) - 2px);
+        margin: 12px 0;
+        font-size: 13px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .notice > .ic {
+        margin-top: 1px;
+        color: var(--sub);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .switch {
+        width: 36px;
+        min-height: 20px;
+        height: 20px;
+        padding: 2px;
+        border-radius: 10px;
+        background: var(--lines);
+        border-color: var(--lines);
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex: none;
+      }
+      .switch::after {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        display: block;
+      }
+      .switch[aria-checked="true"] {
+        background: var(--action);
+        border-color: var(--action);
+        justify-content: flex-end;
+      }
+      .select {
+        border: 1px solid var(--lines);
+        border-radius: calc(var(--radius) - 2px);
+        padding: 4px 8px;
+        font-size: 12px;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        white-space: nowrap;
+        background: var(--panel);
+      }
+      .sechead {
+        font:
+          600 11px/16px ui-monospace,
+          monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--sub);
+        margin: 20px 0 4px;
+      }
+
+      /* toast */
+      .toast {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        width: 100%;
+        max-width: 360px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 12px 40px 12px 14px;
+        position: relative;
+        text-align: left;
+      }
+      .toast.persist {
+        border-color: var(--lines);
+      }
+      .toast.persist > .kind {
+        border: 1px solid var(--lines);
+        border-radius: 6px;
+        padding: 3px;
+        margin: -3px 0 0 -3px;
+      }
+      .toast .kind {
+        display: inline-flex;
+        margin-top: 1px;
+      }
+      .tbody {
+        flex: 1;
+        min-width: 0;
+      }
+      .ttl {
+        display: block;
+        font-size: 14px;
+        line-height: 20px;
+        font-weight: 600;
+      }
+      .tsub {
+        display: block;
+        font-size: 12px;
+        line-height: 18px;
+        color: var(--sub);
+        overflow-wrap: anywhere;
+      }
+      .tact {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      .tact button {
+        min-height: 28px;
+      }
+      .hide {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 28px;
+        height: 28px;
+        min-height: 28px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: transparent;
+        border-color: transparent;
+        color: var(--sub);
+      }
+      .toast.quiet .ttl {
+        font-weight: 500;
+        color: var(--sub);
+      }
+      .tstack {
+        display: grid;
+        gap: 12px;
+        justify-items: end;
+      }
+      .tag-label {
+        font:
+          11px/16px ui-monospace,
+          monospace;
+        color: var(--sub);
+        margin: 0 0 4px;
+        display: block;
+      }
+
+      /* window */
+      .win {
+        border: 1px solid var(--lines);
+        border-radius: var(--radius);
+        background: var(--bg);
+        position: relative;
+        overflow: hidden;
+        height: 360px;
+      }
+      .win .top {
+        height: 36px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        font-size: 12px;
+        color: var(--sub);
+        background: var(--panel);
+      }
+      .win .body {
+        padding: 14px 16px;
+        display: grid;
+        gap: 8px;
+      }
+      .bar {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+      }
+      .composer {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 14px;
+        height: 52px;
+        border: 1px solid var(--lines);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 8px 12px;
+        color: var(--sub);
+        font-size: 12px;
+        display: flex;
+        align-items: flex-start;
+      }
+      .keepclear {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        height: 64px;
+        border: 1px dashed var(--lines);
+        border-radius: var(--radius);
+        pointer-events: none;
+      }
+      .keepclear span {
+        position: absolute;
+        top: -9px;
+        left: 12px;
+        background: var(--bg);
+        padding: 0 6px;
+        font:
+          10px/14px ui-monospace,
+          monospace;
+        color: var(--sub);
+      }
+      .win .tview {
+        position: absolute;
+        top: 44px;
+        right: 14px;
+        width: calc(100% - 28px);
+        max-width: 360px;
+      }
+      .panelcard {
+        border: 1px solid var(--lines);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 12px 14px;
+      }
+
+      /* sidebar */
+      .sidebar {
+        width: 256px;
+        max-width: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--bg);
+        overflow: hidden;
+        padding-bottom: 6px;
+      }
+      .sbhead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 8px 8px 12px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .sbicons {
+        display: flex;
+        gap: 2px;
+      }
+      .ibtn {
+        width: 28px;
+        height: 28px;
+        min-height: 28px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        border-color: transparent;
+        background: transparent;
+        color: var(--sub);
+        border-radius: calc(var(--radius) - 4px);
+      }
+      .ibtn[aria-pressed="true"] {
+        background: var(--soft);
+        color: var(--ink);
+        border-color: var(--lines);
+      }
+      .nm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 8px;
+        padding: 6px 8px;
+        border-radius: calc(var(--radius) - 2px);
+        background: var(--soft);
+        border: 1px solid var(--line);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .nm .cnt {
+        color: var(--sub);
+        font-weight: 400;
+      }
+      .nm .sp {
+        flex: 1;
+      }
+      .nm button {
+        min-height: 24px;
+        padding: 0 6px;
+        font-size: 11px;
+        border-color: transparent;
+        background: transparent;
+        text-decoration: underline;
+      }
+      .grp {
+        padding: 10px 12px 2px;
+        font-size: 11px;
+        color: var(--sub);
+      }
+      .srow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 8px;
+        padding: 5px 8px;
+        font-size: 13px;
+        border-radius: calc(var(--radius) - 2px);
+        min-height: 28px;
+      }
+      .srow.sel {
+        background: var(--soft);
+      }
+      .srow .rt {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .srow .rs {
+        font-size: 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      }
+      .srow .rs i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        display: inline-block;
+      }
+      .srow .tm {
+        font-size: 11px;
+        color: var(--sub);
+      }
+      .nrow {
+        margin: 0 8px;
+        padding: 6px 8px;
+        border-radius: calc(var(--radius) - 2px);
+      }
+      .nrow .l1 {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 13px;
+      }
+      .nrow .l1 .rt {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nrow .l2 {
+        font-size: 11px;
+        color: var(--sub);
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .nrow .l2 .lab {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+      }
+      .sbfoot {
+        padding: 8px 12px 4px;
+        font-size: 11px;
+        color: var(--sub);
+        border-top: 1px solid var(--line);
+        margin-top: 8px;
+      }
+      .sbfoot button {
+        min-height: 24px;
+        padding: 0 4px;
+        border-color: transparent;
+        background: transparent;
+        text-decoration: underline;
+        font-size: 11px;
+      }
+      .menu {
+        width: 220px;
+        border: 1px solid var(--lines);
+        border-radius: var(--radius);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        padding: 4px;
+      }
+      .menu div {
+        padding: 6px 10px;
+        font-size: 13px;
+        border-radius: calc(var(--radius) - 4px);
+      }
+      .menu div.hl {
+        background: var(--soft);
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 4px 0;
+      }
+      .twocol {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+
+      /* empty */
+      .empty {
+        text-align: center;
+        padding: 28px 12px;
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+      }
+      .empty .ic {
+        color: var(--sub);
+      }
+      .empty h4 {
+        font-family: inherit;
+        color: var(--ink);
+        margin: 0;
+        font-size: 17px;
+        line-height: 24px;
+        font-weight: 600;
+        max-width: 36ch;
+      }
+      .card .empty h4 {
+        font-family: inherit;
+        font-size: 17px;
+        line-height: 24px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .empty p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--sub);
+        max-width: 40ch;
+      }
+      .empty .actions {
+        justify-content: center;
+      }
+
+      /* OS content */
+      .osframe {
+        border: 1px dashed var(--lines);
+        border-radius: 14px;
+        padding: 12px;
+        background: var(--soft);
+      }
+      .osframe > .oslabel {
+        display: block;
+        font:
+          10px/14px ui-monospace,
+          monospace;
+        color: var(--sub);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+      }
+      .osnote {
+        font-size: 11px;
+        color: var(--sub);
+        margin: 8px 0 0;
+      }
+      .oscard {
+        background: var(--os);
+        color: var(--os-ink);
+        border-radius: 16px;
+        padding: 12px 14px;
+        display: flex;
+        gap: 10px;
+        max-width: 380px;
+      }
+      .oscard.win11 {
+        border-radius: 6px;
+      }
+      .oscard.mac {
+        border-radius: 12px;
+      }
+      .osglyph {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px dashed var(--os-sub);
+        flex: none;
+        display: grid;
+        place-items: center;
+        font:
+          9px/10px ui-monospace,
+          monospace;
+        color: var(--os-sub);
+        text-align: center;
+      }
+      .ostitle {
+        font-size: 14px;
+        line-height: 19px;
+        font-weight: 600;
+        display: block;
+      }
+      .osbody {
+        font-size: 13px;
+        line-height: 18px;
+        color: var(--os-sub);
+        display: block;
+      }
+      .ossys {
+        font-size: 10px;
+        color: var(--os-sub);
+        border: 1px dashed var(--os-sub);
+        border-radius: 4px;
+        padding: 0 4px;
+        margin-left: 6px;
+        font-family: ui-monospace, monospace;
+        font-weight: 400;
+      }
+      .oscard.passive .ostitle {
+        font-weight: 500;
+        color: var(--os-sub);
+      }
+
+      /* phone / ipad */
+      .phone {
+        width: 100%;
+        max-width: 390px;
+        margin: 0 auto;
+        border: 1px solid var(--lines);
+        border-radius: 28px;
+        background: var(--bg);
+        overflow: hidden;
+        position: relative;
+        min-height: 560px;
+        display: flex;
+        flex-direction: column;
+      }
+      .phone button {
+        min-height: 44px;
+        font-size: 14px;
+      }
+      .phone .ibtn {
+        width: 44px;
+        height: 44px;
+      }
+      .phone .hdr {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 10px 8px 6px;
+        min-height: 56px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .phone .hdr h4 {
+        flex: 1;
+        margin: 0;
+        font-size: 16px;
+        line-height: 22px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .phone .pbody {
+        padding: 16px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+        flex: 1;
+        position: relative;
+      }
+      .phone .pcomposer {
+        margin: 0 12px 14px;
+        border: 1px solid var(--lines);
+        border-radius: 22px;
+        background: var(--panel);
+        min-height: 44px;
+        padding: 10px 16px;
+        color: var(--sub);
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .ptoast {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 8px;
+        background: var(--panel);
+        border: 1px solid var(--lines);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 12px 8px 12px 14px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        z-index: 2;
+      }
+      .ptoast .ttl {
+        font-size: 15px;
+        line-height: 20px;
+      }
+      .ptoast .tsub {
+        font-size: 14px;
+        line-height: 20px;
+      }
+      .ptoast .tact button {
+        min-height: 44px;
+        min-width: 44px;
+      }
+      .ptoast .hide {
+        position: static;
+        width: 44px;
+        height: 44px;
+        min-height: 44px;
+        flex: none;
+      }
+      .prow {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        min-height: 56px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .prow .grow strong {
+        font-size: 15px;
+        font-weight: 500;
+      }
+      .prow small {
+        font-size: 13px;
+      }
+      .prow .lab {
+        font-size: 13px;
+        white-space: nowrap;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .chip {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        border: 1px solid var(--lines);
+        border-radius: 999px;
+        padding: 0 12px;
+        min-height: 44px;
+        font-size: 14px;
+        background: var(--panel);
+      }
+      .chip .cnt {
+        color: var(--sub);
+      }
+      .phone .switch {
+        width: 51px;
+        height: 31px;
+        min-height: 31px;
+        border-radius: 16px;
+        padding: 2px;
+      }
+      .phone .switch::after {
+        width: 27px;
+        height: 27px;
+      }
+      .jumpbtn {
+        position: absolute;
+        right: 12px;
+        bottom: 8px;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        background: var(--panel);
+        border-color: var(--lines);
+        border-radius: 22px;
+        z-index: 1;
+      }
+      .ipad {
+        border: 1px solid var(--lines);
+        border-radius: 22px;
+        background: var(--bg);
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        min-height: 420px;
+        position: relative;
+        max-width: 700px;
+        margin: 0 auto;
+      }
+      .ipad .side {
+        border-right: 1px solid var(--line);
+        background: var(--soft);
+        padding: 10px 0;
+      }
+      .ipad .detail {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      .scale-note {
+        font:
+          10px/14px ui-monospace,
+          monospace;
+        color: var(--sub);
+        text-align: center;
+        margin: 6px 0 0;
+      }
+      .mini {
+        max-width: 230px;
+        min-height: 340px;
+        border-radius: 22px;
+      }
+      .mini .hdr h4 {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .minis {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .mini .hdr {
+        min-height: 40px;
+        padding: 4px;
+      }
+      .mini .hdr h4 {
+        font-size: 12px;
+      }
+      .mini .pbody {
+        padding: 10px;
+        font-size: 12px;
+      }
+      .step {
+        font:
+          10px/14px ui-monospace,
+          monospace;
+        color: var(--sub);
+        text-align: center;
+        margin-top: 6px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: calc(var(--radius) - 2px);
+        padding: 10px 12px;
+        background: var(--bg);
+      }
+      .card h4 {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-family: ui-monospace, monospace;
+        color: var(--sub);
+        font-weight: 500;
+      }
+      .card p {
+        margin: 4px 0;
+        font-size: 13px;
+      }
+      .card ol {
+        margin: 4px 0 8px;
+        padding-left: 18px;
+        font-size: 12px;
+        color: var(--sub);
+      }
+      .gray {
+        filter: grayscale(1);
+      }
+      .iconsheet {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .iconsheet .card {
+        display: grid;
+        gap: 4px;
+        justify-items: start;
+      }
+      .iconsheet code {
+        font-size: 11px;
+        color: var(--sub);
+        overflow-wrap: anywhere;
+      }
+      .kindgrid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .kindgrid .card {
+        display: grid;
+        gap: 4px;
+        justify-items: start;
+        align-content: start;
+      }
+      .kindgrid dl {
+        margin: 0;
+        font-size: 12px;
+        color: var(--sub);
+      }
+      .kindgrid dt {
+        font-weight: 600;
+        color: var(--ink);
+        display: inline;
+      }
+      .kindgrid dd {
+        display: inline;
+        margin: 0;
+      }
+      .kindgrid dd::after {
+        content: "";
+        display: block;
+      }
+      .anat {
+        display: grid;
+        gap: 6px;
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--sub);
+        padding-left: 16px;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .masthead {
+          padding-top: 28px;
+        }
+        .kindgrid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+        .ipad {
+          grid-template-columns: 150px 1fr;
+        }
+      }
+      @media (max-width: 440px) {
+        .surface {
+          padding: 14px;
+          min-height: 0;
+        }
+        .kindgrid {
+          grid-template-columns: 1fr;
+        }
+        .ipad {
+          grid-template-columns: 1fr;
+        }
+        .ipad .side {
+          display: none;
+        }
+        .toast {
+          padding-right: 36px;
+        }
+        .win {
+          height: auto;
+          min-height: 400px;
+        }
+        .win .tview {
+          position: static;
+          margin: 8px 12px;
+          width: auto;
+        }
+        .win .composer {
+          position: static;
+          margin: 12px;
+        }
+        .win .keepclear {
+          display: none;
+        }
+      }
+      @media print {
+        .controls,
+        nav {
+          display: none;
+        }
+        .spec {
+          break-inside: avoid;
+          margin-bottom: 24px;
+        }
+      }
+
+      .pair {
+        display: grid;
+        grid-template-columns: minmax(0, 390px) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+      .grid3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .grid4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      @media (max-width: 600px) {
+        .grid3 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .grid4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 900px) {
+        .pair {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="light" data-profile="upstream">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <symbol id="i-approval" viewBox="0 0 24 24">
+        <path d="M12 2.5l7.5 3v5.5c0 4.7-3.2 8.6-7.5 10.5C7.7 19.6 4.5 15.7 4.5 11V5.5z" />
+        <path d="M12 8v4.5" />
+        <path d="M12 15.5h.01" />
+      </symbol>
+      <symbol id="i-input" viewBox="0 0 24 24">
+        <path
+          d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"
+        />
+        <path d="M9.8 9.2a2.3 2.3 0 0 1 4.4.8c0 1.5-2.2 1.8-2.2 3" />
+        <path d="M12 14.6h.01" />
+      </symbol>
+      <symbol id="i-failed" viewBox="0 0 24 24">
+        <path d="M8.2 2.5h7.6l5.7 5.7v7.6l-5.7 5.7H8.2l-5.7-5.7V8.2z" />
+        <path d="m9 9 6 6m0-6-6 6" />
+      </symbol>
+      <symbol id="i-completed" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9.5" />
+        <path d="m7.8 12.3 2.8 2.8 5.6-6" />
+      </symbol>
+      <symbol id="i-handled-elsewhere" viewBox="0 0 24 24">
+        <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+        <path d="M8 20.5h8M12 16.5v4" />
+        <path d="m8.8 10.2 2.2 2.2 4.2-4.4" />
+      </symbol>
+      <symbol id="i-replaced" viewBox="0 0 24 24">
+        <path d="M4 8h13m-3-3.5L17.5 8 14 11.5" />
+        <path d="M20 16H7m3-3.5L6.5 16l3.5 3.5" />
+      </symbol>
+      <symbol id="i-open-items" viewBox="0 0 24 24">
+        <path d="M3.5 13.5 6 5.5h12l2.5 8" />
+        <path
+          d="M3.5 13.5v5A1.5 1.5 0 0 0 5 20h14a1.5 1.5 0 0 0 1.5-1.5v-5h-5l-1.2 2.5H9.7L8.5 13.5z"
+        />
+      </symbol>
+      <symbol id="i-seen" viewBox="0 0 24 24">
+        <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+        <circle cx="12" cy="12" r="2.8" />
+      </symbol>
+      <symbol id="i-unavailable" viewBox="0 0 24 24">
+        <rect x="3.5" y="4" width="17" height="16" rx="2" stroke-dasharray="3 3" />
+        <path d="M9 12h6" />
+      </symbol>
+      <symbol id="i-permission-off" viewBox="0 0 24 24">
+        <path d="M6 10a6 6 0 0 1 12 0c0 3.5 1 5 2 6.5H4c1-1.5 2-3 2-6.5z" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+        <path d="M4 4l16 16" />
+      </symbol>
+      <symbol id="i-delay" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9.5" />
+        <path d="M12 6.5V12l3.5 2" />
+      </symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24">
+        <path d="M6 10a6 6 0 0 1 12 0c0 3.5 1 5 2 6.5H4c1-1.5 2-3 2-6.5z" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+      </symbol>
+      <symbol id="i-jump" viewBox="0 0 24 24">
+        <path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5" />
+        <path d="M5 20h14" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="6.5" />
+        <path d="m20 20-4.2-4.2" />
+      </symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></symbol>
+      <symbol id="i-chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"
+        />
+      </symbol>
+      <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" /></symbol>
+      <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5m-5 5 5-5 5 5" /></symbol>
+      <symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" /></symbol>
+    </svg>
+    <div class="masthead">
+      <div class="eyebrow">T3 Code / proposed product design / 2026-10-05</div>
+      <h1>One alert, on the right surface.<br />Quiet until it matters.</h1>
+      <p>
+        Review mockups for the notifications proposal. Screen IDs N01 to N33 are the UX
+        specification's.
+      </p>
+      <div class="controls">
+        <button type="button" id="theme" aria-pressed="false">Dark appearance</button>
+        <label
+          ><button
+            type="button"
+            id="profile"
+            role="switch"
+            aria-checked="false"
+            class="switch"
+            style="min-height: 20px"
+          ></button>
+          Warm brutalism preview (optional, off by default)</label
+        >
+      </div>
+      <div class="legend">
+        All screens are proposals with fabricated data; nothing here is implemented or verified.
+        Colors approximate the app's existing roles and are not exact. The warm brutalism preview
+        uses the optional Ledger profile (4 px radii) and is not part of the default look. Gallery
+        controls work; every other control only announces that it is illustrative. The gallery has
+        no animation. OS-owned surfaces draw only the content area the app controls.
+      </div>
+      <nav aria-label="Mockup screens">
+        <a href="#N01">N01</a><a href="#N02">N02</a><a href="#N03">N03</a><a href="#N04">N04</a
+        ><a href="#N05">N05</a><a href="#N06">N06</a><a href="#N07">N07</a><a href="#N08">N08</a
+        ><a href="#N09">N09</a><a href="#N10">N10</a><a href="#N11">N11</a><a href="#N12">N12</a
+        ><a href="#N13">N13</a><a href="#N14">N14</a><a href="#N15">N15</a><a href="#N16">N16</a
+        ><a href="#N17">N17</a><a href="#N18">N18</a><a href="#N19">N19</a><a href="#N20">N20</a
+        ><a href="#N21">N21</a><a href="#N22">N22</a><a href="#N23">N23</a><a href="#N24">N24</a
+        ><a href="#N25">N25</a><a href="#N26">N26</a><a href="#N27">N27</a><a href="#N28">N28</a
+        ><a href="#N29">N29</a><a href="#N30">N30</a><a href="#N31">N31</a><a href="#N32">N32</a
+        ><a href="#N33">N33</a><a href="#A1">A1</a><a href="#A2">A2</a>
+      </nav>
+    </div>
+    <section class="group" aria-labelledby="g-ref">
+      <h2 id="g-ref">Reference</h2>
+      <p class="muted">Kind grammar and the asset sheet. Not screens.</p>
+      <div class="grid">
+        <article id="A1" class="spec span2">
+          <div class="spec-label">
+            <span>A1<span class="phase">ref</span></span
+            ><span>Reference</span>
+          </div>
+          <h3 style="margin-top: 0">Kind grammar: icon, title, row label, behavior</h3>
+          <div class="surface">
+            <div class="kindgrid">
+              <div class="card">
+                <span class="k-approval"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg></span
+                ><strong>Approval needed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Pending Approval</dd>
+                  <dt>Toast:</dt>
+                  <dd>Persists, alert role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-input"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-input" /></svg></span
+                ><strong>Input needed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Awaiting Input</dd>
+                  <dt>Toast:</dt>
+                  <dd>Persists, alert role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-failed"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-failed" /></svg></span
+                ><strong>Thread failed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Failed</dd>
+                  <dt>Toast:</dt>
+                  <dd>Auto-hides, status role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-completed"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-completed" /></svg></span
+                ><strong>Thread completed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Completed</dd>
+                  <dt>Toast:</dt>
+                  <dd>Auto-hides, status role</dd>
+                </dl>
+              </div>
+            </div>
+            <h3>Same four kinds with color removed</h3>
+            <div class="kindgrid gray" aria-hidden="true">
+              <div class="card">
+                <span class="k-approval"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg></span
+                ><strong>Approval needed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Pending Approval</dd>
+                  <dt>Toast:</dt>
+                  <dd>Persists, alert role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-input"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-input" /></svg></span
+                ><strong>Input needed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Awaiting Input</dd>
+                  <dt>Toast:</dt>
+                  <dd>Persists, alert role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-failed"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-failed" /></svg></span
+                ><strong>Thread failed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Failed</dd>
+                  <dt>Toast:</dt>
+                  <dd>Auto-hides, status role</dd>
+                </dl>
+              </div>
+              <div class="card">
+                <span class="k-completed"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-completed" /></svg></span
+                ><strong>Thread completed</strong>
+                <dl>
+                  <dt>Row:</dt>
+                  <dd>Completed</dd>
+                  <dt>Toast:</dt>
+                  <dd>Auto-hides, status role</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Not a screen ID. Each kind has its own silhouette (shield, speech bubble, octagon,
+            circle), its own title, and its own row label, so no kind depends on hue. Hue is a
+            reinforcement drawn from the existing sidebar roles (amber, indigo, red, green) and is
+            applied to the icon and the row label only, never to a surface fill. The second row
+            removes color to show the kinds remain distinguishable.
+          </p>
+        </article>
+        <article id="A2" class="spec span2">
+          <div class="spec-label">
+            <span>A2<span class="phase">ref</span></span
+            ><span>Reference</span>
+          </div>
+          <h3 style="margin-top: 0">
+            Asset sheet (13 SVGs, 24 by 24, 1.5 px stroke, currentColor)
+          </h3>
+          <div class="surface">
+            <div class="iconsheet">
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg></span
+                ><strong>Approval needed</strong><code>approval.svg</code
+                ><code>Lucide: shield-alert</code><code>SF: exclamationmark.shield</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-input" /></svg></span
+                ><strong>Input needed</strong><code>input.svg</code
+                ><code>Lucide: message-square-more / message-circle-question</code
+                ><code>SF: questionmark.bubble</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-failed" /></svg></span
+                ><strong>Thread failed</strong><code>failed.svg</code><code>Lucide: octagon-x</code
+                ><code>SF: xmark.octagon</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-completed" /></svg></span
+                ><strong>Thread completed</strong><code>completed.svg</code
+                ><code>Lucide: circle-check</code><code>SF: checkmark.circle</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-handled-elsewhere" /></svg></span
+                ><strong>Handled elsewhere</strong><code>handled-elsewhere.svg</code
+                ><code>Lucide: monitor-check</code
+                ><code>SF: no single glyph; compose display + checkmark</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-replaced" /></svg></span
+                ><strong>Replaced by a newer item</strong><code>replaced.svg</code
+                ><code>Lucide: replace / arrow-right-left</code
+                ><code>SF: arrow.left.arrow.right</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg></span
+                ><strong>Open items (Needs me)</strong><code>open-items.svg</code
+                ><code>Lucide: inbox</code><code>SF: tray</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-seen" /></svg></span
+                ><strong>Seen</strong><code>seen.svg</code><code>Lucide: eye</code
+                ><code>SF: eye</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-unavailable" /></svg></span
+                ><strong>Target unavailable</strong><code>unavailable.svg</code
+                ><code>Lucide: square-dashed / file-x</code><code>SF: square.dashed</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-permission-off" /></svg></span
+                ><strong>Notifications blocked</strong><code>permission-off.svg</code
+                ><code>Lucide: bell-off</code><code>SF: bell.slash</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-delay" /></svg></span
+                ><strong>Delay</strong><code>delay.svg</code><code>Lucide: clock</code
+                ><code>SF: clock</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-bell" /></svg></span
+                ><strong>System notifications</strong><code>bell.svg</code><code>Lucide: bell</code
+                ><code>SF: bell</code>
+              </div>
+              <div class="card">
+                <span style="color: var(--ink)"
+                  ><svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-jump" /></svg></span
+                ><strong>Jump to result</strong><code>jump.svg</code
+                ><code>Lucide: arrow-down-to-line</code><code>SF: arrow.down.to.line</code>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Each icon is also a file in this directory. Production should prefer the named Lucide
+            glyph on web and desktop and the SF Symbol on iOS where one exists; these drawings are
+            proposals so the review does not depend on an icon install.
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-toasts">
+      <h2 id="g-toasts">Web and desktop toasts</h2>
+      <p class="muted">
+        Toasts are the foreground surface. Persistent (approval, input) and auto-hiding (failed,
+        completed) toasts differ by an outlined icon tile and a stronger border, not by animation.
+      </p>
+      <div class="grid">
+        <article id="N01" class="spec">
+          <span id="N02"></span>
+          <div class="spec-label">
+            <span>N01 · N02<span class="phase">P1</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Approval and input toasts: persistent, alert role</h3>
+          <div class="surface">
+            <div class="win">
+              <div class="top"><strong style="color: var(--ink)">Fix flaky login test</strong></div>
+              <div class="body">
+                <div class="bar" style="width: 92%"></div>
+                <div class="bar" style="width: 78%"></div>
+                <div class="bar" style="width: 85%"></div>
+                <div class="bar" style="width: 60%"></div>
+                <div class="bar" style="width: 88%"></div>
+              </div>
+              <div class="tview">
+                <div class="tstack">
+                  <div class="toast persist" role="alert" aria-live="assertive" aria-atomic="true">
+                    <span class="kind k-approval"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-approval" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Approval needed</strong
+                      ><span class="tsub">Fix flaky login test · billing-api</span>
+                      <div class="tact">
+                        <button type="button">Open</button><button type="button">Dismiss</button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="toast persist" role="alert" aria-live="assertive" aria-atomic="true">
+                    <span class="kind k-input"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-input" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Input needed</strong
+                      ><span class="tsub">Add rate limit headers · edge-gateway</span>
+                      <div class="tact">
+                        <button type="button">Open</button><button type="button">Dismiss</button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="keepclear" aria-hidden="true">
+                <span>keep clear: toasts end above the composer</span>
+              </div>
+              <div class="composer">Message</div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>N01 Approval needed</b> and <b>N02 Input needed</b>. They never auto-hide, so each
+            carries an outlined icon tile and a stronger border (3:1) in place of any timer graphic.
+            The stack sits top right under the topbar; the dashed band is the keep-clear zone above
+            the composer. The corner x is <b>Hide notification</b> (item stays);
+            <b>Dismiss</b> clears it. Limit of 5 persistent toasts.
+          </p>
+        </article>
+        <article id="N03" class="spec">
+          <span id="N04"></span>
+          <div class="spec-label">
+            <span>N03 · N04<span class="phase">P1</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Failed and completed toasts: auto-hiding, status role</h3>
+          <div class="surface">
+            <div class="tstack" style="justify-items: start">
+              <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                <span class="kind k-failed"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-failed" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">Thread failed</strong
+                  ><span class="tsub">Migrate invoice export · billing-api</span>
+                  <div class="tact">
+                    <button type="button">Open</button><button type="button">Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                <span class="kind k-completed"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-completed" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">Thread completed</strong
+                  ><span class="tsub">Tidy README links · docs-site</span>
+                  <div class="tact">
+                    <button type="button">Jump</button><button type="button">Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            <b>N03 Thread failed</b> and <b>N04 Thread completed</b>. Hairline border and a bare
+            icon mark them as ones that leave on their own; the item stays listed. No error text, no
+            countdown bar. Default 10 seconds (assumption), paused on hover and keyboard focus.
+            Failed is red on the icon only; completed is never red.
+          </p>
+        </article>
+        <article id="N05" class="spec">
+          <div class="spec-label">
+            <span>N05<span class="phase">P1, P3, P4</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Actions: Open or Jump, Dismiss, Hide</h3>
+          <div class="surface">
+            <div class="tstack" style="justify-items: start">
+              <span class="tag-label">Proposed (focus ring shown on Hide)</span>
+              <div class="toast persist" role="alert" aria-live="assertive" aria-atomic="true">
+                <span class="kind k-approval"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">Approval needed</strong
+                  ><span class="tsub">Fix flaky login test · billing-api</span>
+                  <div class="tact">
+                    <button type="button">Open</button><button type="button">Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="hide focus-demo"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+              <span class="tag-label">Today: one action, close labeled Dismiss notification</span>
+              <div class="toast auto quiet" role="alert" aria-live="assertive" aria-atomic="true">
+                <span class="kind k-approval"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">Approval needed</strong
+                  ><span class="tsub">Fix flaky login test · billing-api</span>
+                  <div class="tact"><button type="button">Open thread</button></div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Dismiss notification"
+                  title="Dismiss notification"
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            <ul class="anat">
+              <li>
+                <b>Open</b> (P1) or <b>Jump</b> (P3, results): the primary action, first in tab
+                order.
+              </li>
+              <li>
+                <b>Dismiss</b>: text action; clears the item (local in P3, server-wide from P4).
+              </li>
+              <li><b>Hide</b>: the x; this toast only. Escape on a focused toast hides it.</li>
+            </ul>
+          </div>
+          <p class="cap">
+            Reverses the single "Open thread" action and the "Dismiss notification" close label.
+            Actions use the existing compact button size (28 px here; at least 24 px on desktop).
+            The x tooltip "Hide. It stays in Needs me." is only true from P4; see the conflicts
+            section.
+          </p>
+        </article>
+        <article id="N06" class="spec">
+          <div class="spec-label">
+            <span>N06<span class="phase">P4</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Catch-up summary toast</h3>
+          <div class="surface">
+            <div class="tstack" style="justify-items: start">
+              <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                <span class="kind k-quiet"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">3 threads need you.</strong>
+                  <div class="tact"><button type="button">Show</button></div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Raised once on reconnect or return when two or more items arrived while away;
+            <b>Show</b> opens Needs me. Never one toast per item. Drawn as auto-hiding with no
+            Dismiss, because Dismiss would clear several items at once (see conflicts). The
+            open-items glyph carries no kind color.
+          </p>
+        </article>
+        <article id="N19" class="spec">
+          <div class="spec-label">
+            <span>N19<span class="phase">P3, P4</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">
+            Replaced item: updates in place and reads quiet about the past
+          </h3>
+          <div class="surface">
+            <span class="tag-label">Before</span>
+            <div class="toast persist" role="alert" aria-live="assertive" aria-atomic="true">
+              <span class="kind k-approval"
+                ><svg class="ic" aria-hidden="true" focusable="false">
+                  <use href="#i-approval" /></svg
+              ></span>
+              <div class="tbody">
+                <strong class="ttl">Approval needed</strong
+                ><span class="tsub">Fix flaky login test · billing-api</span>
+                <div class="tact">
+                  <button type="button">Open</button><button type="button">Dismiss</button>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="hide"
+                aria-label="Hide notification"
+                title="Hide. It stays in Needs me."
+              >
+                <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+              </button>
+            </div>
+            <div style="text-align: center; color: var(--sub); margin: 6px 0">
+              <svg class="ic s24" aria-hidden="true" focusable="false">
+                <use href="#i-replaced" />
+              </svg>
+            </div>
+            <span class="tag-label">After (same toast, updated in place)</span>
+            <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+              <span class="kind k-completed"
+                ><svg class="ic" aria-hidden="true" focusable="false">
+                  <use href="#i-completed" /></svg
+              ></span>
+              <div class="tbody">
+                <strong class="ttl">Thread completed</strong
+                ><span class="tsub">Fix flaky login test · billing-api</span>
+                <div class="tact">
+                  <button type="button">Jump</button><button type="button">Dismiss</button>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="hide"
+                aria-label="Hide notification"
+                title="Hide. It stays in Needs me."
+              >
+                <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+              </button>
+            </div>
+            <div class="sidebar" style="margin-top: 14px">
+              <div class="srow">
+                <span class="rt">Fix flaky login test</span
+                ><span class="rs k-approval"><i></i>Pending Approval</span
+                ><span class="tag">New</span>
+              </div>
+              <div class="srow">
+                <span class="rt">Fix flaky login test</span
+                ><span class="rs k-completed"><i></i>Completed</span><span class="tag">New</span>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            The toast, the notification, and the row change kind together. The new toast loses the
+            outlined tile (now auto-hiding), is announced once as a status ("Thread completed. Fix
+            flaky login test."), and says nothing about the old kind. The Needs me count does not
+            change: it is one thread.
+          </p>
+        </article>
+        <article id="N13" class="spec">
+          <div class="spec-label">
+            <span>N13<span class="phase">P3</span></span
+            ><span>Web, desktop, iPad</span>
+          </div>
+          <h3 style="margin-top: 0">Activation at the wrong spot</h3>
+          <div class="surface">
+            <div class="win">
+              <div class="top"><strong style="color: var(--ink)">Fix flaky login test</strong></div>
+              <div class="body">
+                <div class="bar" style="width: 92%"></div>
+                <div class="bar" style="width: 78%"></div>
+                <div class="bar" style="width: 85%"></div>
+                <div class="bar" style="width: 60%"></div>
+                <div class="bar" style="width: 88%"></div>
+                <div class="bar" style="width: 70%"></div>
+                <div style="position: absolute; right: 16px; bottom: 78px">
+                  <button type="button" class="jumpbtn" style="position: static">
+                    <svg class="ic s16" aria-hidden="true" focusable="false">
+                      <use href="#i-jump" />
+                    </svg>
+                    Jump to result
+                  </button>
+                </div>
+              </div>
+              <div class="tview">
+                <div class="tstack">
+                  <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="kind k-completed"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-completed" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Thread completed</strong
+                      ><span class="tsub">Fix flaky login test</span>
+                      <div class="tact">
+                        <button type="button">Jump</button><button type="button">Dismiss</button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="keepclear" aria-hidden="true">
+                <span>keep clear: toasts end above the composer</span>
+              </div>
+              <div class="composer">Unsent draft text</div>
+            </div>
+          </div>
+          <p class="cap">
+            The window activated on the notified thread with the anchor off screen. One instant
+            scroll is attempted; an unsent draft cancels it, so the toast keeps <b>Jump</b> and the
+            thread keeps <b>Jump to result</b> (persistent, above the composer, never over the
+            draft). Approval and input never scroll: the toast action is <b>Open</b>.
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-sidebar">
+      <h2 id="g-sidebar">Sidebar and Needs me</h2>
+      <p class="muted">
+        A filter, a count in plain text, and a New mark. No inbox view, no red dots.
+      </p>
+      <div class="grid">
+        <article id="N08" class="spec">
+          <div class="spec-label">
+            <span>N08<span class="phase">P4</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Needs me filter and count in the sidebar</h3>
+          <div class="surface">
+            <div class="twocol">
+              <div class="sidebar">
+                <div class="sbhead">
+                  <span>Threads</span>
+                  <div class="sbicons">
+                    <button type="button" class="ibtn" aria-label="Search threads">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-search" />
+                      </svg></button
+                    ><button type="button" class="ibtn" aria-label="New thread">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-plus" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="ibtn"
+                      aria-pressed="true"
+                      aria-label="Needs me, 3 threads"
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-open-items" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="nm">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                  ><span>Needs me</span><span class="cnt">3</span><span class="sp"></span
+                  ><button type="button">Mark all seen</button>
+                </div>
+                <div style="height: 8px"></div>
+                <div class="nrow">
+                  <div class="l1">
+                    <span class="rt">Fix flaky login test</span
+                    ><span class="tm muted">2:14 PM</span>
+                  </div>
+                  <div class="l2">
+                    <span class="lab k-approval"
+                      ><svg class="ic s14" aria-hidden="true" focusable="false">
+                        <use href="#i-approval" /></svg
+                      >Pending Approval</span
+                    ><span class="tag">New</span><span>billing-api</span>
+                  </div>
+                </div>
+                <div class="nrow">
+                  <div class="l1">
+                    <span class="rt">Add rate limit headers</span
+                    ><span class="tm muted">2:09 PM</span>
+                  </div>
+                  <div class="l2">
+                    <span class="lab k-input"
+                      ><svg class="ic s14" aria-hidden="true" focusable="false">
+                        <use href="#i-input" /></svg
+                      >Awaiting Input</span
+                    ><span class="tag">New</span><span>edge-gateway</span>
+                  </div>
+                </div>
+                <div class="nrow">
+                  <div class="l1">
+                    <span class="rt">Refactor retry helper</span
+                    ><span class="tm muted">1:52 PM</span>
+                  </div>
+                  <div class="l2">
+                    <span class="lab k-approval"
+                      ><svg class="ic s14" aria-hidden="true" focusable="false">
+                        <use href="#i-approval" /></svg
+                      >Pending Approval</span
+                    ><span>billing-api</span>
+                  </div>
+                </div>
+                <div class="sbfoot">
+                  3 more in other projects. <button type="button">Show all projects</button>
+                </div>
+              </div>
+              <div class="sidebar">
+                <div class="sbhead">
+                  <span>Threads</span>
+                  <div class="sbicons">
+                    <button type="button" class="ibtn" aria-label="Search threads">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-search" />
+                      </svg></button
+                    ><button type="button" class="ibtn" aria-label="New thread">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-plus" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="ibtn"
+                      aria-pressed="true"
+                      aria-label="Needs me, 3 threads"
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-open-items" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="nm">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                  ><span>Needs me</span>
+                </div>
+                <div class="empty">
+                  <svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" />
+                  </svg>
+                  <h4>Nothing needs you.</h4>
+                  <p>Approvals, questions, failures, and results you have not seen appear here.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            The toggle sits in the header icon group (<code>aria-pressed</code>, name "Needs me, 3
+            threads"); the <b>Needs me</b> row exists only while the count is above 0 or the filter
+            is on. The count is plain muted text, not a badge, with no age, no overdue state, and no
+            red. The third row is a seen approval the agent still waits on: no <b>New</b>, same
+            label. Right: the empty state. List rows here are a new two-line layout; the sidebar
+            width (16rem) is existing.
+          </p>
+        </article>
+        <article id="N10" class="spec">
+          <div class="spec-label">
+            <span>N10<span class="phase">P3, P4</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Per-thread item indicator: existing label plus New</h3>
+          <div class="surface">
+            <div class="sidebar">
+              <div class="srow">
+                <span class="rt">Fix flaky login test</span
+                ><span class="rs k-approval"><i></i>Pending Approval</span
+                ><span class="tag">New</span>
+              </div>
+              <div class="srow">
+                <span class="rt">Add rate limit headers</span
+                ><span class="rs k-input"><i></i>Awaiting Input</span><span class="tag">New</span>
+              </div>
+              <div class="srow">
+                <span class="rt">Migrate invoice export</span
+                ><span class="rs k-failed"><i></i>Failed</span><span class="tag">New</span>
+              </div>
+              <div class="srow sel">
+                <span class="rt">Tidy README links</span
+                ><span class="rs k-completed"><i></i>Completed</span><span class="tag">New</span>
+              </div>
+              <div class="srow">
+                <span class="rt">Refactor retry helper</span
+                ><span class="rs k-approval"><i></i>Pending Approval</span>
+              </div>
+              <div class="srow">
+                <span class="rt">Upgrade date library</span><span class="tm">2:14 PM</span>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            The existing status label (dot plus text) stays unchanged. <b>New</b> is a bordered text
+            tag, not a dot: it is read in the row name ("Fix flaky login test, Pending Approval,
+            new, billing-api"). It leaves when seen, while a still-waiting approval keeps its label.
+            The last row shows a seen result: label gone. In the real row the title middle-truncates
+            and the compact form keeps only the dot.
+          </p>
+        </article>
+        <article id="N11" class="spec">
+          <div class="spec-label">
+            <span>N11<span class="phase">P4</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Mark seen, Mark all seen, Mark as new</h3>
+          <div class="surface">
+            <div class="twocol">
+              <div class="menu" role="menu" aria-label="Row actions (illustrative)">
+                <div class="hl" role="menuitem">Mark seen</div>
+                <div role="menuitem">Mark as new</div>
+                <hr />
+                <div role="menuitem">Mark unread</div>
+              </div>
+              <div style="flex: 1; min-width: 240px">
+                <div class="nm" style="margin: 0">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                  ><span>Needs me</span><span class="cnt">3</span><span class="sp"></span
+                  ><button type="button">Mark all seen</button>
+                </div>
+                <div class="tstack" style="justify-items: start; margin-top: 14px">
+                  <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="kind k-quiet"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-seen" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Marked 4 seen. 2 still waiting for you.</strong>
+                      <div class="tact"><button type="button">Undo</button></div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Per row, an open item offers <b>Mark seen</b> and a cleared one offers
+            <b>Mark as new</b> (this menu shows both for review); <b>Mark unread</b> stays for
+            threads without an item. <b>Mark all seen</b> acts on the visible list and answers with
+            a status toast and <b>Undo</b>. Reopening does not alert. The seen glyph appears only on
+            these explicit actions.
+          </p>
+        </article>
+        <article id="N12" class="spec">
+          <div class="spec-label">
+            <span>N12<span class="phase">P4</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Handled: the way back from Mark seen and Dismiss</h3>
+          <div class="surface">
+            <div class="twocol">
+              <div class="sidebar">
+                <div class="sbhead">
+                  <span>Threads</span>
+                  <div class="sbicons">
+                    <button type="button" class="ibtn" aria-label="Search threads">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-search" />
+                      </svg></button
+                    ><button type="button" class="ibtn" aria-label="New thread">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-plus" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="ibtn"
+                      aria-pressed="true"
+                      aria-label="Needs me, 3 threads"
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-open-items" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="nm">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                  ><span>Needs me</span><span class="cnt">3</span><span class="sp"></span
+                  ><button type="button">Mark all seen</button>
+                </div>
+                <div style="height: 8px"></div>
+                <div class="nrow">
+                  <div class="l1">
+                    <span class="rt">Fix flaky login test</span
+                    ><span class="tm muted">2:14 PM</span>
+                  </div>
+                  <div class="l2">
+                    <span class="lab k-approval"
+                      ><svg class="ic s14" aria-hidden="true" focusable="false">
+                        <use href="#i-approval" /></svg
+                      >Pending Approval</span
+                    ><span class="tag">New</span><span>billing-api</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="ghost"
+                  style="
+                    display: flex;
+                    gap: 6px;
+                    align-items: center;
+                    margin: 4px 8px;
+                    min-height: 28px;
+                  "
+                  aria-expanded="true"
+                >
+                  <svg class="ic s14" aria-hidden="true" focusable="false">
+                    <use href="#i-chevd" /></svg
+                  >Handled
+                </button>
+                <div class="nrow">
+                  <div class="l1"><span class="rt muted">Refactor retry helper</span></div>
+                  <div class="l2"><span>Cleared 2:14 PM, still waiting</span></div>
+                </div>
+                <div class="nrow">
+                  <div class="l1"><span class="rt muted">Upgrade date library</span></div>
+                  <div class="l2"><span>Answered 2:16 PM</span></div>
+                </div>
+                <div class="nrow">
+                  <div class="l1"><span class="rt muted">Tidy README links</span></div>
+                  <div class="l2"><span>Thread continued 2:16 PM</span></div>
+                </div>
+              </div>
+              <div class="sidebar">
+                <div class="sbhead">
+                  <span>Threads</span>
+                  <div class="sbicons">
+                    <button type="button" class="ibtn" aria-label="Search threads">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-search" />
+                      </svg></button
+                    ><button type="button" class="ibtn" aria-label="New thread">
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-plus" />
+                      </svg></button
+                    ><button
+                      type="button"
+                      class="ibtn"
+                      aria-pressed="true"
+                      aria-label="Needs me, 3 threads"
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-open-items" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="nm">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-open-items" /></svg
+                  ><span>Needs me</span>
+                </div>
+                <button
+                  type="button"
+                  class="ghost"
+                  style="
+                    display: flex;
+                    gap: 6px;
+                    align-items: center;
+                    margin: 4px 8px;
+                    min-height: 28px;
+                  "
+                  aria-expanded="true"
+                >
+                  <svg class="ic s14" aria-hidden="true" focusable="false">
+                    <use href="#i-chevd" /></svg
+                  >Handled
+                </button>
+                <p class="muted" style="margin: 6px 20px 14px">Nothing handled yet.</p>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            A disclosure (shown expanded; collapsed by default) at the end of Needs me listing the
+            latest 20 cleared, answered, or continued items in quiet text: no icons, no color, no
+            counts, no timers (static strings). Each row opens its anchor;
+            <b>Mark as new</b> reopens it. Right: the empty state.
+          </p>
+        </article>
+        <article id="N32" class="spec">
+          <div class="spec-label">
+            <span>N32<span class="phase">P1, P4</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Multi-environment display</h3>
+          <div class="surface">
+            <div class="tstack" style="justify-items: start">
+              <div class="toast persist" role="alert" aria-live="assertive" aria-atomic="true">
+                <span class="kind k-approval"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-approval" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl">Approval needed</strong
+                  ><span class="tsub">Fix flaky login test · billing-api · Workshop</span>
+                  <div class="tact">
+                    <button type="button">Open</button><button type="button">Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="sidebar" style="margin-top: 14px">
+              <div class="nrow">
+                <div class="l1">
+                  <span class="rt">Fix flaky login test</span><span class="tm muted">2:14 PM</span>
+                </div>
+                <div class="l2">
+                  <span class="lab k-approval"
+                    ><svg class="ic s14" aria-hidden="true" focusable="false">
+                      <use href="#i-approval" /></svg
+                    >Pending Approval</span
+                  ><span class="tag">New</span><span>billing-api · Workshop</span>
+                </div>
+              </div>
+              <div class="nrow">
+                <div class="l1">
+                  <span class="rt">Add rate limit headers</span
+                  ><span class="tm muted">2:09 PM</span>
+                </div>
+                <div class="l2">
+                  <span class="lab k-input"
+                    ><svg class="ic s14" aria-hidden="true" focusable="false">
+                      <use href="#i-input" /></svg
+                    >Awaiting Input</span
+                  ><span class="tag">New</span><span>edge-gateway · Studio</span>
+                </div>
+              </div>
+              <div class="sbfoot">Can't reach Studio. Its threads may be missing here.</div>
+            </div>
+          </div>
+          <p class="cap">
+            The environment label is appended (" · Workshop") only while more than one environment
+            is connected, on toasts, notifications, rows, and the Needs me footer. An unreachable
+            environment gets a plain sentence in the footer so the list does not look complete; no
+            icon, no alarm color.
+          </p>
+        </article>
+        <article id="N33" class="spec">
+          <div class="spec-label">
+            <span>N33<span class="phase">P3, P4</span></span
+            ><span>Web, desktop, iPad keyboard</span>
+          </div>
+          <h3 style="margin-top: 0">Command palette actions</h3>
+          <div class="surface">
+            <div class="menu" style="width: 100%; max-width: 420px">
+              <div
+                style="
+                  border-bottom: 1px solid var(--line);
+                  color: var(--sub);
+                  border-radius: 0;
+                  padding: 8px 10px;
+                "
+              >
+                Search commands
+              </div>
+              <div class="sechead" style="margin: 8px 10px 2px">Actions</div>
+              <div class="hl">Needs me</div>
+              <div>Mark all seen</div>
+              <div>Mark seen</div>
+              <div>Mark as new</div>
+              <div>Focus newest notification</div>
+            </div>
+          </div>
+          <p class="cap">
+            Rows in the existing "Actions" group, each also registered as a keybinding command with
+            no default key (so no collision). "Focus newest notification" is the label this gallery
+            gives <code>notifications.focus</code>; the copy deck does not name it. Palette rows
+            carry no new icon grammar.
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-landing">
+      <h2 id="g-landing">Landing and unavailable states</h2>
+      <p class="muted">
+        Every tap lands on the anchor or on a sentence about why it did not. No blank screens.
+      </p>
+      <div class="grid">
+        <article id="N14" class="spec">
+          <div class="spec-label">
+            <span>N14<span class="phase">P2, P3</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Landing on the anchor</h3>
+          <div class="surface">
+            <div class="twocol">
+              <div class="win" style="height: 340px; flex: 1; min-width: 240px">
+                <div class="top">
+                  <strong style="color: var(--ink)">Fix flaky login test</strong>
+                </div>
+                <div class="body">
+                  <div class="bar" style="width: 90%"></div>
+                  <div class="bar" style="width: 76%"></div>
+                  <div class="bar" style="width: 84%"></div>
+                  <div class="bar" style="width: 58%"></div>
+                </div>
+                <div style="position: absolute; left: 14px; right: 14px; bottom: 14px">
+                  <div class="panelcard focus-demo" style="margin-top: 8px" tabindex="-1">
+                    <strong>Existing approval panel (not redesigned)</strong>
+                    <div class="bar" style="margin-top: 8px; width: 70%"></div>
+                    <div class="bar" style="margin-top: 6px; width: 45%"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="phone mini">
+                <div class="hdr">
+                  <button type="button" class="ibtn" aria-label="Back to threads">
+                    <svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-back" />
+                    </svg>
+                  </button>
+                  <h4>Fix flaky login test</h4>
+                  <span style="width: 44px"></span>
+                </div>
+                <div class="pbody">
+                  <div class="bar" style="width: 90%"></div>
+                  <div class="bar" style="width: 76%"></div>
+                  <div class="bar" style="width: 84%"></div>
+                  <div class="bar" style="width: 58%"></div>
+                  <div class="bar" style="width: 88%"></div>
+                </div>
+                <div style="padding: 0 12px 8px">
+                  <button type="button" class="jumpbtn" style="position: static">
+                    <svg class="ic s16" aria-hidden="true" focusable="false">
+                      <use href="#i-jump" />
+                    </svg>
+                    Jump to result
+                  </button>
+                </div>
+                <div class="pcomposer"><span>Message</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Left: an approval or question lands on its panel (focus ring shown; nothing scrolls).
+            Right: a completed thread lands at the end with <b>Jump to result</b> (failed:
+            <b>Jump to failure</b>), the existing scroll-to-end control, which stays after a skipped
+            scroll. Screen reader: "Approval needed in Fix flaky login test." then focus on the
+            panel.
+          </p>
+        </article>
+        <article id="N15" class="spec">
+          <div class="spec-label">
+            <span>N15<span class="phase">P2</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Target unavailable: archived or deleted</h3>
+          <div class="surface">
+            <div class="grid2">
+              <div class="card" style="background: var(--panel)">
+                <div class="empty">
+                  <svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-unavailable" />
+                  </svg>
+                  <h4>This thread is archived.</h4>
+                  <div class="actions">
+                    <button type="button" class="primary">View archived threads</button
+                    ><button type="button">Back to threads</button>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="background: var(--panel)">
+                <div class="empty">
+                  <svg class="ic s32" aria-hidden="true" focusable="false">
+                    <use href="#i-unavailable" />
+                  </svg>
+                  <h4>This thread was deleted.</h4>
+                  <div class="actions">
+                    <button type="button" class="primary">Back to threads</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            A real route state with one sentence and a way back; never a blank or unrelated screen.
+            Neutral glyph, no warning color: nothing is wrong. Built from the existing compact empty
+            state.
+          </p>
+        </article>
+        <article id="N16" class="spec">
+          <div class="spec-label">
+            <span>N16<span class="phase">P2</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Target unavailable: already answered</h3>
+          <div class="surface">
+            <div class="win">
+              <div class="top"><strong style="color: var(--ink)">Fix flaky login test</strong></div>
+              <div class="body">
+                <div class="bar" style="width: 92%"></div>
+                <div class="bar" style="width: 78%"></div>
+                <div class="bar" style="width: 85%"></div>
+                <div class="bar" style="width: 60%"></div>
+                <div class="bar" style="width: 88%"></div>
+                <div class="bar" style="width: 70%"></div>
+              </div>
+              <div class="tview">
+                <div class="tstack">
+                  <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="kind k-quiet"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-handled-elsewhere" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Already answered.</strong>
+                      <div class="tact"><button type="button">Show latest</button></div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="keepclear" aria-hidden="true">
+                <span>keep clear: toasts end above the composer</span>
+              </div>
+              <div class="composer">Message</div>
+            </div>
+          </div>
+          <p class="cap">
+            The tap lands in the thread; the panel is gone because the request was answered. One
+            quiet status toast with <b>Show latest</b>. The handled-elsewhere glyph carries no kind
+            color.
+          </p>
+        </article>
+        <article id="N17" class="spec">
+          <div class="spec-label">
+            <span>N17<span class="phase">P2</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Target unavailable: environment unreachable</h3>
+          <div class="surface">
+            <div class="empty">
+              <svg class="ic s32" aria-hidden="true" focusable="false">
+                <use href="#i-unavailable" />
+              </svg>
+              <h4>
+                Can't reach Studio right now. This notification opens when the connection is back.
+              </h4>
+              <div class="actions">
+                <button type="button" class="primary">Retry</button
+                ><button type="button">Back to threads</button>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Names the environment, offers <b>Retry</b> and a way back, and keeps the target queued,
+            so the tap is not lost. Static: no spinner while waiting.
+          </p>
+        </article>
+        <article id="N18" class="spec">
+          <div class="spec-label">
+            <span>N18<span class="phase">P2, P3</span></span
+            ><span>Web, desktop, mobile</span>
+          </div>
+          <h3 style="margin-top: 0">Anchor not found: reverted turn or outside window</h3>
+          <div class="surface">
+            <div class="win">
+              <div class="top"><strong style="color: var(--ink)">Fix flaky login test</strong></div>
+              <div class="body">
+                <div class="bar" style="width: 92%"></div>
+                <div class="bar" style="width: 78%"></div>
+                <div class="bar" style="width: 85%"></div>
+                <div class="bar" style="width: 60%"></div>
+                <div class="bar" style="width: 88%"></div>
+                <div class="bar" style="width: 70%"></div>
+              </div>
+              <div class="tview">
+                <div class="tstack">
+                  <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="kind k-quiet"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-unavailable" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl"
+                        >That turn was reverted. Showing the latest messages.</strong
+                      >
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                    <span class="kind k-quiet"
+                      ><svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-unavailable" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Couldn't find that message. Showing the latest.</strong>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic s16" aria-hidden="true" focusable="false">
+                        <use href="#i-x" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="keepclear" aria-hidden="true">
+                <span>keep clear: toasts end above the composer</span>
+              </div>
+              <div class="composer">Message</div>
+            </div>
+          </div>
+          <p class="cap">
+            Lands at the end of the thread with one toast that says why (two variants shown). After
+            the 20-page cap, no further search. Neutral: no kind color, no actions; the thread is
+            already showing the latest messages.
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-settings">
+      <h2 id="g-settings">Settings and permission states</h2>
+      <p class="muted">The setting shows the system's truth and one way to fix it.</p>
+      <div class="grid">
+        <article id="N21" class="spec">
+          <div class="spec-label">
+            <span>N21<span class="phase">P1, P3, P5</span></span
+            ><span>Web, desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Notification settings</h3>
+          <div class="surface">
+            <small>Settings / General / Behavior</small>
+            <h2>Notifications</h2>
+            <div class="row">
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-bell" /></svg>
+              <div class="grow">
+                <strong>Toasts</strong
+                ><small>Show a toast when something needs you and this window is in front.</small>
+              </div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Toasts"
+              ></button>
+            </div>
+            <div class="row">
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-bell" /></svg>
+              <div class="grow">
+                <strong>System notifications</strong
+                ><small>Show a system notification when this window isn't in front.</small>
+              </div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="System notifications"
+              ></button>
+            </div>
+            <div class="notice">
+              <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-bell" /></svg
+              ><span
+                >On. System notifications appear when this window isn't in front; toasts show when
+                it is.</span
+              >
+            </div>
+            <div class="row">
+              <div class="grow">
+                <strong>Sound</strong
+                ><small>Play one sound with a toast, only in the window you're using.</small>
+              </div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Sound"
+              ></button>
+            </div>
+            <div class="sechead">Notify me when</div>
+            <div class="row">
+              <span class="k-approval"
+                ><svg class="ic" aria-hidden="true" focusable="false">
+                  <use href="#i-approval" /></svg
+              ></span>
+              <div class="grow"><strong>Approval needed</strong><small></small></div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Approval needed"
+              ></button>
+            </div>
+            <div class="row">
+              <span class="k-input"
+                ><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-input" /></svg
+              ></span>
+              <div class="grow"><strong>Input needed</strong><small></small></div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Input needed"
+              ></button>
+            </div>
+            <div class="row">
+              <span class="k-failed"
+                ><svg class="ic" aria-hidden="true" focusable="false"><use href="#i-failed" /></svg
+              ></span>
+              <div class="grow"><strong>Thread failed</strong><small></small></div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Thread failed"
+              ></button>
+            </div>
+            <div class="row">
+              <span class="k-completed"
+                ><svg class="ic" aria-hidden="true" focusable="false">
+                  <use href="#i-completed" /></svg
+              ></span>
+              <div class="grow"><strong>Thread completed</strong><small></small></div>
+              <button
+                type="button"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-label="Thread completed"
+              ></button>
+            </div>
+            <p class="muted">Turned-off kinds still appear in Needs me.</p>
+            <div class="row">
+              <div class="grow">
+                <strong>Toast duration</strong
+                ><small>Approvals and questions always stay until you hide them.</small>
+              </div>
+              <span class="select"
+                >10 seconds
+                <svg class="ic s14" aria-hidden="true" focusable="false">
+                  <use href="#i-chevd" /></svg
+              ></span>
+            </div>
+            <p class="muted" style="margin-top: 14px">
+              Alerts go to the device you're using. If you aren't using one, they go to the last one
+              you used. A notification clears when you see what it's about, not when you open the
+              thread.
+            </p>
+          </div>
+          <p class="cap">
+            Replaces the four-value select in Settings, General, Behavior. Standard rows and the
+            existing switch; the four kind switches reuse the kind icons so the settings match the
+            alerts. Switch tracks are drawn at 3:1 here; the app's off-state
+            <code>input</code> track is lighter (see Validation). The "how it works" sentence is the
+            only explanation of seen; no mechanism is taught.
+          </p>
+        </article>
+        <article id="N24" class="spec">
+          <div class="spec-label">
+            <span>N24<span class="phase">P5</span></span
+            ><span>Web, desktop, iPad, iPhone</span>
+          </div>
+          <h3 style="margin-top: 0">Delay per kind (environment-scoped)</h3>
+          <div class="surface">
+            <h2>Wait before alerting my other devices</h2>
+            <div class="row">
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-delay" /></svg>
+              <div class="grow">
+                <strong>Approvals and questions</strong
+                ><small>Applies to Studio. Time counted from your last activity.</small>
+              </div>
+              <span class="select"
+                >1 minute
+                <svg class="ic s14" aria-hidden="true" focusable="false">
+                  <use href="#i-chevd" /></svg
+              ></span>
+            </div>
+            <div class="row">
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-delay" /></svg>
+              <div class="grow">
+                <strong>Failures and results</strong
+                ><small>Applies to Studio. Time counted from your last activity.</small>
+              </div>
+              <span class="select"
+                >5 minutes
+                <svg class="ic s14" aria-hidden="true" focusable="false">
+                  <use href="#i-chevd" /></svg
+              ></span>
+            </div>
+            <div class="menu" style="margin-top: 10px; width: 160px">
+              <div>1 minute</div>
+              <div class="hl">5 minutes</div>
+              <div>15 minutes</div>
+              <div>30 minutes</div>
+            </div>
+          </div>
+          <p class="cap">
+            A clock glyph always sits beside text. Choices 1, 5, 15, 30 minutes (assumption). The
+            helper names the environment the setting applies to; with several environments, each
+            gets its own group. Mobile reads and writes the same values (N22).
+          </p>
+        </article>
+        <article id="N23" class="spec span2">
+          <div class="spec-label">
+            <span>N23<span class="phase">P1 web, M1 mobile</span></span
+            ><span>Web, desktop, iPad, iPhone</span>
+          </div>
+          <h3 style="margin-top: 0">Permission states and recovery</h3>
+          <div class="surface">
+            <div class="grid2">
+              <div class="card">
+                <h4>unsupported · web</h4>
+                <p>This browser can't show system notifications. Toasts and sound still work.</p>
+              </div>
+              <div class="card">
+                <h4>unsupported · phone browser</h4>
+                <p>
+                  Phone browsers can't show system notifications. Use the mobile app for alerts.
+                </p>
+              </div>
+              <div class="card">
+                <h4>unsupported · insecure origin</h4>
+                <p>System notifications need HTTPS or the desktop app.</p>
+              </div>
+              <div class="card">
+                <h4>unsupported · mobile</h4>
+                <p>
+                  This device can't receive push notifications. Toasts still show while the app is
+                  open.
+                </p>
+              </div>
+              <div class="card">
+                <h4>not asked</h4>
+                <p>
+                  Allow system notifications to hear about threads when this window isn't in front.
+                </p>
+                <div class="actions">
+                  <button type="button" class="primary">Allow notifications</button>
+                </div>
+                <p class="muted">Your browser will ask for permission next.</p>
+              </div>
+              <div class="card">
+                <h4>denied or revoked · web</h4>
+                <p>
+                  System notifications are blocked. Your choice is saved and resumes when you allow
+                  them.
+                </p>
+                <ol>
+                  <li>Click the lock or settings icon next to the address bar.</li>
+                  <li>Set Notifications to Allow.</li>
+                  <li>Return here.</li>
+                </ol>
+                <div class="actions">
+                  <button type="button" class="primary">Check again</button>
+                </div>
+              </div>
+              <div class="card">
+                <h4>denied or revoked · desktop (macOS)</h4>
+                <p>
+                  System notifications are blocked. Your choice is saved and resumes when you allow
+                  them.
+                </p>
+                <ol>
+                  <li>Open System Settings, then Notifications.</li>
+                  <li>Choose T3 Code.</li>
+                  <li>Turn on Allow Notifications.</li>
+                </ol>
+                <div class="actions">
+                  <button type="button" class="primary">Open System Settings</button>
+                </div>
+              </div>
+              <div class="card">
+                <h4>denied or revoked · iOS</h4>
+                <p>Notifications are off for T3 Code in Settings.</p>
+                <ol>
+                  <li>Open Settings, then Notifications.</li>
+                  <li>Choose T3 Code.</li>
+                  <li>Turn on Allow Notifications.</li>
+                </ol>
+                <div class="actions">
+                  <button type="button" class="primary">Open Settings</button>
+                </div>
+              </div>
+              <div class="card">
+                <h4>granted</h4>
+                <p>
+                  On. System notifications appear when this window isn't in front; toasts show when
+                  it is.
+                </p>
+              </div>
+            </div>
+            <h3>Revocation notice (once per revocation)</h3>
+            <div class="tstack" style="justify-items: start">
+              <div class="toast auto" role="status" aria-live="polite" aria-atomic="true">
+                <span class="kind k-quiet"
+                  ><svg class="ic" aria-hidden="true" focusable="false">
+                    <use href="#i-permission-off" /></svg
+                ></span>
+                <div class="tbody">
+                  <strong class="ttl"
+                    >System notifications are blocked. You won&#39;t be alerted when T3 Code
+                    isn&#39;t in front.</strong
+                  >
+                  <div class="tact">
+                    <button type="button">Fix</button><button type="button">Dismiss</button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="hide"
+                  aria-label="Hide notification"
+                  title="Hide. It stays in Needs me."
+                >
+                  <svg class="ic s16" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Each state shows the system's truth with numbered steps and a re-check; the saved choice
+            is never rewritten. State glyphs are neutral (bell, bell-off) and the blocked notice is
+            a quiet status toast, not an error: toasts, Needs me, and badges still work. Button
+            labels (Allow notifications, Check again, Open System Settings, Open Settings) come from
+            the copy deck.
+          </p>
+        </article>
+        <article id="N22" class="spec">
+          <div class="spec-label">
+            <span>N22<span class="phase">M1</span></span
+            ><span>iPhone, iPad, Android</span>
+          </div>
+          <h3 style="margin-top: 0">Notification settings, mobile</h3>
+          <div class="surface">
+            <div class="phone">
+              <div class="hdr">
+                <button type="button" class="ibtn" aria-label="Back to threads">
+                  <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-back" /></svg>
+                </button>
+                <h4>Notifications</h4>
+                <span style="width: 44px"></span>
+              </div>
+              <div class="pbody">
+                <div class="notice" style="margin: 0">
+                  <svg class="ic s16" aria-hidden="true" focusable="false">
+                    <use href="#i-bell" /></svg
+                  ><span
+                    >Allowed, but this device isn't registered with Studio yet. Alerts start when it
+                    connects.</span
+                  >
+                </div>
+                <div class="sechead">Notify me when</div>
+                <div class="row" style="padding: 6px 0; min-height: 56px">
+                  <span class="k-approval"
+                    ><svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-approval" /></svg
+                  ></span>
+                  <div class="grow"><strong>Approval needed</strong></div>
+                  <button
+                    type="button"
+                    class="switch"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Approval needed"
+                  ></button>
+                </div>
+                <div class="row" style="padding: 6px 0; min-height: 56px">
+                  <span class="k-input"
+                    ><svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-input" /></svg
+                  ></span>
+                  <div class="grow"><strong>Input needed</strong></div>
+                  <button
+                    type="button"
+                    class="switch"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Input needed"
+                  ></button>
+                </div>
+                <div class="row" style="padding: 6px 0; min-height: 56px">
+                  <span class="k-failed"
+                    ><svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-failed" /></svg
+                  ></span>
+                  <div class="grow"><strong>Thread failed</strong></div>
+                  <button
+                    type="button"
+                    class="switch"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Thread failed"
+                  ></button>
+                </div>
+                <div class="row" style="padding: 6px 0; min-height: 56px">
+                  <span class="k-completed"
+                    ><svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-completed" /></svg
+                  ></span>
+                  <div class="grow"><strong>Thread completed</strong></div>
+                  <button
+                    type="button"
+                    class="switch"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Thread completed"
+                  ></button>
+                </div>
+                <p class="muted">
+                  Turned-off kinds still appear in Needs me. Approvals and questions can break
+                  through Focus.
+                </p>
+                <div class="sechead">Wait before alerting my other devices</div>
+                <div class="row" style="min-height: 56px">
+                  <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-delay" /></svg>
+                  <div class="grow">
+                    <strong>Approvals and questions</strong><small>Applies to Studio.</small>
+                  </div>
+                  <span class="select" style="min-height: 44px"
+                    >1 minute
+                    <svg class="ic s14" aria-hidden="true" focusable="false">
+                      <use href="#i-chevd" /></svg
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Settings, Notifications on a 390 pt reference with 44 pt rows and controls; native
+            switches and headers in production. The registration notice is the direct-push wording
+            (no Connect requirement; see conflicts). Delay and Time Sensitive helper copy sit on the
+            same screen.
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-os">
+      <h2 id="g-os">OS notification content areas</h2>
+      <p class="muted">
+        OS chrome is native and is not reproduced. Only the content areas the app controls (title,
+        body, any actions) are drawn inside neutral dashed frames.
+      </p>
+      <div class="grid">
+        <article id="N25" class="spec">
+          <div class="spec-label">
+            <span>N25<span class="phase">M1, M2</span></span
+            ><span>iPhone, iPad (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">iOS banner and lock screen: content area only</h3>
+          <div class="surface">
+            <div class="osframe">
+              <span class="oslabel">iOS lock screen and banner (native chrome not reproduced)</span>
+              <div class="oscard">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle"
+                    >Approval needed<span class="ossys">Time Sensitive: system-drawn</span></span
+                  ><span class="osbody">Fix flaky login test · billing-api</span>
+                </div>
+              </div>
+              <div style="height: 8px"></div>
+              <div class="oscard">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle">Input needed</span
+                  ><span class="osbody">Add rate limit headers · edge-gateway</span>
+                </div>
+              </div>
+              <p class="osnote">
+                Dashed items are drawn by iOS: the app icon, app name, time, and the Time Sensitive
+                label. We control the title and body only, which match the toast exactly.
+                Notifications for one thread group under its thread id.
+              </p>
+            </div>
+          </div>
+          <p class="cap">
+            Title and body are identical to the toast so the two read as one alert across devices.
+            No actions on the notification (Approve and Deny are deferred). Approval and input are
+            Time Sensitive; "Approvals and questions can break through Focus." lives in settings.
+          </p>
+        </article>
+        <article id="N20" class="spec">
+          <div class="spec-label">
+            <span>N20<span class="phase">P4, M2</span></span
+            ><span>iPhone, iPad (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">Handled elsewhere: quiet replacement</h3>
+          <div class="surface">
+            <div class="osframe">
+              <span class="oslabel">iOS passive replacement (native chrome not reproduced)</span>
+              <div class="oscard passive">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle">Approval answered</span
+                  ><span class="osbody">Fix flaky login test · billing-api</span>
+                </div>
+              </div>
+              <div style="height: 8px"></div>
+              <div class="oscard passive">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle">Input answered</span
+                  ><span class="osbody">Add rate limit headers · edge-gateway</span>
+                </div>
+              </div>
+              <div style="height: 8px"></div>
+              <div class="oscard passive">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle">Seen on another device</span
+                  ><span class="osbody">Tidy README links · docs-site</span>
+                </div>
+              </div>
+              <p class="osnote">
+                Passive: no sound, no buzz, same collapse id as the alert it replaces. On web and
+                desktop the notification closes and Handled records it; nothing is drawn.
+              </p>
+            </div>
+          </div>
+          <p class="cap">
+            For a killed iOS app only. The title is quieter (medium weight, secondary color) than an
+            alert and uses past-tense words. It can stay in Notification Center until cleared, a
+            platform limit. Handled elsewhere is represented in-app by the handled-elsewhere glyph
+            where a glyph is needed.
+          </p>
+        </article>
+        <article id="N26" class="spec">
+          <div class="spec-label">
+            <span>N26<span class="phase">M1, after Android push</span></span
+            ><span>Android (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">Android notification: content area only</h3>
+          <div class="surface">
+            <div class="osframe">
+              <span class="oslabel">Android notification shade (native chrome not reproduced)</span>
+              <div class="oscard">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle"
+                    >Approval needed<span class="ossys">channel, time: system-drawn</span></span
+                  ><span class="osbody">Fix flaky login test · billing-api</span>
+                </div>
+              </div>
+              <p class="osnote">
+                Specified now; blocked on Android push. Channel names and the small icon are
+                system-drawn and not specified here.
+              </p>
+            </div>
+          </div>
+          <p class="cap">
+            Same title and body as every other surface. Android uses the same four titles and the
+            same replacement titles as iOS (N20).
+          </p>
+        </article>
+        <article id="N27" class="spec">
+          <div class="spec-label">
+            <span>N27<span class="phase">P2, P3</span></span
+            ><span>Desktop (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">Desktop OS notification: content area only</h3>
+          <div class="surface">
+            <div class="osframe">
+              <span class="oslabel"
+                >macOS and Windows notifications (native chrome not reproduced)</span
+              >
+              <div class="oscard mac">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle"
+                    >Thread completed<span class="ossys">app name: system-drawn</span></span
+                  ><span class="osbody">Tidy README links · docs-site</span>
+                </div>
+              </div>
+              <div style="height: 8px"></div>
+              <div class="oscard win11">
+                <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                <div>
+                  <span class="ostitle"
+                    >Thread failed<span class="ossys">app name: system-drawn</span></span
+                  ><span class="osbody">Migrate invoice export · billing-api</span>
+                </div>
+              </div>
+              <p class="osnote">
+                Shown only when the window is not in front. Click raises the window (N29) and lands
+                on the anchor (N14). It closes when its item is cleared.
+              </p>
+            </div>
+          </div>
+          <p class="cap">
+            Content only: title and body with no actions and no error text. Appearance differs by OS
+            and theme and is not ours to style.
+          </p>
+        </article>
+        <article id="N28" class="spec">
+          <div class="spec-label">
+            <span>N28<span class="phase">P1</span></span
+            ><span>Web (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">Browser notification: content area only</h3>
+          <div class="surface">
+            <div class="osframe">
+              <span class="oslabel">Browser notification (native chrome not reproduced)</span>
+              <div class="oscard">
+                <div class="osglyph" aria-hidden="true">site icon</div>
+                <div>
+                  <span class="ostitle"
+                    >Input needed<span class="ossys">site name: browser-drawn</span></span
+                  ><span class="osbody">Add rate limit headers · edge-gateway</span>
+                </div>
+              </div>
+              <p class="osnote">
+                Constructed only when the tab is hidden or unfocused, and never on phone browsers
+                (N23 explains).
+              </p>
+            </div>
+          </div>
+          <p class="cap">Uses one tag per item, so a replacement updates the same notification.</p>
+        </article>
+        <article id="N29" class="spec span2">
+          <div class="spec-label">
+            <span>N29<span class="phase">P2</span></span
+            ><span>Desktop</span>
+          </div>
+          <h3 style="margin-top: 0">Window raise and macOS hide-on-close</h3>
+          <div class="surface">
+            <div class="grid2 grid3">
+              <div>
+                <div class="win" style="height: 120px; border-style: dashed">
+                  <div class="top" style="height: 24px"></div>
+                  <div class="body" style="padding: 8px">
+                    <div class="bar" style="width: 90%"></div>
+                    <div class="bar" style="width: 76%"></div>
+                  </div>
+                </div>
+                <div class="step">1. Window closed: hidden, app still runs</div>
+              </div>
+              <div>
+                <div class="oscard mac">
+                  <div class="osglyph" aria-hidden="true">app icon (OS)</div>
+                  <div>
+                    <span class="ostitle">Approval needed</span
+                    ><span class="osbody">Fix flaky login test · billing-api</span>
+                  </div>
+                </div>
+                <div class="step">2. OS notification (N27)</div>
+              </div>
+              <div>
+                <div class="win" style="height: 120px">
+                  <div class="top" style="height: 24px"></div>
+                  <div class="body" style="padding: 8px">
+                    <div class="bar" style="width: 90%"></div>
+                    <div class="bar" style="width: 76%"></div>
+                  </div>
+                  <div
+                    class="panelcard focus-demo"
+                    style="position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px"
+                  >
+                    <div class="bar" style="width: 60%"></div>
+                  </div>
+                </div>
+                <div class="step">3. Click raises the window and lands (N14)</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            A native behavior, drawn only as three states. Closing the macOS window hides it so
+            alerts keep flowing; a click or dock bounce raises it from the main process. No tray or
+            menu-bar item is added. Not drivable from the web gallery and filed as unverified until
+            run in the real Electron app.
+          </p>
+        </article>
+        <article id="N31" class="spec">
+          <div class="spec-label">
+            <span>N31<span class="phase">P3, P4, M2</span></span
+            ><span>Dock, taskbar, favicon, iOS (OS-owned)</span>
+          </div>
+          <h3 style="margin-top: 0">Badge</h3>
+          <div class="surface">
+            <div class="grid2 grid4">
+              <div class="card" style="text-align: center">
+                <div
+                  style="
+                    position: relative;
+                    width: 56px;
+                    height: 56px;
+                    margin: 12px auto;
+                    border: 1px dashed var(--lines);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    color: var(--sub);
+                    font:
+                      9px ui-monospace,
+                      monospace;
+                  "
+                  aria-hidden="true"
+                >
+                  app icon<span
+                    style="
+                      position: absolute;
+                      top: -8px;
+                      right: -8px;
+                      min-width: 22px;
+                      height: 22px;
+                      border-radius: 11px;
+                      background: var(--ink);
+                      color: var(--bg);
+                      font:
+                        600 12px/22px -apple-system,
+                        sans-serif;
+                      text-align: center;
+                      padding: 0 5px;
+                    "
+                    >3</span
+                  >
+                </div>
+                <strong style="font-size: 12px">Dock</strong>
+              </div>
+              <div class="card" style="text-align: center">
+                <div
+                  style="
+                    position: relative;
+                    width: 56px;
+                    height: 56px;
+                    margin: 12px auto;
+                    border: 1px dashed var(--lines);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    color: var(--sub);
+                    font:
+                      9px ui-monospace,
+                      monospace;
+                  "
+                  aria-hidden="true"
+                >
+                  app icon<span
+                    style="
+                      position: absolute;
+                      top: -8px;
+                      right: -8px;
+                      min-width: 22px;
+                      height: 22px;
+                      border-radius: 11px;
+                      background: var(--ink);
+                      color: var(--bg);
+                      font:
+                        600 12px/22px -apple-system,
+                        sans-serif;
+                      text-align: center;
+                      padding: 0 5px;
+                    "
+                    >3</span
+                  >
+                </div>
+                <strong style="font-size: 12px">Taskbar</strong>
+              </div>
+              <div class="card" style="text-align: center">
+                <div
+                  style="
+                    position: relative;
+                    width: 56px;
+                    height: 56px;
+                    margin: 12px auto;
+                    border: 1px dashed var(--lines);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    color: var(--sub);
+                    font:
+                      9px ui-monospace,
+                      monospace;
+                  "
+                  aria-hidden="true"
+                >
+                  favicon<span
+                    style="
+                      position: absolute;
+                      top: -8px;
+                      right: -8px;
+                      min-width: 22px;
+                      height: 22px;
+                      border-radius: 11px;
+                      background: var(--ink);
+                      color: var(--bg);
+                      font:
+                        600 12px/22px -apple-system,
+                        sans-serif;
+                      text-align: center;
+                      padding: 0 5px;
+                    "
+                    >3</span
+                  >
+                </div>
+                <strong style="font-size: 12px">Tab favicon</strong>
+              </div>
+              <div class="card" style="text-align: center">
+                <div
+                  style="
+                    position: relative;
+                    width: 56px;
+                    height: 56px;
+                    margin: 12px auto;
+                    border: 1px dashed var(--lines);
+                    border-radius: 14px;
+                    display: grid;
+                    place-items: center;
+                    color: var(--sub);
+                    font:
+                      9px ui-monospace,
+                      monospace;
+                  "
+                  aria-hidden="true"
+                >
+                  app icon<span
+                    style="
+                      position: absolute;
+                      top: -8px;
+                      right: -8px;
+                      min-width: 22px;
+                      height: 22px;
+                      border-radius: 11px;
+                      background: var(--ink);
+                      color: var(--bg);
+                      font:
+                        600 12px/22px -apple-system,
+                        sans-serif;
+                      text-align: center;
+                      padding: 0 5px;
+                    "
+                    >3</span
+                  >
+                </div>
+                <strong style="font-size: 12px">iOS icon</strong>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            A plain number of threads with an open item. Badge shape and color are OS-owned (neutral
+            here); only the number is ours. It is never the only signal: the toast, the New mark,
+            and Needs me carry the same fact. The badge counts open items; the Needs me count also
+            includes seen-but-unanswered approvals, so the two numbers can differ (see conflicts).
+          </p>
+        </article>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="g-mobile">
+      <h2 id="g-mobile">Mobile: iPhone and iPad</h2>
+      <p class="muted">
+        390 pt reference with 44 pt targets, plus a reduced-scale iPad detail pane.
+      </p>
+      <div class="grid">
+        <article id="N07" class="spec span2">
+          <div class="spec-label">
+            <span>N07<span class="phase">P1, P4</span></span
+            ><span>iPhone, iPad, Android</span>
+          </div>
+          <h3 style="margin-top: 0">Mobile foreground toast</h3>
+          <div class="surface">
+            <div class="pair">
+              <div class="phone">
+                <div class="hdr">
+                  <button type="button" class="ibtn" aria-label="Back to threads">
+                    <svg class="ic" aria-hidden="true" focusable="false">
+                      <use href="#i-back" />
+                    </svg>
+                  </button>
+                  <h4>Fix flaky login test</h4>
+                  <span style="width: 44px"></span>
+                </div>
+                <div class="pbody">
+                  <div class="ptoast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <span class="kind k-approval" style="margin-top: 2px"
+                      ><svg class="ic s24" aria-hidden="true" focusable="false">
+                        <use href="#i-approval" /></svg
+                    ></span>
+                    <div class="tbody">
+                      <strong class="ttl">Approval needed</strong
+                      ><span class="tsub">Fix flaky login test · billing-api</span>
+                      <div class="tact">
+                        <button type="button">Open</button><button type="button">Dismiss</button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="hide"
+                      aria-label="Hide notification"
+                      title="Hide. It stays in Needs me."
+                    >
+                      <svg class="ic" aria-hidden="true" focusable="false"><use href="#i-x" /></svg>
+                    </button>
+                  </div>
+                  <div class="bar" style="width: 76%"></div>
+                  <div class="bar" style="width: 84%"></div>
+                  <div class="bar" style="width: 58%"></div>
+                  <div class="bar" style="width: 88%"></div>
+                  <div class="bar" style="width: 66%"></div>
+                </div>
+                <div class="pcomposer"><span>Message</span></div>
+              </div>
+              <div>
+                <div class="ipad">
+                  <div class="side">
+                    <div class="sbhead"><span>Threads</span></div>
+                    <div class="prow" style="padding: 6px 12px; min-height: 44px">
+                      <div class="grow">
+                        <strong style="font-size: 13px">Fix flaky login test</strong>
+                      </div>
+                    </div>
+                    <div class="prow" style="padding: 6px 12px; min-height: 44px">
+                      <div class="grow">
+                        <strong style="font-size: 13px">Add rate limit headers</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="detail">
+                    <div
+                      class="hdr"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        padding: 6px 12px;
+                        min-height: 48px;
+                        border-bottom: 1px solid var(--line);
+                        background: var(--panel);
+                      "
+                    >
+                      <strong style="flex: 1; text-align: center">Add rate limit headers</strong>
+                    </div>
+                    <div
+                      class="pbody"
+                      style="
+                        padding: 14px 16px;
+                        display: grid;
+                        gap: 8px;
+                        align-content: start;
+                        flex: 1;
+                        position: relative;
+                      "
+                    >
+                      <div class="ptoast" role="alert" aria-live="assertive" aria-atomic="true">
+                        <span class="kind k-approval" style="margin-top: 2px"
+                          ><svg class="ic s24" aria-hidden="true" focusable="false">
+                            <use href="#i-approval" /></svg
+                        ></span>
+                        <div class="tbody">
+                          <strong class="ttl">Approval needed</strong
+                          ><span class="tsub">Fix flaky login test · billing-api</span>
+                          <div class="tact">
+                            <button type="button">Open</button
+                            ><button type="button">Dismiss</button>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          class="hide"
+                          aria-label="Hide notification"
+                          title="Hide. It stays in Needs me."
+                        >
+                          <svg class="ic" aria-hidden="true" focusable="false">
+                            <use href="#i-x" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div style="height: 78px"></div>
+                      <div class="bar" style="width: 90%"></div>
+                      <div class="bar" style="width: 76%"></div>
+                      <div class="bar" style="width: 84%"></div>
+                      <div class="bar" style="width: 58%"></div>
+                    </div>
+                    <div
+                      class="pcomposer"
+                      style="
+                        margin: 0 12px 14px;
+                        border: 1px solid var(--lines);
+                        border-radius: 22px;
+                        min-height: 44px;
+                        padding: 10px 16px;
+                        color: var(--sub);
+                        background: var(--panel);
+                      "
+                    >
+                      Message
+                    </div>
+                  </div>
+                </div>
+                <p class="scale-note">
+                  iPad detail pane drawn at reduced scale; production uses the real split view
+                </p>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            Top of the screen under the header, never over the composer; silent, no haptic, and no
+            OS banner while the app is foreground. One element with custom actions Open, Dismiss,
+            and Hide (swipe up hides; a 44 pt Hide control is also visible). Dynamic Type grows it
+            vertically and wraps actions below; body truncates at 3 lines with the full text in the
+            accessible name. A new component: mobile has no toast today.
+          </p>
+        </article>
+        <article id="N09" class="spec span2">
+          <div class="spec-label">
+            <span>N09<span class="phase">P4</span></span
+            ><span>iPhone, iPad, Android</span>
+          </div>
+          <h3 style="margin-top: 0">Needs me filter and count, thread list</h3>
+          <div class="surface">
+            <div class="pair">
+              <div class="phone">
+                <div class="hdr">
+                  <span style="width: 44px"></span>
+                  <h4>Threads</h4>
+                  <span style="width: 44px"></span>
+                </div>
+                <div class="pbody">
+                  <div style="padding: 8px 12px; display: flex; gap: 8px">
+                    <button type="button" class="chip" aria-pressed="true">
+                      Needs me <span class="cnt">3</span>
+                    </button>
+                  </div>
+                  <div class="prow">
+                    <div class="grow">
+                      <strong>Fix flaky login test</strong><small>billing-api</small>
+                    </div>
+                    <span class="lab k-approval">Approval</span><span class="tag">New</span>
+                  </div>
+                  <div class="prow">
+                    <div class="grow">
+                      <strong>Add rate limit headers</strong><small>edge-gateway</small>
+                    </div>
+                    <span class="lab k-input">Input</span><span class="tag">New</span>
+                  </div>
+                  <div class="prow">
+                    <div class="grow">
+                      <strong>Migrate invoice export</strong><small>billing-api</small>
+                    </div>
+                    <span class="lab k-failed">Failed</span><span class="tag">New</span>
+                  </div>
+                  <div class="prow">
+                    <div class="grow">
+                      <strong>Tidy README links</strong><small>docs-site</small>
+                    </div>
+                    <span class="lab k-completed">Completed</span><span class="tag">New</span>
+                  </div>
+                  <div class="prow">
+                    <div class="grow">
+                      <strong>Upgrade date library</strong><small>docs-site</small>
+                    </div>
+                    <span class="muted">2:14 PM</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="menu" style="width: 240px">
+                  <div class="hl">Needs me</div>
+                  <hr />
+                  <div>Existing filters, unchanged</div>
+                </div>
+                <p class="muted" style="max-width: 34ch">
+                  The same <b>Needs me</b> item sits at the top of the filter menu (iPad: the
+                  sidebar filter), and as the chip above the list.
+                </p>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            A chip with the count as plain text, visible only while something needs me or the filter
+            is on. Rows keep the existing short mobile labels (Approval, Input, Failed) and gain
+            <b>Completed</b> and the <b>New</b> text mark (N10, mobile). The row has one trailing
+            slot, so Completed should appear only while New (see conflicts).
+          </p>
+        </article>
+        <article id="N30" class="spec span2">
+          <div class="spec-label">
+            <span>N30<span class="phase">P2, M2</span></span
+            ><span>iPhone, iPad, Android</span>
+          </div>
+          <h3 style="margin-top: 0">Cold-start tap</h3>
+          <div class="surface">
+            <div class="minis">
+              <div>
+                <div class="phone mini">
+                  <div class="hdr">
+                    <span style="width: 44px"></span>
+                    <h4>T3 Code</h4>
+                    <span style="width: 44px"></span>
+                  </div>
+                  <div class="pbody">
+                    <div
+                      style="display: grid; place-items: center; height: 240px; color: var(--sub)"
+                    >
+                      <div class="osglyph" style="border-color: var(--lines); color: var(--sub)">
+                        existing launch screen
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="step">1. Tap launches the app; target queued</div>
+              </div>
+              <div>
+                <div class="phone mini">
+                  <div class="hdr">
+                    <button type="button" class="ibtn" aria-label="Back to threads">
+                      <svg class="ic" aria-hidden="true" focusable="false">
+                        <use href="#i-back" />
+                      </svg>
+                    </button>
+                    <h4>Fix flaky login test</h4>
+                    <span style="width: 44px"></span>
+                  </div>
+                  <div class="pbody">
+                    <div class="bar" style="width: 90%"></div>
+                    <div class="bar" style="width: 76%"></div>
+                    <div class="bar" style="width: 84%"></div>
+                    <div class="panelcard focus-demo" style="margin-top: 8px">
+                      <strong style="font-size: 12px">Existing approval panel</strong>
+                    </div>
+                  </div>
+                </div>
+                <div class="step">2. Ready: lands once, on the anchor (N14)</div>
+              </div>
+              <div>
+                <div class="phone mini">
+                  <div class="hdr">
+                    <span style="width: 44px"></span>
+                    <h4>Threads</h4>
+                    <span style="width: 44px"></span>
+                  </div>
+                  <div class="pbody">
+                    <div class="empty" style="padding: 8px 0">
+                      <svg class="ic s32" aria-hidden="true" focusable="false">
+                        <use href="#i-unavailable" />
+                      </svg>
+                      <h4>
+                        Can't reach Studio right now. This notification opens when the connection is
+                        back.
+                      </h4>
+                      <div class="actions">
+                        <button type="button" class="primary">Retry</button
+                        ><button type="button">Back to threads</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="step">3. Or no connection: N17, tap kept</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap">
+            The existing launch screen shows while the target waits for navigation and the
+            environment connection. If the connection never comes up, N17 appears with Retry; the
+            tap is not lost. No new loading graphic and no spinner is added.
+          </p>
+        </article>
+      </div>
+    </section>
+    <p id="demo-status" role="status" aria-live="polite" style="padding: 8px 5vw 32px; margin: 0">
+      Illustrative: no real changes occurred.
+    </p>
+    <script>
+      const b = document.body;
+      const theme = document.getElementById("theme");
+      theme.addEventListener("click", () => {
+        const dark = b.dataset.theme !== "dark";
+        b.dataset.theme = dark ? "dark" : "light";
+        theme.setAttribute("aria-pressed", String(dark));
+        theme.textContent = dark ? "Light appearance" : "Dark appearance";
+      });
+      const profile = document.getElementById("profile");
+      profile.addEventListener("click", () => {
+        const warm = b.dataset.profile !== "warm";
+        b.dataset.profile = warm ? "warm" : "upstream";
+        profile.setAttribute("aria-checked", String(warm));
+      });
+      document.querySelectorAll(".surface button").forEach((el) =>
+        el.addEventListener("click", () => {
+          const name = el.getAttribute("aria-label") || el.textContent.trim();
+          document.getElementById("demo-status").textContent =
+            "Illustrative: no real changes occurred (" + name + ").";
+        }),
+      );
+    </script>
+  </body>
+</html>

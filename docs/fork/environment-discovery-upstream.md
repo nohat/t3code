@@ -5,6 +5,16 @@ PR, or other write was made for this research. This page supports
 [the integration proposal](./environment-discovery.md); it does not activate
 implementation or authorize an upstream submission.
 
+> **Update 2026-10-05.** The notifications strategist re-read upstream and
+> reported drift from this page; verify each at U0 before relying on it: upstream
+> main is now `e22c880434`; the triage exemption list has six logins, not three
+> (`bmdavis419`, `markflorkowski`, `Yash-Singh1` added); the V2 rewrite (#2829,
+> 2026-10-02) is the actual reason legacy-file PRs such as #12675 were closed;
+> #15467 made routes multi-valued, so the single-profile statement is stale;
+> and #15468 frames LAN use as "pair once through T3 Connect", which an Ideas
+> draft should answer directly. The comparison with notifications as a first
+> contribution is in [notifications-upstream.md](./notifications-upstream.md).
+
 ## Offer a small product improvement
 
 The upstream offer is: **a new device can find an explicitly advertised nearby
