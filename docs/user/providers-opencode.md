@@ -53,9 +53,8 @@ does not stop the whole turn.
 
 After changing an OpenCode login or configuration, use **Refresh provider status**
 in **Settings > Providers** for that environment. On mobile, use **Refresh models**
-in the thread settings. Reconnecting also refreshes the catalog. A local server is
-re-probed when provider settings change and on the provider health interval; an
-external server is not polled, so refresh it from Settings.
+in the thread settings. Reconnecting also refreshes the catalog; periodic provider
+health checks do not.
 
 Credential changes are read on refresh. Native OpenCode configuration can remain
 cached while the local helper is running. Let it sit for 30 seconds without model
