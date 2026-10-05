@@ -75,6 +75,18 @@ Recommendation: start with option 1 to stop the bleeding, and spike option 2 onl
 
 Stage 4 does not depend on the others and can be prototyped sooner in the existing dev client.
 
+## Traps in the iPad feed (learned 2026-10-04, #17)
+
+The feed is `ThreadFeed` over `KeyboardAwareLegendList`, which wraps react-native-keyboard-controller's `KeyboardChatScrollView`. Read this before touching scroll behavior, inset handling, or the floating status control.
+
+- **Never write the native `contentOffset` through animated props.** The keyboard controller did exactly that for composer-height changes and keyboard events (`contentOffsetY`), which left a stale offset on the native scroll view that the next React commit of the list reset to 0. On a long thread the reader landed at the top on their first touch after opening or returning to it. `patches/react-native-keyboard-controller@1.22.4.patch` makes both shifts imperative `scrollTo`, and `apps/mobile/src/lib/keyboardControllerPatch.test.ts` fails if a version bump drops it. After a bump, check whether upstream fixed it before re-patching, and re-run that test.
+- **Metro bundles a package's `src/` when its `react-native` field points there.** The keyboard controller does, so a patch that only edits `lib/` does nothing in the app. Patch `src/` and `lib/`, and confirm by effect (the test, or a string from the patch in the built bundle). A fix test that edits the wrong directory reads as a failed fix.
+- **Anything that changes the composer overlay height is a trigger,** because it feeds the keyboard controller's `extraContentPadding`: the floating status control, the connection and sync-stall pills (the fork's retry pill and longer failure text added more of these), the scroll-to-end button, and a growing draft. A new pill or an animated height needs a long-thread check at the end of the feed.
+- **The signature:** the offset goes to exactly 0 (or the header-inset top, -86) in one scroll event, with no JS `scrollTo` or `scrollToEnd` call, no remount, and no content-size change. It follows a composer-height change or a keyboard event, and it fires on the next touch or re-render.
+- **Wrong leads, already ruled out by repeated runs:** `initialScrollAtEnd`, `maintainScrollAtEnd`, `alignItemsAtEnd`, toggling `maintainVisibleContentPosition` at drag start, a list remount, and LegendList's end-target correction. An ablation that looked clean in 4 of 5 runs (`initialScrollAtEnd` off) was noise.
+- **Not established:** whether the stack before upstream's Expo 58, React Native 0.88 RC, Reanimated 4.7, and keyboard controller 1.22.4 upgrade (2026-10-01) had the bug, and whether upstream `main` has it today. The write itself existed in 1.21.13.
+- **Not separately measured:** keyboard open and close at the end of a long thread (the simulator's accessibility runner hangs on `press` against this screen), wobble of the composer-height animation, and a live stream while scrolling. #17 was closed on use, 2026-10-04, after about 20 minutes on the iPad with no jump.
+
 ## Risks to watch
 
 - **Upstream mobile direction.** A separate SwiftUI client is in TestFlight beside the React Native app (upstream issue #13994). If upstream moves, my mobile footprint should be small and additive so a merge does not break it.
