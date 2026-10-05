@@ -444,6 +444,13 @@ function makeOpenCodeReplayRuntimeLayer(transcript: OpenCodeSdkReplayTranscript)
               detail: "OpenCode replay does not load skills.",
             }),
           ),
+        loadOpenCodeAgents: () =>
+          Effect.fail(
+            new OpenCodeRuntime.OpenCodeRuntimeError({
+              operation: "loadOpenCodeAgents",
+              detail: "OpenCode replay does not load agents.",
+            }),
+          ),
         loadSkillsFromCli: () =>
           Effect.fail(
             new OpenCodeRuntime.OpenCodeRuntimeError({

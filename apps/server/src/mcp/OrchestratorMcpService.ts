@@ -73,6 +73,7 @@ import * as ThreadManagementService from "../orchestration-v2/ThreadManagementSe
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as OrchestratorModelHints from "./OrchestratorModelHints.ts";
 import {
   type McpInvocationScope,
   type McpThreadInvocationScope,
@@ -769,6 +770,8 @@ const make = Effect.gen(function* () {
   const providerAdapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   const projects = yield* ProjectService.ProjectService;
+  // Fork: optional so suites without usage or SQL still build; McpHttpServer provides it.
+  const modelHints = yield* Effect.serviceOption(OrchestratorModelHints.OrchestratorModelHints);
 
   /** A caller-named project, which must exist before anything is recorded against it. */
   const requireProject = (projectId: ProjectId) =>
@@ -1461,6 +1464,7 @@ const make = Effect.gen(function* () {
         const { parent, limits } = yield* loadCaller(scope);
         const providers = yield* loadProviders;
         const orchestrationCapableInstanceIds = yield* loadOrchestrationCapableInstanceIds();
+        const hints = Option.isSome(modelHints) ? yield* modelHints.value.read : null;
         return {
           parentThreadId: parent?.thread.id ?? null,
           inheritedProviderInstanceId: parent?.thread.modelSelection.instanceId ?? null,
@@ -1483,6 +1487,7 @@ const make = Effect.gen(function* () {
                   ...(model.capabilities?.optionDescriptors === undefined
                     ? {}
                     : { options: model.capabilities.optionDescriptors }),
+                  ...OrchestratorModelHints.modelHintFields(hints, provider.instanceId, model),
                 })) ?? [],
               canRunChildTask: constraints.length === 0,
               canRunCrossProviderChildTask: constraints.length === 0,

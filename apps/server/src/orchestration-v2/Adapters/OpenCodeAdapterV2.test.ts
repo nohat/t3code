@@ -2419,6 +2419,7 @@ describe("OpenCodeAdapterV2", () => {
         loadOpenCodeInventory: unused("loadOpenCodeInventory"),
         loadInventoryFromCli: unused("loadInventoryFromCli"),
         loadOpenCodeSkills: unused("loadOpenCodeSkills"),
+        loadOpenCodeAgents: unused("loadOpenCodeAgents"),
         loadSkillsFromCli: unused("loadSkillsFromCli"),
       };
       const instanceId = ProviderInstanceId.make("opencode");

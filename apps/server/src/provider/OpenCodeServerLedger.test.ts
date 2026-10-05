@@ -217,6 +217,7 @@ describe.skipIf(observedPlatforms.length === 0)("OpenCode server startup", () =>
                   yield* Deferred.succeed(recording, server.pid);
                   return yield* Effect.never;
                 }),
+              trackedCount: Effect.succeed(0),
             }),
           ),
         ),

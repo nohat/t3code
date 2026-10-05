@@ -92,6 +92,7 @@ import {
   groupByProvider,
   isModelSelectionUnavailable,
 } from "../../lib/modelOptions";
+import { resolveProviderModelsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
@@ -651,9 +652,25 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   const lockedProviderInstanceId = props.canSwitchProvider
     ? undefined
     : currentModelSelection.instanceId;
+  // Directory-scoped agents (e.g. a project's `.opencode/agents` primaries)
+  // arrive on the workspace snapshot — resolve them here so the mobile
+  // agent picker offers the same roster as the thread directory.
+  const scopedServerConfig = useMemo(() => {
+    if (!props.serverConfig || !props.projectCwd) {
+      return props.serverConfig;
+    }
+    const cwd = props.projectCwd;
+    return {
+      ...props.serverConfig,
+      providers: props.serverConfig.providers.map((provider) => ({
+        ...provider,
+        models: resolveProviderModelsForCwd(provider, cwd),
+      })),
+    };
+  }, [props.serverConfig, props.projectCwd]);
   const modelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, currentModelSelection, lockedProviderInstanceId),
-    [props.serverConfig, currentModelSelection, lockedProviderInstanceId],
+    () => buildModelOptions(scopedServerConfig, currentModelSelection, lockedProviderInstanceId),
+    [scopedServerConfig, currentModelSelection, lockedProviderInstanceId],
   );
   const threadProviderGroups = useMemo(() => groupByProvider(modelOptions), [modelOptions]);
   const currentModelOption =

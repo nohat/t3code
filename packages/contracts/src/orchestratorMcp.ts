@@ -36,6 +36,7 @@ import {
   ProviderOptionSelectionValue,
 } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { ServerProviderModelPricing } from "./server.ts";
 
 const OrchestratorMcpPrompt = TrimmedNonEmptyString.check(Schema.isMaxLength(120_000)).annotate({
   description: "Complete task or message text for the target agent.",
@@ -475,6 +476,10 @@ export const OrchestratorMcpProviderCapability = Schema.Struct({
       label: Schema.NullOr(Schema.String),
       /** Model options a target may select (for example reasoning effort). */
       options: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
+      /** Fork: estimated USD rates per million tokens; absent when the model is unpriced. */
+      pricing: Schema.optional(ServerProviderModelPricing),
+      /** Fork: threads that ran this model in the last 14 days. */
+      recentThreadCount: Schema.optional(NonNegativeInt),
     }),
   ),
   canRunChildTask: Schema.Boolean,

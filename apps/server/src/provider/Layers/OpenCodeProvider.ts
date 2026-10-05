@@ -194,6 +194,69 @@ const DEFAULT_OPENCODE_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabi
   ],
 });
 
+function openCodeAgentOptions(agents: ReadonlyArray<Agent>): {
+  readonly agentOptions: ReadonlyArray<{ id: string; label: string; isDefault?: true }>;
+  readonly defaultAgent: string | undefined;
+} {
+  const primaryAgents = agents.filter(
+    (agent) => !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
+  );
+  const defaultAgent = inferDefaultAgent(primaryAgents);
+  const agentOptions = primaryAgents.map((agent) =>
+    defaultAgent === agent.name
+      ? { id: agent.name, label: titleCaseSlug(agent.name), isDefault: true as const }
+      : { id: agent.name, label: titleCaseSlug(agent.name) },
+  );
+  return { agentOptions, defaultAgent };
+}
+
+/**
+ * Re-scopes each model's `agent` option descriptor to a directory-scoped
+ * agent roster (e.g. one that includes project `.opencode/agents`
+ * definitions). An empty roster means the scoped lookup failed, so the base
+ * model's options are kept instead of wiped.
+ */
+export function openCodeModelsWithAgents(
+  models: ReadonlyArray<ServerProviderModel>,
+  agents: ReadonlyArray<Agent>,
+): ReadonlyArray<ServerProviderModel> {
+  if (agents.length === 0) {
+    return models;
+  }
+  const { agentOptions, defaultAgent } = openCodeAgentOptions(agents);
+  if (agentOptions.length === 0) {
+    return models;
+  }
+  return models.map((model) => {
+    const descriptors = model.capabilities?.optionDescriptors;
+    if (!descriptors) {
+      return model;
+    }
+    let replaced = false;
+    const nextDescriptors = descriptors.map((descriptor) => {
+      if (descriptor.id !== "agent" || descriptor.type !== "select") {
+        return descriptor;
+      }
+      replaced = true;
+      return {
+        ...descriptor,
+        options: [...agentOptions],
+        ...(defaultAgent ? { currentValue: defaultAgent } : {}),
+      };
+    });
+    if (!replaced) {
+      return model;
+    }
+    return {
+      ...model,
+      capabilities: {
+        ...model.capabilities,
+        optionDescriptors: nextDescriptors,
+      },
+    };
+  });
+}
+
 function openCodeCapabilitiesForModel(input: {
   readonly providerID: string;
   readonly model: ProviderListResponse["all"][number]["models"][string];
@@ -213,15 +276,7 @@ function openCodeCapabilitiesForModel(input: {
       ? { id: value, label: titleCaseSlug(value), isDefault: true as const }
       : { id: value, label: titleCaseSlug(value) },
   );
-  const primaryAgents = input.agents.filter(
-    (agent) => !agent.hidden && (agent.mode === "primary" || agent.mode === "all"),
-  );
-  const defaultAgent = inferDefaultAgent(primaryAgents);
-  const agentOptions = primaryAgents.map((agent) =>
-    defaultAgent === agent.name
-      ? { id: agent.name, label: titleCaseSlug(agent.name), isDefault: true as const }
-      : { id: agent.name, label: titleCaseSlug(agent.name) },
-  );
+  const { agentOptions, defaultAgent } = openCodeAgentOptions(input.agents);
   return createModelCapabilities({
     optionDescriptors: [
       ...(variantOptions.length > 0

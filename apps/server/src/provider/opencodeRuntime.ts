@@ -34,6 +34,7 @@ import { signalProcessGroup } from "../process/processGroup.ts";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
 import * as OpenCodeServerLedger from "./OpenCodeServerLedger.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
+import { retryOpenCodeServerStart } from "./opencodeServerStartRetry.ts";
 import * as NetService from "@t3tools/shared/Net";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
@@ -668,7 +669,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       throwOnError: true,
     });
 
-  const startOpenCodeServerProcess: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (input) =>
+  const startOpenCodeServerProcessOnce: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (
+    input,
+  ) =>
     Effect.gen(function* () {
       // Bind this server's lifetime to the caller's scope. When the caller's
       // scope closes, the spawned child is killed and all associated fibers
@@ -873,6 +876,13 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           Effect.orElseSucceed(() => 0),
         ),
       } satisfies OpenCodeServerProcess;
+    });
+
+  const startOpenCodeServerProcess: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (input) =>
+    retryOpenCodeServerStart(startOpenCodeServerProcessOnce(input), {
+      trackedServers: serverLedger.trackedCount,
+      withDetail: (error, detail) =>
+        new OpenCodeRuntimeError({ operation: error.operation, detail, cause: error.cause }),
     });
 
   const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {

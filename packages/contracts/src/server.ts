@@ -173,9 +173,9 @@ export const ServerProviderWorkspaceSnapshot = Schema.Struct({
   /** Skills are available, but command discovery still needs a retry. */
   slashCommandsPending: Schema.optional(Schema.Boolean),
   skills: Schema.Array(ServerProviderSkill),
-  agents: Schema.Array(ServerProviderWorkspaceAgent).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  // Absent when the driver has no directory-scoped roster (every driver but
+  // OpenCode 1.x); clients then keep the base models' agent options.
+  agents: Schema.optional(Schema.Array(ServerProviderWorkspaceAgent)),
   agentCurrentValue: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderWorkspaceSnapshot = typeof ServerProviderWorkspaceSnapshot.Type;

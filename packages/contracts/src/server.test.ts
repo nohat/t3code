@@ -201,10 +201,10 @@ describe("ServerProviderWorkspaceSnapshot.agents", () => {
     skills: [],
   };
 
-  it("defaults agents for snapshots written before the roster field", () => {
+  it("leaves agents absent for snapshots without a roster", () => {
     const parsed = decodeWorkspaceSnapshot(baseSnapshot);
 
-    expect(parsed.agents).toEqual([]);
+    expect(parsed.agents).toBeUndefined();
     expect(parsed.agentCurrentValue).toBeUndefined();
   });
 
