@@ -13,6 +13,47 @@ import {
 } from "./modelOptions";
 
 describe("mobile model options", () => {
+  it("preserves server prices and full names through grouping and selected-model resolution", () => {
+    const pricing = {
+      inputCostPerMillionTokens: 3,
+      outputCostPerMillionTokens: 15,
+      cacheReadCostPerMillionTokens: 0.3,
+      cacheWriteCostPerMillionTokens: 3.75,
+      costSource: "modelPriced",
+    };
+    const config = {
+      providers: [
+        {
+          instanceId: "claude",
+          driver: "claudeAgent",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [
+            {
+              slug: "long-model",
+              name: "A very long full model name that must remain visible",
+              shortName: "Short",
+              capabilities: null,
+              pricing,
+            },
+            { slug: "unknown", name: "Unknown", capabilities: null },
+          ],
+        },
+      ],
+    } as unknown as ServerConfig;
+    const selection = { instanceId: ProviderInstanceId.make("claude"), model: "long-model" };
+    const options = buildModelOptions(config, selection);
+    expect(options[0]).toMatchObject({
+      label: "A very long full model name that must remain visible",
+      pricing,
+      selection,
+    });
+    expect(options[1]?.pricing).toBeUndefined();
+    expect(groupByProvider(options)[0]?.models[0]?.pricing).toEqual(pricing);
+    expect(buildModelOptions(null, selection)[0]?.pricing).toBeUndefined();
+  });
+
   it("groups models by provider and flags legacy entries", () => {
     const config = {
       providers: [

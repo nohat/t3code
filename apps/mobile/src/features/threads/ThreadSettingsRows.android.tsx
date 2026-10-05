@@ -10,7 +10,6 @@ export function ModelRow(props: ModelRowProps) {
   return (
     <ModelRowContent
       {...props}
-      labelNumberOfLines={2}
       minimumHeight={56}
       selectedClassName={props.selected ? "bg-secondary" : undefined}
       leadingSelection={<MaterialRadioIndicator selected={props.selected} />}

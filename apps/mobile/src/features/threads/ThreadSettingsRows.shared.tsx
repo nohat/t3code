@@ -1,3 +1,5 @@
+import type { ModelCostDisplay } from "@t3tools/contracts/settings";
+import { modelPricingLines } from "../../lib/modelPricing";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { AppText as Text } from "../../components/AppText";
@@ -7,6 +9,7 @@ import type { ModelOption } from "../../lib/modelOptions";
 
 export type ModelRowProps = {
   readonly option: ModelOption;
+  readonly pricingDisplay?: ModelCostDisplay;
   readonly selected: boolean;
   readonly onPress: () => void;
   readonly isFavorite: boolean;
@@ -33,10 +36,10 @@ type RowSelectionProps = {
 export function ModelRowContent(
   props: ModelRowProps &
     RowSelectionProps & {
-      readonly labelNumberOfLines: number;
       readonly selectedClassName?: string;
     },
 ) {
+  const pricingLines = modelPricingLines(props.option.pricing, props.pricingDisplay);
   return (
     <View
       style={props.minimumHeight === undefined ? undefined : { minHeight: props.minimumHeight }}
@@ -48,7 +51,9 @@ export function ModelRowContent(
       )}
     >
       <Pressable
-        accessibilityLabel={[props.option.label, props.option.subtitle].filter(Boolean).join(", ")}
+        accessibilityLabel={[props.option.label, props.option.subtitle, ...pricingLines]
+          .filter(Boolean)
+          .join(", ")}
         accessibilityRole="radio"
         accessibilityState={{
           checked: props.selected,
@@ -59,36 +64,33 @@ export function ModelRowContent(
         onPress={props.onPress}
       >
         {props.leadingSelection}
-        <View className="min-w-0 flex-1">
-          <View className="flex-row items-center gap-2">
-            <Text
-              className="min-w-0 shrink text-base font-t3-medium text-foreground"
-              numberOfLines={props.labelNumberOfLines}
-            >
-              {props.option.label}
-            </Text>
-            {props.option.isDefault ? (
-              <View className="rounded-md bg-subtle-strong px-1.5 py-0.5">
-                <Text className="text-3xs font-t3-bold text-foreground-muted">Default</Text>
-              </View>
-            ) : null}
-            {props.option.isLegacy ? (
-              <View className="rounded-md bg-subtle px-1.5 py-0.5">
-                <Text className="text-3xs font-t3-bold text-foreground-muted">Legacy</Text>
-              </View>
-            ) : null}
-            {props.option.isUnavailable ? (
-              <Text className="text-xs text-foreground">Unavailable</Text>
-            ) : null}
-          </View>
-          {props.option.subtitle ? (
-            <Text
-              className="text-xs text-foreground-muted"
-              numberOfLines={props.labelNumberOfLines}
-            >
-              {props.option.subtitle}
-            </Text>
+        <View className="min-w-0 flex-1 gap-1 py-3">
+          <Text className="text-base font-t3-medium text-foreground">{props.option.label}</Text>
+          {props.option.isDefault || props.option.isLegacy || props.option.isUnavailable ? (
+            <View className="flex-row flex-wrap items-center gap-2">
+              {props.option.isDefault ? (
+                <View className="rounded-md bg-subtle-strong px-1.5 py-0.5">
+                  <Text className="text-3xs font-t3-bold text-foreground-muted">Default</Text>
+                </View>
+              ) : null}
+              {props.option.isLegacy ? (
+                <View className="rounded-md bg-subtle px-1.5 py-0.5">
+                  <Text className="text-3xs font-t3-bold text-foreground-muted">Legacy</Text>
+                </View>
+              ) : null}
+              {props.option.isUnavailable ? (
+                <Text className="text-xs text-foreground">Unavailable</Text>
+              ) : null}
+            </View>
           ) : null}
+          {props.option.subtitle ? (
+            <Text className="text-xs text-foreground-muted">{props.option.subtitle}</Text>
+          ) : null}
+          {pricingLines.map((line) => (
+            <Text key={line} className="text-xs text-foreground-muted">
+              {line}
+            </Text>
+          ))}
         </View>
         {props.trailingSelection}
       </Pressable>

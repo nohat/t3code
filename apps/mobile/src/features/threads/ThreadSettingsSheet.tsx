@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL_COST_DISPLAY, type ModelCostDisplay } from "@t3tools/contracts/settings";
+import { ModelPricingDisplayControl } from "./ModelPricingDisplayControl";
 import type {
   EnvironmentId,
   ModelSelection,
@@ -305,6 +307,8 @@ type ThreadSettingsSessionValue = {
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly favoriteKeys: ReadonlySet<string>;
   readonly favoritesLoaded: boolean;
+  readonly modelCostDisplay: ModelCostDisplay;
+  readonly setModelCostDisplay: (display: ModelCostDisplay) => void;
   readonly toggleFavorite: (option: ModelOption) => void;
   readonly runtimeMode: RuntimeMode;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
@@ -339,6 +343,13 @@ function ThreadSettingsSessionProvider(
   const modelFavorites = favoritesLoaded
     ? (preferences.value.modelFavorites ?? EMPTY_MODEL_FAVORITES)
     : EMPTY_MODEL_FAVORITES;
+  const modelCostDisplay = favoritesLoaded
+    ? (preferences.value.modelCostDisplay ?? DEFAULT_MODEL_COST_DISPLAY)
+    : DEFAULT_MODEL_COST_DISPLAY;
+  const setModelCostDisplay = useCallback(
+    (display: ModelCostDisplay) => savePreferences({ modelCostDisplay: display }),
+    [savePreferences],
+  );
   const favoriteKeys = useMemo(
     () =>
       new Set(
@@ -511,6 +522,8 @@ function ThreadSettingsSessionProvider(
       displayedDescriptors,
       favoriteKeys,
       favoritesLoaded,
+      modelCostDisplay,
+      setModelCostDisplay,
       providerExpansionOverrides,
       hasLegacyModels,
       pendingModel,
@@ -536,6 +549,8 @@ function ThreadSettingsSessionProvider(
       displayedDescriptors,
       favoriteKeys,
       favoritesLoaded,
+      modelCostDisplay,
+      setModelCostDisplay,
       providerExpansionOverrides,
       hasLegacyModels,
       isApplied,
@@ -632,6 +647,7 @@ function ThreadSettingsModelListRow(props: {
       isFavorite={session.favoriteKeys.has(props.option.key)}
       favoritesLoaded={session.favoritesLoaded}
       onToggleFavorite={() => session.toggleFavorite(props.option)}
+      pricingDisplay={session.modelCostDisplay}
       option={props.option}
       selected={session.isDisplayed(props.option)}
     />
@@ -963,7 +979,7 @@ function ThreadSettingsMainContent(props: {
       contentContainerStyle={{ paddingTop: 4 }}
       contentInsetAdjustmentBehavior="automatic"
       data={listItems}
-      estimatedItemSize={Platform.OS === "android" ? 56 : 48}
+      estimatedItemSize={100}
       extraData={animationsReady}
       getItemType={(item) => item.kind}
       itemLayoutAnimation={THREAD_SETTINGS_CATALOG_LAYOUT_TRANSITION}
@@ -973,6 +989,10 @@ function ThreadSettingsMainContent(props: {
       maintainVisibleContentPosition={THREAD_SETTINGS_MAINTAIN_VISIBLE_CONTENT_POSITION}
       ListHeaderComponent={
         <>
+          <ModelPricingDisplayControl
+            value={session.modelCostDisplay}
+            onChange={session.setModelCostDisplay}
+          />
           {Platform.OS === "android" ? (
             <View className="px-4 pb-2 pt-3">
               <View
