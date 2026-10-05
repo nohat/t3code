@@ -1,12 +1,19 @@
 import {
-  type OrchestrationThread,
+  NodeId,
+  type OrchestrationV2ConversationMessage,
+  type OrchestrationV2Run,
+  type OrchestrationV2ThreadProjection,
   PAPERCUT_MAX_EVENTS,
   PAPERCUT_MAX_MESSAGES,
   PapercutCreateInput,
+  ProviderSessionId,
+  RunId,
+  RuntimeRequestId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
+import { v2Now, v2Projection } from "../state/orchestrationV2TestFixtures.ts";
 import { capturePapercut } from "./capture.ts";
 import { createPapercutEventBuffer } from "./eventBuffer.ts";
 import { papercutThreadContext } from "./threadContext.ts";
@@ -127,25 +134,47 @@ describe("capturePapercut", () => {
 });
 
 describe("papercutThreadContext", () => {
-  const thread = {
-    id: "thread-1",
-    modelSelection: { instanceId: "codex", model: "gpt-5" },
-    runtimeMode: "full-access",
-    latestTurn: { turnId: "turn-3" },
-    session: { activeTurnId: "turn-2" },
-    activities: [
+  // Only the fields the context reads; the rest of a run or message is irrelevant here.
+  const run = (id: string, ordinal: number) =>
+    ({ id: RunId.make(id), ordinal, status: "completed" }) as unknown as OrchestrationV2Run;
+  const thread: OrchestrationV2ThreadProjection = {
+    ...v2Projection,
+    // Out of order on purpose: the newest run is picked by ordinal.
+    runs: [run("run-1", 1), run("run-3", 3), run("run-2", 2)],
+    runtimeRequests: [
       {
-        kind: "approval.requested",
-        createdAt: "2026-10-02T12:00:00.000Z",
-        payload: { requestId: "approval-1", requestKind: "command" },
+        id: RuntimeRequestId.make("approval-1"),
+        nodeId: NodeId.make("node-1"),
+        providerTurnId: null,
+        nativeRequestRef: null,
+        kind: "command",
+        status: "pending",
+        responseCapability: { type: "live", providerSessionId: ProviderSessionId.make("s-1") },
+        createdAt: v2Now,
+        resolvedAt: null,
+      },
+      {
+        id: RuntimeRequestId.make("question-1"),
+        nodeId: NodeId.make("node-1"),
+        providerTurnId: null,
+        nativeRequestRef: null,
+        kind: "user_input",
+        status: "resolved",
+        responseCapability: { type: "message" },
+        createdAt: v2Now,
+        resolvedAt: v2Now,
       },
     ],
-    messages: Array.from({ length: PAPERCUT_MAX_MESSAGES + 2 }, (_, index) => ({
-      role: "user",
-      text: `message ${index}`,
-      createdAt: "2026-10-02T12:00:00.000Z",
-    })),
-  } as unknown as OrchestrationThread;
+    messages: Array.from(
+      { length: PAPERCUT_MAX_MESSAGES + 2 },
+      (_, index) =>
+        ({
+          role: "user",
+          text: `message ${index}`,
+          createdAt: v2Now,
+        }) as unknown as OrchestrationV2ConversationMessage,
+    ),
+  };
 
   it("separates evidence ids and state from message text", () => {
     const context = papercutThreadContext({
@@ -158,10 +187,10 @@ describe("papercutThreadContext", () => {
 
     expect(context.where).toEqual({
       environmentId: "env-1",
-      threadId: "thread-1",
-      turnId: "turn-3",
+      threadId: v2Projection.thread.id,
+      turnId: "run-3",
       provider: "codex",
-      model: "gpt-5",
+      model: "gpt-5.4",
       runtimeMode: "full-access",
       route: "/env-1/thread-1",
     });
@@ -172,7 +201,11 @@ describe("papercutThreadContext", () => {
       pendingApproval: true,
     });
     expect(context.messages).toHaveLength(PAPERCUT_MAX_MESSAGES);
-    expect(context.messages.at(-1)?.text).toBe(`message ${PAPERCUT_MAX_MESSAGES + 1}`);
+    expect(context.messages.at(-1)).toEqual({
+      role: "user",
+      text: `message ${PAPERCUT_MAX_MESSAGES + 1}`,
+      at: "2026-06-20T00:00:00.000Z",
+    });
     expect(
       JSON.stringify({ where: context.where, clientState: context.clientState }),
     ).not.toContain("message ");
