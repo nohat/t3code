@@ -11,9 +11,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
-import { Command, Flag, GlobalFlag } from "effect/unstable/cli";
-import { FetchHttpClient } from "effect/unstable/http";
-import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
+import { Command, Flag, GlobalFlag } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
@@ -59,6 +59,7 @@ const formatDrainStatus = (status: EnvironmentOrchestrationDrainStatus, json: bo
         `draining: ${status.draining ? "yes" : "no"}`,
         ...(status.expiresAt === null ? [] : [`expires: ${status.expiresAt}`]),
         `running turns: ${status.runningTurns}`,
+        `waiting runs: ${status.waitingRuns}`,
       ].join("\n");
 
 /**
@@ -157,7 +158,9 @@ const drainStatusCommand = Command.make("status", {
   ...projectLocationFlags,
   json: jsonFlag,
 }).pipe(
-  Command.withDescription("Show whether drain mode is on and how many turns are still running."),
+  Command.withDescription(
+    "Show whether drain mode is on and how many turns are still running or waiting.",
+  ),
   Command.withHandler((flags) => runDrainRequest(flags, { kind: "status" })),
 );
 

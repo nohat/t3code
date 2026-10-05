@@ -32,6 +32,9 @@ import {
 import {
   DpopFailureReason,
   AuthSessionId,
+  IsoDateTime,
+  NonNegativeInt,
+  PositiveInt,
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
@@ -523,6 +526,34 @@ const EnvironmentOrchestrationThreadHistoryErrors = [
   EnvironmentInternalError,
 ] as const;
 
+/** Upper bound for a drain's lifetime, so a typo cannot park the server for days. */
+export const ORCHESTRATION_DRAIN_MAX_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Drain mode refuses new user turns so a deploy can wait for running turns to
+ * finish. It lives in memory and expires on its own, so a deploy that dies
+ * mid-drain cannot leave the server refusing forever.
+ */
+export const EnvironmentOrchestrationDrainRequest = Schema.Struct({
+  enable: Schema.Boolean,
+  /** Only read when enabling. The server applies its default when omitted. */
+  ttlSeconds: Schema.optionalKey(
+    PositiveInt.check(Schema.isLessThanOrEqualTo(ORCHESTRATION_DRAIN_MAX_TTL_SECONDS)),
+  ),
+});
+export type EnvironmentOrchestrationDrainRequest = typeof EnvironmentOrchestrationDrainRequest.Type;
+
+export const EnvironmentOrchestrationDrainStatus = Schema.Struct({
+  draining: Schema.Boolean,
+  /** Null unless draining. */
+  expiresAt: Schema.NullOr(IsoDateTime),
+  /** Runs preparing, starting, running, or queued to start; a deploy waits for zero. */
+  runningTurns: NonNegativeInt,
+  /** Runs parked on background work. Informational: a restart does not cut a turn short. */
+  waitingRuns: NonNegativeInt,
+});
+export type EnvironmentOrchestrationDrainStatus = typeof EnvironmentOrchestrationDrainStatus.Type;
+
 class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
   .add(
     HttpApiEndpoint.get("shellSnapshot", "/api/orchestration/shell", {
@@ -554,6 +585,21 @@ class EnvironmentOrchestrationHttpApi extends HttpApiGroup.make("orchestration")
       query: EnvironmentOrchestrationThreadHistoryQuery,
       success: OrchestrationV2ThreadHistoryPage,
       error: EnvironmentOrchestrationThreadHistoryErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.get("drainStatus", "/api/orchestration/drain", {
+      headers: OptionalBearerHeaders,
+      success: EnvironmentOrchestrationDrainStatus,
+      error: EnvironmentScopedOperationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("setDrain", "/api/orchestration/drain", {
+      headers: OptionalBearerHeaders,
+      payload: EnvironmentOrchestrationDrainRequest,
+      success: EnvironmentOrchestrationDrainStatus,
+      error: EnvironmentScopedOperationErrors,
     }).middleware(EnvironmentAuthenticatedAuth),
   ) {}
 

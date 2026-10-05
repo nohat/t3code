@@ -2,6 +2,7 @@
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readlinkSync,
   utimesSync,
   writeFileSync,
@@ -9,18 +10,26 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   atomicSwap,
   COMPLETE_MARKER,
+  countRunningSessions,
+  countV2OnlyRows,
   isQuiet,
+  movedAsideName,
+  moveStateV2Aside,
   parseDrainStatus,
+  parseSeconds,
   pruneReleases,
   readCurrent,
   readPrevious,
   releaseDir,
+  releaseUsesV2State,
   renderLaunchAgent,
+  resolveStateDb,
   serverCliCommand,
 } from "./fork-deploy-lib.ts";
 
@@ -89,6 +98,8 @@ describe("renderLaunchAgent", () => {
     expect(plist).toContain("App &amp; Co.app");
     expect(plist).toContain("<key>SuccessfulExit</key><false/>");
     expect(plist).toContain("<key>T3CODE_PORT</key><string>13774</string>");
+    // Room for a V2 server's graceful shutdown before launchd sends SIGKILL.
+    expect(plist).toContain("<key>ExitTimeOut</key><integer>60</integer>");
   });
 });
 
@@ -127,5 +138,111 @@ describe("drain helpers", () => {
     const command = serverCliCommand(root, "abc");
     expect(command?.[0]).toBe(join(macOs, "T3 Code (Alpha)"));
     expect(command?.[1]).toMatch(/app\.asar\/apps\/server\/dist\/bin\.mjs$/);
+  });
+});
+
+describe("V2 cutover helpers", () => {
+  const makeUserdata = (files: readonly string[]) => {
+    const home = mkdtempSync(join(tmpdir(), "fork-deploy-home-"));
+    mkdirSync(join(home, "userdata"));
+    for (const file of files) writeFileSync(join(home, "userdata", file), "");
+    return home;
+  };
+
+  it("reads statev2.sqlite once it exists, since state.sqlite is frozen from then on", () => {
+    const v1Only = makeUserdata(["state.sqlite"]);
+    expect(resolveStateDb(v1Only)).toBe(join(v1Only, "userdata", "state.sqlite"));
+    const both = makeUserdata(["state.sqlite", "statev2.sqlite"]);
+    expect(resolveStateDb(both)).toBe(join(both, "userdata", "statev2.sqlite"));
+  });
+
+  it("counts V2 runs the way the server does: held queued and waiting runs do not block", () => {
+    const home = makeUserdata([]);
+    const path = join(home, "userdata", "statev2.sqlite");
+    const db = new DatabaseSync(path);
+    db.exec("create table orchestration_v2_projection_runs (status text, payload_json text)");
+    const insert = db.prepare("insert into orchestration_v2_projection_runs values (?, ?)");
+    for (const status of ["preparing", "starting", "running", "queued"]) insert.run(status, "{}");
+    insert.run("queued", '{"queueHeld":true}');
+    insert.run("waiting", "{}");
+    insert.run("completed", "{}");
+    db.close();
+    expect(countRunningSessions(path)).toBe(4);
+  });
+
+  it("parses whole positive seconds and names the flag otherwise", () => {
+    expect(parseSeconds("240", "--first-boot-budget-seconds")).toBe(240);
+    expect(() => parseSeconds("0", "--first-boot-budget-seconds")).toThrow(
+      /--first-boot-budget-seconds/,
+    );
+    expect(() => parseSeconds("1.5", "--x")).toThrow(/whole number/);
+    expect(() => parseSeconds(undefined, "--x")).toThrow(/whole number/);
+  });
+
+  it("names a moved-aside copy so its WAL and SHM still pair with it", () => {
+    const now = new Date("2026-10-05T13:45:07.123Z");
+    expect(movedAsideName("/u/statev2.sqlite", now)).toBe(
+      "/u/statev2.failed-20261005T134507Z.sqlite",
+    );
+    expect(movedAsideName("/u/statev2.sqlite-wal", now)).toBe(
+      "/u/statev2.failed-20261005T134507Z.sqlite-wal",
+    );
+  });
+
+  it("moves a failed V2 copy aside without touching state.sqlite or overwriting", () => {
+    const home = makeUserdata(["state.sqlite", "statev2.sqlite", "statev2.sqlite-wal"]);
+    const userdata = join(home, "userdata");
+    const now = new Date("2026-10-05T13:45:07Z");
+    expect(moveStateV2Aside(userdata, now)).toEqual([
+      join(userdata, "statev2.failed-20261005T134507Z.sqlite"),
+      join(userdata, "statev2.failed-20261005T134507Z.sqlite-wal"),
+    ]);
+    expect(readdirSync(userdata).sort()).toEqual([
+      "state.sqlite",
+      "statev2.failed-20261005T134507Z.sqlite",
+      "statev2.failed-20261005T134507Z.sqlite-wal",
+    ]);
+    writeFileSync(join(userdata, "statev2.sqlite"), "");
+    expect(() => moveStateV2Aside(userdata, now)).toThrow(/refusing to overwrite/);
+    expect(existsSync(join(userdata, "statev2.sqlite"))).toBe(true);
+  });
+
+  it("tells a V2 release from a v1 one by the database its bundle names", () => {
+    const root = makeRoot([]);
+    const release = (sha: string, bundle: string) => {
+      const app = join(releaseDir(root, sha), "T3 Code.app", "Contents");
+      mkdirSync(join(app, "MacOS"), { recursive: true });
+      mkdirSync(join(app, "Resources"), { recursive: true });
+      writeFileSync(join(app, "MacOS", "T3 Code"), "");
+      writeFileSync(join(app, "Resources", "app.asar"), bundle);
+    };
+    release("v1", 'const dbPath = join(stateDir, "state.sqlite");');
+    release("v2", 'const dbPath = join(stateDir, "statev2.sqlite");');
+    expect(releaseUsesV2State(root, "v1")).toBe(false);
+    expect(releaseUsesV2State(root, "v2")).toBe(true);
+    expect(releaseUsesV2State(root, "missing")).toBeNull();
+  });
+
+  it("counts the threads and messages only V2 has, reading both files read-only", () => {
+    const home = makeUserdata([]);
+    const userdata = join(home, "userdata");
+    const v1 = new DatabaseSync(join(userdata, "state.sqlite"));
+    v1.exec(`
+      create table projection_threads (thread_id text primary key);
+      create table projection_thread_messages (message_id text primary key);
+      insert into projection_threads values ('t-old');
+      insert into projection_thread_messages values ('m-old');
+    `);
+    v1.close();
+    const v2 = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    v2.exec(`
+      create table orchestration_v2_projection_threads (thread_id text primary key);
+      create table orchestration_v2_projection_messages (message_id text primary key);
+      insert into orchestration_v2_projection_threads values ('t-old'), ('t-new');
+      insert into orchestration_v2_projection_messages values ('m-old'), ('m-new1'), ('m-new2');
+    `);
+    v2.close();
+    expect(countV2OnlyRows(userdata)).toEqual({ threads: 1, messages: 2 });
+    expect(countV2OnlyRows(join(makeUserdata(["state.sqlite"]), "userdata"))).toBeNull();
   });
 });

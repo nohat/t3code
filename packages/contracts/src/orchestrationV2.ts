@@ -3268,6 +3268,11 @@ export class OrchestrationV2DispatchCommandError extends Schema.TaggedError<Orch
     commandType: Schema.String,
     message: Schema.String,
     detail: Schema.optional(Schema.String),
+    // Why the server refused, when a client may want to react beyond showing
+    // the message. `server-draining`: the server is about to restart and the
+    // same command is safe to send again afterward. Optional, so older clients
+    // and servers ignore it.
+    reason: Schema.optional(Schema.Literal("server-draining")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
@@ -3295,6 +3300,8 @@ export class OrchestrationV2ThreadLaunchError extends Schema.TaggedError<Orchest
     commandId: CommandId,
     projectId: ProjectId,
     message: Schema.String,
+    /** See `OrchestrationV2DispatchCommandError.reason`. */
+    reason: Schema.optional(Schema.Literal("server-draining")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}

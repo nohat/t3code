@@ -81,21 +81,115 @@ export function pruneReleases(root: string, keep: number): string[] {
   return removed;
 }
 
+export const STATE_DB_V1 = "state.sqlite";
+export const STATE_DB_V2 = "statev2.sqlite";
+
+/**
+ * The database the server under `home` uses. A V2 server copies `state.sqlite` into
+ * `statev2.sqlite` on its first boot and never writes the v1 file again, so once the V2 file
+ * exists the v1 one is frozen and its counts are stale.
+ */
+export function resolveStateDb(home: string): string {
+  const v2 = join(home, "userdata", STATE_DB_V2);
+  return existsSync(v2) ? v2 : join(home, "userdata", STATE_DB_V1);
+}
+
+/**
+ * Running-turn query for either database generation. The V2 one matches the server's
+ * `t3 drain status` count: queued runs the user has not held start when the active run ends.
+ */
+export function runningSessionsQuery(stateDb: string): string {
+  return basename(stateDb) === STATE_DB_V2
+    ? "select count(*) from orchestration_v2_projection_runs where status in ('preparing','starting','running') or (status = 'queued' and json_extract(payload_json, '$.queueHeld') is not 1);"
+    : "select count(*) from projection_thread_sessions where status = 'running';";
+}
+
 /**
  * Threads with a turn in flight, or null when the database cannot be read (a read-only open of a
- * WAL database fails while no server is running). Opens the live database read-only.
+ * WAL database fails while no server is running). Opens the live database read-only. Prefer the
+ * running server's own count (`t3 drain status`); this is the fallback.
  */
 export function countRunningSessions(stateDb: string): number | null {
+  const result = spawnSync("sqlite3", ["-readonly", stateDb, runningSessionsQuery(stateDb)], {
+    encoding: "utf8",
+  });
+  return result.status === 0 ? Number.parseInt(result.stdout.trim(), 10) : null;
+}
+
+/**
+ * Whether a release's server uses `statev2.sqlite` (orchestration V2), or null when its bundle
+ * cannot be read. The packaged server names the file, so its presence in `app.asar` marks a V2
+ * build; asar stores files uncompressed.
+ */
+export function releaseUsesV2State(root: string, sha: string): boolean | null {
+  const bin = serverCliCommand(root, sha)?.[1];
+  if (!bin) return null;
+  const asar = bin.slice(0, bin.indexOf("app.asar") + "app.asar".length);
+  const result = spawnSync("grep", ["-q", "-a", "-F", STATE_DB_V2, asar]);
+  return result.status === 0 ? true : result.status === 1 ? false : null;
+}
+
+/**
+ * Rows a rollback from V2 to v1 would hide: threads and messages in `statev2.sqlite` that the
+ * frozen `state.sqlite` does not have. Both files are opened read-only. Null when unreadable.
+ */
+export function countV2OnlyRows(
+  userdataDir: string,
+): { readonly threads: number; readonly messages: number } | null {
+  const v1 = join(userdataDir, STATE_DB_V1);
+  const v2 = join(userdataDir, STATE_DB_V2);
+  if (!existsSync(v1) || !existsSync(v2)) return null;
   const result = spawnSync(
     "sqlite3",
     [
       "-readonly",
-      stateDb,
-      "select count(*) from projection_thread_sessions where status = 'running';",
+      v2,
+      `attach 'file:${v1.replaceAll("'", "''")}?mode=ro' as v1;`,
+      "select (select count(*) from orchestration_v2_projection_threads t where not exists (select 1 from v1.projection_threads o where o.thread_id = t.thread_id)) || ' ' || (select count(*) from orchestration_v2_projection_messages m where not exists (select 1 from v1.projection_thread_messages o where o.message_id = m.message_id));",
     ],
     { encoding: "utf8" },
   );
-  return result.status === 0 ? Number.parseInt(result.stdout.trim(), 10) : null;
+  const [threads, messages] = result.stdout.trim().split(" ").map(Number);
+  return result.status === 0 && Number.isInteger(threads) && Number.isInteger(messages)
+    ? { threads: threads!, messages: messages! }
+    : null;
+}
+
+/**
+ * Where a failed V2 boot's database goes: `statev2.sqlite-wal` becomes
+ * `statev2.failed-<stamp>.sqlite-wal`, so the three files still open together.
+ */
+export function movedAsideName(file: string, now: Date): string {
+  const stamp = now
+    .toISOString()
+    .replaceAll(/[-:]/g, "")
+    .replace(/\.\d+Z$/, "Z");
+  return file.replace(STATE_DB_V2, `statev2.failed-${stamp}.sqlite`);
+}
+
+/**
+ * Renames `statev2.sqlite` and its WAL and SHM files aside so the next V2 boot copies
+ * `state.sqlite` again instead of reusing a copy from a failed attempt. Never deletes, never
+ * overwrites. Returns the new paths. Call only while no server has the files open.
+ */
+export function moveStateV2Aside(userdataDir: string, now: Date): string[] {
+  const files = ["", "-wal", "-shm"]
+    .map((suffix) => join(userdataDir, `${STATE_DB_V2}${suffix}`))
+    .filter((file) => existsSync(file));
+  const moves = files.map((file) => [file, movedAsideName(file, now)] as const);
+  const taken = moves.find(([, target]) => existsSync(target));
+  if (taken) throw new Error(`refusing to overwrite ${taken[1]}`);
+  for (const [file, target] of moves) renameSync(file, target);
+  return moves.map(([, target]) => target);
+}
+
+/** Reads a whole number of seconds from a flag, or throws naming the flag. */
+export function parseSeconds(raw: string | undefined, flag: string): number {
+  const seconds = Number(raw);
+  if (!Number.isInteger(seconds) || seconds < 1) {
+    throw new Error(`${flag} must be a whole number of seconds, got "${raw}"`);
+  }
+  return seconds;
 }
 
 export async function probeHealth(port: number, timeoutMs = 5000): Promise<boolean> {
@@ -117,6 +211,12 @@ export function launchdPid(label: string, uid: number): number | null {
 
 const xml = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+/**
+ * How long launchd waits between SIGTERM and SIGKILL. A V2 server spends this capturing
+ * restart-continuation intent and reconciling runs, so it must outlast a busy shutdown.
+ */
+export const LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS = 60;
 
 /**
  * LaunchAgent that runs the app from the `current` link. Restarts only after a crash, so a
@@ -150,7 +250,7 @@ ${envEntries}
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
-  <key>ExitTimeOut</key><integer>20</integer>
+  <key>ExitTimeOut</key><integer>${LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS}</integer>
   <key>StandardOutPath</key><string>${xml(join(options.logDir, "prod.out.log"))}</string>
   <key>StandardErrorPath</key><string>${xml(join(options.logDir, "prod.err.log"))}</string>
 </dict>

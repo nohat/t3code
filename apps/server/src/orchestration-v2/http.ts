@@ -1,10 +1,13 @@
 import {
+  AuthOrchestrationOperateScope,
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
   ThreadId,
   TurnItemId,
   type OrchestrationProjectShell,
 } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
@@ -29,6 +32,7 @@ import {
   OLDER_THREAD_USER_TURN_LIMIT,
 } from "./threadHistoryPaging.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import * as ServerDrainState from "./ServerDrainState.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import { buildActiveShellSnapshot } from "./ShellStream.ts";
 import { projectThreadProjectionForWire } from "./WireProjection.ts";
@@ -72,6 +76,15 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
     const projectStore = yield* ProjectStore.ProjectStoreV2;
     const projectEnrichment = yield* ProjectEnrichmentService.ProjectEnrichmentService;
+    const drainState = yield* ServerDrainState.ServerDrainState;
+
+    const drainReport = drainState.report.pipe(
+      Effect.map((report) => ({
+        ...report,
+        expiresAt: report.expiresAt === null ? null : DateTime.formatIso(report.expiresAt),
+      })),
+      Effect.catch((cause) => failEnvironmentInternal("internal_error", cause)),
+    );
 
     const enrichProjectShells = Effect.fn("http.orchestration.enrichProjectShells")(
       (projects: ReadonlyArray<OrchestrationProjectShell>) =>
@@ -255,6 +268,29 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
             nextCursor: pageOrError.page.nextCursor,
             hasMoreHistory: pageOrError.page.hasMoreHistory,
           };
+        }),
+      )
+      .handle(
+        "drainStatus",
+        Effect.fn("environment.orchestration.drainStatus")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          return yield* drainReport;
+        }),
+      )
+      .handle(
+        "setDrain",
+        Effect.fn("environment.orchestration.setDrain")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationOperateScope);
+          yield* args.payload.enable
+            ? drainState.enable(
+                args.payload.ttlSeconds === undefined
+                  ? undefined
+                  : Duration.seconds(args.payload.ttlSeconds),
+              )
+            : drainState.disable;
+          return yield* drainReport;
         }),
       );
   }),
