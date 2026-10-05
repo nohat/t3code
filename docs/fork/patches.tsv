@@ -1,0 +1,23 @@
+name	branch	guard
+opencode-scoped-agents	fix/opencode-scoped-agents	(cd apps/server && vp test run src/provider/Layers/OpenCodeProvider.test.ts src/provider/opencodeRuntime.inventory.test.ts) && (cd packages/client-runtime && vp test run src/providerSkills.test.ts)
+model-cost-display	local/t3-work	(cd apps/server && vp test run src/provider/modelPricing.test.ts) && (cd apps/web && vp test run --project unit src/components/chat/PricingBadge.test.tsx)
+mobile-model-pricing	feat/mobile-model-pricing	cd apps/mobile && vp test run --config ../../vite.config.ts src/lib/modelPricing.test.ts src/lib/modelOptions.test.ts
+send-blocked-reason	fix/send-blocked-reason	cd apps/web && vp test run --project unit src/components/chat/sendBlockedReason.test.ts
+send-never-settles	fix/send-never-settles	(cd packages/client-runtime && vp test run src/operations/commands.test.ts src/state/threadCommands.test.ts) && (cd apps/web && vp test run --project unit src/components/ChatView.logic.test.ts)
+thread-resync	feat/thread-resync	(cd packages/client-runtime && vp test run src/state/threads-sync.test.ts) && (cd apps/web && vp test run --project unit src/components/threadActionMenu.logic.test.ts)
+mobile-thread-sync-stall	fix/mobile-thread-sync-stall	cd apps/mobile && vp test run --config ../../vite.config.ts src/features/threads/floating-working-status.test.ts
+claude-silent-cli	fix/send-turn-control-stall	cd apps/server && vp test run src/provider/Layers/ClaudeAdapter.test.ts
+server-drain-mode	feat/server-drain-mode	(cd apps/server && vp test run src/orchestration/ServerDrainState.test.ts src/orchestration/drainHttp.test.ts) && (cd apps/mobile && vp test run --config ../../vite.config.ts src/state/thread-outbox.test.ts)
+fork-deploy	feat/fork-deploy-drain	cd scripts && vp test run --config ../vite.config.ts fork/fork-deploy-lib.test.ts
+turn-activity-watchdog	feat/turn-activity-registry	cd apps/server && vp test run src/orchestration/ThreadTurnActivity.test.ts src/orchestration/ThreadTurnWatchdog.test.ts
+papercuts	feat/papercuts-stage1	(cd packages/contracts && vp test run --config ../../vite.config.ts src/papercut.test.ts) && (cd packages/client-runtime && vp test run src/papercut/papercut.test.ts) && (cd apps/server && vp test run src/papercuts/Papercuts.test.ts src/cli/papercuts.test.ts) && (cd apps/web && vp test run --project unit src/papercuts/readSendButtonState.test.ts)
+papercuts-ipad	feat/papercuts-ipad	cd apps/mobile && vp test run --config ../../vite.config.ts src/papercuts/jsStallDetector.test.ts src/papercuts/papercutBundle.test.ts
+opencode-support-gaps	t3code/opencode-support-gaps-wave1	(cd apps/server && vp test run src/provider/Drivers/OpenCodeDriver.test.ts) && (cd apps/web && vp test run --project unit src/components/chat/ContextWindowMeter.logic.test.ts)
+opencode-subagents	t3code/finish-opencode-subagents-adapter	(cd packages/client-runtime && vp test run src/state/subagentRuntime.test.ts) && (cd apps/server && vp test run src/provider/Layers/OpenCodeAdapter.test.ts)
+remote-reconnect	feat/remote-reconnect	(cd packages/client-runtime && vp test run src/connection/presentation.test.ts src/connection/supervisor.test.ts) && (cd apps/web && vp test run --project unit src/components/cloud/cloudEnvironmentConnectionPresentation.test.ts) && (cd apps/mobile && vp test run --config ../../vite.config.ts src/features/home/workspace-connection-status.test.ts)
+prompt-draft-persistence	fix/prompt-draft-persistence	(cd apps/web && vp test run --project unit src/composerDraftStore.unloadFlush.test.ts) && (cd apps/mobile && vp test run --config ../../vite.config.ts src/state/use-composer-drafts.test.ts)
+model-picker-selection	fix/model-picker-selection	(cd apps/web && vp test run --project unit src/components/chat/ModelPickerContent.test.ts src/modelOrdering.test.ts) && (cd apps/mobile && vp test run --config ../../vite.config.ts src/features/threads/thread-settings-sheet-state.test.ts)
+design-system	feat/design-system-clean	cd scripts && vp test run --config ../vite.config.ts fork/design-system/lib.test.ts
+feed-scroll-jump	fix/feed-scroll-jump	cd apps/mobile && vp test run --config ../../vite.config.ts src/lib/keyboardControllerPatch.test.ts
+sync-gates	feat/sync-gates	cd scripts && vp test run --config ../vite.config.ts fork/delta-check.test.ts
+fork-docs-agent-config	fork/prod	-

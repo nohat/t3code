@@ -1,6 +1,6 @@
 # Upstream sync automation
 
-Status: **ratified 2026-10-05** ("i like the sync automation plan, let's ratify it", plus the weekly cadence review below). Tracked in nohat/t3code#6; the first sync, a one-off port, is #36. Background and rejected alternatives are in [maintenance.md](./maintenance.md). Nothing here is built yet except the facts it rests on: `upstream` has `no_push`, `rerere` is on.
+Status: **ratified 2026-10-05** ("i like the sync automation plan, let's ratify it", plus the weekly cadence review below). Tracked in nohat/t3code#6; the first sync, a one-off port, is #36. Background and rejected alternatives are in [maintenance.md](./maintenance.md). Built so far: the facts it rests on (`upstream` has `no_push`, `rerere` is on), and the two gates below, `docs/fork/patches.tsv` and `scripts/fork/delta-check.ts` (2026-10-05, `feat/sync-gates`). The job itself is not built.
 
 ## What it does
 
@@ -15,8 +15,8 @@ Status: **ratified 2026-10-05** ("i like the sync automation plan, let's ratify 
 
 ## What makes "clean" mean something
 
-- `docs/fork/patches.tsv`: name, branch, guard command, one row per accepted fork feature. The guard is a test that fails if an upstream merge drops the feature. This is the primary signal.
-- `scripts/fork/delta-check`: the net for features without a guard. It compares the fork's delta before and after the trial merge and flags a fork file whose added lines dropped or vanished. It follows renames (`git diff -M --numstat`) and compares against the new base (`upstream/main` against the merge result), not `main` before the sync, because a rewrite such as the V2 orchestrator auto-merges many fork files onto code that no longer exists. `git range-diff` is not used; it skips merge commits.
+- `docs/fork/patches.tsv`: name, branch, guard command, one row per accepted fork feature. The guard is a test that fails if an upstream merge drops the feature. This is the primary signal. A guard is a shell command run from the repository root; `-` marks a feature with no guard test (only the fork docs and agent config today). Partly guarded: the mobile Send-blocked text and the desktop papercut menu have no test of their own.
+- `scripts/fork/delta-check.ts` (`node scripts/fork/delta-check.ts --old-main <ref> --old-fork <ref> --new-main <ref> --merged <ref> [--allow <file>]`): the net for features without a guard. It compares the fork's delta before and after the trial merge and flags a fork file whose added lines dropped or vanished. It follows renames (`git diff -M --numstat`) and compares against the new base (`upstream/main` against the merge result), not `main` before the sync, because a rewrite such as the V2 orchestrator auto-merges many fork files onto code that no longer exists. `git range-diff` is not used; it skips merge commits. A file upstream deleted is listed, not flagged. `--allow` takes a list of paths whose loss was decided on purpose (a dropped feature), so one decision does not fail every later run of the same merge.
 
 ## Cadence
 
