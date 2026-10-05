@@ -483,7 +483,7 @@ Update and restart: `serviceLauncher`/`selfUpdate`/trial-and-rollback snapshots 
 | Data | Survives V2? |
 | --- | --- |
 | `userdata/papercuts/*.json` and `.triage.json` | Yes (same `userdata` directory, not in the DB). But `Papercuts.ts` snapshot queries read `projection_thread_sessions` and `projection_thread_activities`; in `statev2` they still exist, frozen, so new reports carry stale server state without error (rewrite per #36). |
-| Deploy registry (`releases/`, `.previous`, `current`), `fork-versions.json`, decisions ledger, `releases/<sha>/.fork-version` | Yes (deploy root, outside git and outside T3 home). `pruneReleases` keeps current and previous only. After a second V2 deploy the last v1 release becomes prunable (`keepReleases` 3). Per `versioning.md`, a data migration is a **major**: this ships as 2.0.0 by the fork's own rule (#36 says 1.0.0; reconcile). |
+| Deploy registry (`releases/`, `.previous`, `current`), `fork-versions.json`, decisions ledger, `releases/<sha>/.fork-version` | Yes (deploy root, outside git and outside T3 home). `pruneReleases` keeps current and previous only. After a second V2 deploy the last v1 release becomes prunable (`keepReleases` 3). Per `versioning.md`, a data migration is a **major**: its label follows the rule in the decisions section. |
 | `push_devices` (APNs) | In the DB only; see section 1. |
 | Auth sessions, pairing | Copied at cutover; sessions created or revoked later exist only in `statev2`. |
 | `settings.json`, keybindings, desktop and client settings, attachments, worktrees | Shared files, unchanged location. |
