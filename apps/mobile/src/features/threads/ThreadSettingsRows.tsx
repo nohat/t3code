@@ -22,7 +22,6 @@ export function ModelRow(props: ModelRowProps) {
   return (
     <ModelRowContent
       {...props}
-      labelNumberOfLines={1}
       trailingSelection={<SelectedCheckmark selected={props.selected} />}
     />
   );

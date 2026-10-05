@@ -1,6 +1,7 @@
 import type {
   ModelCapabilities,
   ModelSelection,
+  ServerProviderModelPricing,
   ServerConfig as T3ServerConfig,
 } from "@t3tools/contracts";
 import {
@@ -19,6 +20,7 @@ export type ModelOption = {
   readonly isLegacy: boolean;
   readonly isUnavailable?: boolean;
   readonly capabilities: ModelCapabilities | null;
+  readonly pricing?: ServerProviderModelPricing;
   readonly selection: ModelSelection;
 };
 
@@ -175,6 +177,7 @@ export function buildModelOptions(
         providerDriver: provider.driver,
         isDefault: model.isDefault === true,
         isLegacy: model.isLegacy === true,
+        ...(model.pricing ? { pricing: model.pricing } : {}),
         capabilities: model.capabilities,
         selection: normalizeSelectionOptions(
           {
@@ -225,6 +228,7 @@ export function buildModelOptions(
         ...(isModelSelectionUnavailable(config, fallbackModelSelection)
           ? { isUnavailable: true }
           : {}),
+        ...(model?.pricing ? { pricing: model.pricing } : {}),
         capabilities: model?.capabilities ?? null,
         selection: fallbackModelSelection,
       });
