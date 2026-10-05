@@ -6,7 +6,7 @@ import {
   formatProviderSkillDisplayName,
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
-  resolveProviderModelsForCwd,
+  hasCompleteProviderWorkspaceSnapshot,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
   resolveProviderSkillSourceKind,
@@ -30,7 +30,6 @@ const provider = {
       checkedAt: "2026-01-01T00:01:00.000Z",
       slashCommands: [{ name: "project" }],
       skills: [{ name: "project", path: "/workspace/project-a/SKILL.md", enabled: true }],
-      agents: [],
     },
   ],
 } satisfies ServerProvider;
@@ -254,82 +253,25 @@ describe("workspace provider snapshots", () => {
     expect(resolveProviderSlashCommandsForCwd(provider, null)).toEqual(provider.slashCommands);
   });
 
-  it("applies the workspace agent roster to model agent descriptors", () => {
-    const models = [
-      {
-        slug: "openai/gpt-test",
-        name: "GPT Test",
-        isCustom: false,
-        capabilities: {
-          optionDescriptors: [
-            {
-              id: "variant",
-              label: "Reasoning",
-              type: "select" as const,
-              options: [{ id: "medium", label: "Medium" }],
-              currentValue: "medium",
-            },
-            {
-              id: "agent",
-              label: "Agent",
-              type: "select" as const,
-              options: [{ id: "build", label: "Build", isDefault: true }],
-              currentValue: "build",
-            },
-          ],
-        },
-      },
-    ];
-    const scoped = {
+  it("uses partial workspace skills and commands while keeping discovery retryable", () => {
+    const partial = {
       ...provider,
-      models,
-      workspaceSnapshots: [
-        {
-          cwd: "/workspace/project-a",
-          checkedAt: "2026-01-01T00:01:00.000Z",
-          slashCommands: [{ name: "project" }],
-          skills: [],
-          agents: [
-            { id: "build", label: "Build", isDefault: true },
-            { id: "orchestrator", label: "Orchestrator" },
-          ],
-          agentCurrentValue: "build",
-        },
-      ],
-    };
-    const resolved = resolveProviderModelsForCwd(scoped, "/workspace/project-a");
-    const agentDescriptor = resolved[0]?.capabilities?.optionDescriptors?.find(
-      (descriptor) => descriptor.id === "agent",
+      workspaceSnapshots: provider.workspaceSnapshots.map((snapshot) => ({
+        ...snapshot,
+        slashCommands: [{ name: "compact" }],
+        slashCommandsPending: true,
+      })),
+    } satisfies ServerProvider;
+    expect(resolveProviderSkillsForCwd(partial, "/workspace/project-a")).toEqual(
+      provider.workspaceSnapshots[0]?.skills,
     );
-    expect(
-      agentDescriptor?.type === "select" ? agentDescriptor.options.map((option) => option.id) : [],
-    ).toEqual(["build", "orchestrator"]);
-    // Reasoning descriptors pass through untouched.
-    expect(resolved[0]?.capabilities?.optionDescriptors?.length).toBe(2);
-  });
-
-  it("keeps base models when the cwd has no agent roster", () => {
-    const models = [
-      {
-        slug: "openai/gpt-test",
-        name: "GPT Test",
-        isCustom: false,
-        capabilities: {
-          optionDescriptors: [
-            {
-              id: "agent",
-              label: "Agent",
-              type: "select" as const,
-              options: [{ id: "build", label: "Build", isDefault: true }],
-              currentValue: "build",
-            },
-          ],
-        },
-      },
-    ];
-    expect(resolveProviderModelsForCwd({ models, workspaceSnapshots: [] }, null)).toBe(models);
-    expect(resolveProviderModelsForCwd({ ...provider, models }, "/workspace/project-b")).toBe(
-      models,
-    );
+    expect(resolveProviderSlashCommandsForCwd(partial, "/workspace/project-a")).toEqual([
+      { name: "compact" },
+    ]);
+    expect(hasCompleteProviderWorkspaceSnapshot(partial, "/workspace/project-a")).toBe(false);
+    expect(hasCompleteProviderWorkspaceSnapshot(provider, "/workspace/project-a")).toBe(true);
+    expect(hasCompleteProviderWorkspaceSnapshot(provider, "/workspace/project-b")).toBe(false);
+    expect(hasCompleteProviderWorkspaceSnapshot(undefined, "/workspace/project-a")).toBe(false);
+    expect(hasCompleteProviderWorkspaceSnapshot(provider, null)).toBe(false);
   });
 });
