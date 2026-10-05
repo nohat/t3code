@@ -132,6 +132,18 @@ function effectiveFailureKind(
 }
 
 /**
+ * Which side needs the update. The compatibility check names it in the failure detail: an older
+ * client is told to update the app, a client ahead of its host is told to update the server
+ * (`serverUpdateRequired`). Only a failure without that detail falls back to the generic sentence.
+ */
+function unsupportedGuidance(connection: EnvironmentConnectionPresentation): string {
+  const detail = connection.error?.trim();
+  return detail !== undefined && detail.length > 0
+    ? detail
+    : "This app can't connect to this environment. Update the app to continue.";
+}
+
+/**
  * One actionable sentence describing what went wrong and what to try. Returns
  * null while a connection is healthy or newly connecting (no failure yet).
  */
@@ -154,7 +166,7 @@ export function connectionFailureGuidance(
     case "configuration":
       return `Can't connect to ${name}. Check its connection settings.`;
     case "unsupported":
-      return "This app can't connect to this environment. Update the app to continue.";
+      return unsupportedGuidance(connection);
     case "unknown":
     case null:
       return null;
@@ -178,7 +190,7 @@ export function connectionStatusText(
     case "connected":
       return "Connected";
     case "unsupported":
-      return "This app can't connect to this environment. Update the app to continue.";
+      return unsupportedGuidance(connection);
     case "error":
       return connectionFailureGuidance(connection, options) ?? `Can't connect to ${name}.`;
   }

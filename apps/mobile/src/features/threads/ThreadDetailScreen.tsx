@@ -4,7 +4,10 @@ import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 import { useNavigation } from "@react-navigation/native";
 import type { WorktreeSetupCardProps } from "./worktree-setup-card";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
-import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import {
+  type ConnectionFailureKind,
+  type EnvironmentConnectionPhase,
+} from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type {
   CodexFeedbackSubmission,
@@ -147,6 +150,7 @@ export interface ThreadDetailScreenProps {
   readonly contentPresentation: ThreadContentPresentation;
   readonly screenTone: StatusTone;
   readonly connectionError: string | null;
+  readonly connectionFailureKind?: ConnectionFailureKind | null;
   readonly environmentLabel: string | null;
   readonly feedbackSubmissions: ReadonlyArray<CodexFeedbackSubmission>;
   readonly onDismissFeedback: (id: MessageId) => void;
@@ -452,6 +456,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     const connectionStatus = connectionFloatingStatus({
       connectionError: props.connectionError,
       connectionState: props.connectionStateLabel,
+      connectionFailureKind: props.connectionFailureKind ?? null,
       environmentLabel: props.environmentLabel,
       onReconnect: props.onReconnectEnvironment,
     });

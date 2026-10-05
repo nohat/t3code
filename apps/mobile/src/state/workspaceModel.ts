@@ -2,6 +2,7 @@ import { type EnvironmentShellSummary } from "@t3tools/client-runtime/state/shel
 import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
 
 import {
+  type ConnectionFailureKind,
   type EnvironmentConnectionPhase,
   type NetworkStatus,
 } from "@t3tools/client-runtime/connection";
@@ -19,6 +20,8 @@ export interface WorkspaceConnectionState {
   readonly connectingEnvironments: ReadonlyArray<WorkspaceEnvironment>;
   readonly connectionState: EnvironmentConnectionPhase;
   readonly connectionError: string | null;
+  readonly connectionFailureKind: ConnectionFailureKind | null;
+  readonly connectionFailureLabel: string | null;
   readonly networkStatus: NetworkStatus;
 }
 
@@ -73,6 +76,9 @@ export function projectWorkspaceConnectionState(input: {
       environment.connectionState === "reconnecting",
   );
 
+  const failedEnvironment =
+    activeEnvironments.find((environment) => environment.connectionError !== null) ?? null;
+
   return {
     isLoadingConnections: !input.isReady,
     hasConnections: input.environments.length > 0,
@@ -82,9 +88,9 @@ export function projectWorkspaceConnectionState(input: {
     hasConnectingEnvironment: connectingEnvironments.length > 0,
     connectingEnvironments,
     connectionState: overallConnectionState(activeEnvironments, input.networkStatus),
-    connectionError:
-      activeEnvironments.find((environment) => environment.connectionError !== null)
-        ?.connectionError ?? null,
+    connectionError: failedEnvironment?.connectionError ?? null,
+    connectionFailureKind: failedEnvironment?.connectionFailureKind ?? null,
+    connectionFailureLabel: failedEnvironment?.environmentLabel ?? null,
     networkStatus: input.networkStatus,
   };
 }

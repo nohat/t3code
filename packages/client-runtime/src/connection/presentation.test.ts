@@ -67,7 +67,24 @@ describe("connection presentation", () => {
     expect(connection.phase).toBe("unsupported");
     expect(connection.error).toBe("Update your app.");
     expect(connectionStatusTitle(connection)).toBe("Client not supported");
+    expect(connectionStatusText(connection)).toBe("Update your app.");
+  });
+
+  it("says the host needs the update when the client is ahead of its server", () => {
+    const connection = presentConnectionState(
+      supervisorState({
+        phase: "blocked",
+        lastFailure: new ConnectionBlockedError({
+          reason: "unsupported",
+          detail: "This client requires a newer server. Update T3 Code on Mac mini to connect.",
+          serverUpdateRequired: true,
+        }),
+      }),
+    );
     expect(connectionStatusText(connection)).toBe(
+      "This client requires a newer server. Update T3 Code on Mac mini to connect.",
+    );
+    expect(connectionStatusText({ ...connection, error: null })).toBe(
       "This app can't connect to this environment. Update the app to continue.",
     );
   });
@@ -271,7 +288,7 @@ describe("connection presentation", () => {
         ),
         { label },
       ),
-    ).toBe("This app can't connect to this environment. Update the app to continue.");
+    ).toBe("Too old.");
   });
 
   it("falls back to a generic target and one actionable offline sentence", () => {
