@@ -1127,6 +1127,7 @@ import {
 } from "@t3tools/client-runtime/providerSkills";
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useDelayedStatus } from "../../hooks/useDelayedStatus";
+import { resolveSendBlockedReason, resolveSendTargetBlockedReason } from "./sendBlockedReason";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { usePanelAnimationSettings } from "../../panelAnimations";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -1369,6 +1370,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   sendDisabledReason: string | null;
   isConnecting: boolean;
   isEnvironmentUnavailable: boolean;
+  isEnvironmentDisconnected: boolean;
   hasSendableContent: boolean;
   canResume: boolean;
   preserveComposerFocusOnPointerDown?: boolean;
@@ -1408,6 +1410,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         sendDisabledReason={props.sendDisabledReason}
         isConnecting={props.isConnecting}
         isEnvironmentUnavailable={props.isEnvironmentUnavailable}
+        isEnvironmentDisconnected={props.isEnvironmentDisconnected}
         isPreparingWorktree={props.isPreparingWorktree}
         hasSendableContent={props.hasSendableContent}
         canResume={props.canResume}
@@ -2159,12 +2162,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const sendDisabledReason =
     externalSendDisabledReason ??
+    resolveSendTargetBlockedReason({
+      projectSelectionRequired,
+      noProviderAvailable,
+      providerCatalogKnown,
+    }) ??
     (multipleModelSelections?.length === 0 ? "Select at least one model." : null) ??
     (activePendingProgress
       ? attachmentBlockReason
       : (attachmentBlockReason ??
         (multipleModelSelections === null ? providerSendBlockReason : null)));
   const isSendDisabled = sendDisabledReason !== null;
+  // A disabled Send button must say why, in text, since touch has no tooltip. Delayed, so a
+  // thread that is merely opening or a reconnect blip never flashes a notice.
+  const sendBlockedNotice = useDelayedStatus(
+    composerDraftTargetKey,
+    resolveSendBlockedReason({
+      environmentUnavailable: environmentUnavailable !== null,
+      isConnecting,
+      sendDisabledReason,
+    }),
+  );
   const selectedProviderStatus = useMemo(
     () => selectedProviderEntry?.snapshot ?? null,
     [selectedProviderEntry],
@@ -5065,7 +5083,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const toggleTasksDrawer = useCallback(() => {
     setIsTasksDrawerOpen((open) => !open);
   }, []);
-  const hasBannerItems = props.bannerItems.length > 0;
+  const bannerItems = useMemo<readonly ComposerBannerStackItem[]>(
+    () =>
+      sendBlockedNotice === null
+        ? props.bannerItems
+        : [
+            ...props.bannerItems,
+            {
+              id: "send-blocked",
+              variant: "info",
+              compact: true,
+              icon: <CircleAlertIcon />,
+              title: `Can't send yet: ${sendBlockedNotice}`,
+            },
+          ],
+    [props.bannerItems, sendBlockedNotice],
+  );
+  const hasBannerItems = bannerItems.length > 0;
   const hasBlockingComposerTopDrawer =
     activePendingApproval !== null || pendingUserInputs.length > 0;
   const showInlineTasksBadge =
@@ -5564,9 +5598,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         content: activityStackContent,
       }
     : null;
-  const bannerStackItems = activityStackItem
-    ? [activityStackItem, ...props.bannerItems]
-    : props.bannerItems;
+  const bannerStackItems = activityStackItem ? [activityStackItem, ...bannerItems] : bannerItems;
   useEffect(() => {
     if (activeTasksProgress === null || activeTaskSteps === null) {
       setIsTasksDrawerOpen(false);
@@ -6728,6 +6760,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                                 noProviderAvailable ||
                                 projectSelectionRequired
                               }
+                              isEnvironmentDisconnected={environmentUnavailable !== null}
                               isPreparingWorktree={false}
                               hasSendableContent={false}
                               preserveComposerFocusOnPointerDown
@@ -7413,6 +7446,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         noProviderAvailable ||
                         projectSelectionRequired
                       }
+                      isEnvironmentDisconnected={environmentUnavailable !== null}
                       isPreparingWorktree={false}
                       hasSendableContent={false}
                       preserveComposerFocusOnPointerDown
@@ -7537,6 +7571,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       noProviderAvailable ||
                       projectSelectionRequired
                     }
+                    isEnvironmentDisconnected={environmentUnavailable !== null}
                     isPreparingWorktree={isPreparingWorktree}
                     hasSendableContent={composerSendState.hasSendableContent}
                     canResume={showResumeAction}

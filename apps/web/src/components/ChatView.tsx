@@ -501,6 +501,7 @@ import {
   hasEnvironmentReconnectWarningGraceElapsed,
   scheduleEnvironmentReconnectWarning,
   hasServerAcknowledgedLocalDispatch,
+  localDispatchExpiryDelayMs,
   isBranchMismatchDismissedForSession,
   shouldShowBranchMismatchBanner,
   shouldShowPlanFollowUpPrompt,
@@ -865,6 +866,18 @@ function useLocalDispatchState(input: {
     ],
   );
   const activeLocalDispatch = serverAcknowledgedLocalDispatch ? null : localDispatch;
+  // A send the server never acknowledges would otherwise hold Send disabled until a reload
+  // (V2 holds it while a run is preparing, starting, or queued, so a hung provider start pins it).
+  useEffect(() => {
+    const delayMs = localDispatchExpiryDelayMs({
+      localDispatch,
+      serverAcknowledged: serverAcknowledgedLocalDispatch,
+      nowMs: Date.now(),
+    });
+    if (delayMs === null) return;
+    const timer = setTimeout(resetLocalDispatch, Math.max(0, delayMs));
+    return () => clearTimeout(timer);
+  }, [localDispatch, resetLocalDispatch, serverAcknowledgedLocalDispatch]);
   const beginLocalDispatch = useCallback(
     (options?: { preparingWorktree?: boolean; submissionIntent?: ComposerSubmissionIntent }) => {
       const preparingWorktree = Boolean(options?.preparingWorktree);
@@ -8341,7 +8354,7 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
-  const onSend = async (
+  const sendComposerMessage = async (
     e?: { preventDefault: () => void },
     dispatchMode: ComposerDispatchMode = "auto",
     submissionIntent: ComposerSubmissionIntent = "foreground",
@@ -8386,10 +8399,24 @@ export default function ChatView(props: ChatViewProps) {
       !clientSettingsHydrated ||
       threadDetailLoading ||
       environmentChangeRef.current !== null ||
-      sendInFlightRef.current ||
       feedbackUploadsInFlightRef.current.has(routeThreadKey)
     ) {
       notifyDirectAnnotationAttached();
+      return;
+    }
+    if (sendInFlightRef.current) {
+      if (directAnnotation) {
+        notifyDirectAnnotationAttached();
+      } else {
+        toastManager.add({
+          ...stackedThreadToast({
+            type: "warning",
+            title: "Message not sent",
+            description: "A previous send is still in progress. Try again in a moment.",
+          }),
+          id: "chat-send-in-flight",
+        });
+      }
       return;
     }
     if (needsLoadBalancing) {
@@ -9675,6 +9702,30 @@ export default function ChatView(props: ChatViewProps) {
         currentThreadKey === activeThreadKey ? null : currentThreadKey,
       );
       resetLocalDispatch();
+    }
+  };
+
+  // Every path out of a send releases the in-flight guard, including a throw or an awaited step
+  // that never settles into a failure. The body bumps the send generation once when it claims the
+  // guard; matching it keeps an early return (which never claimed the guard) and a background
+  // fan-out (which releases it early, so a newer send may own it) from clearing someone else's.
+  const onSend = async (...args: Parameters<typeof sendComposerMessage>) => {
+    const generationBefore = composerSendGenerationRef.current;
+    const ownsSend = () => composerSendGenerationRef.current === generationBefore + 1;
+    const threadIdForSend = activeThread?.id ?? null;
+    try {
+      await sendComposerMessage(...args);
+    } catch (error) {
+      if (!ownsSend()) throw error;
+      resetLocalDispatch();
+      if (threadIdForSend !== null) {
+        setThreadError(
+          threadIdForSend,
+          error instanceof Error ? error.message : "Failed to send message.",
+        );
+      }
+    } finally {
+      if (ownsSend()) sendInFlightRef.current = false;
     }
   };
 

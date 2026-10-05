@@ -1232,6 +1232,37 @@ export function deriveCommittedServerUserMessageIds(
   );
 }
 
+/**
+ * How long a local dispatch waits for the server to acknowledge it before the composer stops
+ * treating the send as pending. A healthy turn start is acknowledged well inside this; a longer
+ * silence means the send never settled, and holding Send disabled would not help the user.
+ */
+export const LOCAL_DISPATCH_ACK_TIMEOUT_MS = 30_000;
+
+/**
+ * Milliseconds until an unacknowledged local dispatch should be dropped, zero or less once it is
+ * overdue, or null when it must not expire. An acknowledged dispatch is the server's to finish,
+ * and a worktree preparation legitimately outlasts the timeout (the server records its progress
+ * on the thread), so neither expires here.
+ */
+export function localDispatchExpiryDelayMs(input: {
+  localDispatch: Pick<LocalDispatchSnapshot, "startedAt" | "preparingWorktree"> | null;
+  serverAcknowledged: boolean;
+  nowMs: number;
+}): number | null {
+  if (input.localDispatch === null || input.serverAcknowledged) {
+    return null;
+  }
+  if (input.localDispatch.preparingWorktree) {
+    return null;
+  }
+  const startedAtMs = Date.parse(input.localDispatch.startedAt);
+  if (Number.isNaN(startedAtMs)) {
+    return null;
+  }
+  return startedAtMs + LOCAL_DISPATCH_ACK_TIMEOUT_MS - input.nowMs;
+}
+
 export function hasServerAcknowledgedLocalDispatch(input: {
   localDispatch: LocalDispatchSnapshot | null;
   phase: SessionPhase;

@@ -38,7 +38,10 @@ interface ComposerPrimaryActionsProps {
   isSendBusy: boolean;
   sendDisabledReason: string | null;
   isConnecting: boolean;
+  /** Disables the actions for any reason the composer has nowhere to send. */
   isEnvironmentUnavailable: boolean;
+  /** The subset of `isEnvironmentUnavailable` that is a genuinely lost connection. */
+  isEnvironmentDisconnected: boolean;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   canResume?: boolean;
@@ -91,6 +94,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   sendDisabledReason,
   isConnecting,
   isEnvironmentUnavailable,
+  isEnvironmentDisconnected,
   isPreparingWorktree,
   hasSendableContent,
   canResume = false,
@@ -261,7 +265,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         : isRunning
           ? "Steer message"
           : "Submit message";
-  const submitStatus = isEnvironmentUnavailable
+  const submitStatus = isEnvironmentDisconnected
     ? "Environment disconnected"
     : (sendDisabledReason ??
       (isConnecting
@@ -282,6 +286,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const sendButton = (
     <button
       type={showResume ? "button" : "submit"}
+      data-chat-composer-send="true"
       className={cn(
         "relative isolate flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:inset-shadow-control-highlight hover:scale-105 active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none disabled:hover:scale-100 sm:h-8 sm:w-8 [&_svg]:pointer-events-none",
         stageBackdropVariant
