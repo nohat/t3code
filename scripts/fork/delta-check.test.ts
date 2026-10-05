@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
-import { classify, parseAllowList, parseNameStatusZ, parseNumstatZ } from "./delta-check.ts";
+import {
+  addedLines,
+  classify,
+  parseAllowList,
+  parseNameStatusZ,
+  parseNumstatZ,
+} from "./delta-check.ts";
 
 const SCRIPT = join(import.meta.dirname, "delta-check.ts");
 
@@ -18,7 +24,8 @@ function inputs(
     upstreamRenames: new Map(),
     mergeRenames: new Map(),
     upstreamDeleted: new Set(),
-    identicalToUpstream: () => false,
+    existsInMerged: () => false,
+    upstreamHasForkLines: () => false,
     ...overrides,
   };
 }
@@ -37,6 +44,10 @@ describe("parsers", () => {
     const parsed = parseNameStatusZ("R095\0a.ts\0b.ts\0D\0gone.ts\0M\0kept.ts\0");
     expect([...parsed.renames]).toEqual([["a.ts", "b.ts"]]);
     expect([...parsed.deleted]).toEqual(["gone.ts"]);
+  });
+
+  it("reads the lines a diff adds", () => {
+    expect(addedLines("+++ b/a.ts\n+ one\n-two\n+\n context\n+three")).toEqual(["one", "three"]);
   });
 
   it("ignores comments and blanks in the allow list", () => {
@@ -92,9 +103,22 @@ describe("classify", () => {
 
   it("treats a change upstream already made as absorbed", () => {
     const verdicts = classify(
-      inputs({ before: new Map([["a.ts", 2]]), identicalToUpstream: (path) => path === "a.ts" }),
+      inputs({
+        before: new Map([["a.ts", 2]]),
+        existsInMerged: (path) => path === "a.ts",
+        upstreamHasForkLines: () => true,
+      }),
     );
     expect(verdicts[0]?.kind).toBe("absorbed");
+  });
+
+  it("flags a file reset to upstream's version as dropped", () => {
+    const verdicts = classify(
+      inputs({ before: new Map([["a.ts", 2]]), existsInMerged: (path) => path === "a.ts" }),
+    );
+    expect(verdicts).toEqual([
+      { kind: "lines-dropped", path: "a.ts", at: "a.ts", before: 2, after: 0 },
+    ]);
   });
 });
 
@@ -174,6 +198,13 @@ describe("delta-check on a synthetic repository", () => {
       const allowed = check(dir, [oldMain, oldFork, newMain, bad], join(dir, "allow.txt"));
       expect(allowed.status).toBe(0);
       expect(allowed.stdout).toContain("allowed vanished fork-only.ts");
+
+      run("checkout", "-q", newMain, "--", "shared.ts");
+      run("commit", "-qm", "reset shared.ts to upstream");
+      const reset = run("rev-parse", "HEAD");
+      const dropped = check(dir, [oldMain, oldFork, newMain, reset]);
+      expect(dropped.status).toBe(1);
+      expect(dropped.stdout).toContain("LOSS lines-dropped shared.ts -> shared.ts (+2 -> +0)");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
