@@ -1,0 +1,52 @@
+# Fork files whose loss in an upstream merge was decided on purpose.
+# Read by `scripts/fork/delta-check.ts --allow docs/fork/delta-allow.txt`.
+# One path (as it was on fork/prod) per line; the comment says why.
+# Entries below: V2 catch-up, upstream 194c73f3f9, #36 (2026-10-05). Clear them once it lands.
+
+# Drain: rewritten under orchestration-v2/ (too different for rename detection) or moved upstream.
+apps/server/src/orchestration/ServerDrainState.ts # now orchestration-v2/ServerDrainState.ts
+apps/server/src/orchestration/ServerDrainState.test.ts # now orchestration-v2/ServerDrainState.test.ts
+apps/server/src/orchestration/drainHttp.test.ts # now orchestration-v2/drainHttp.test.ts
+apps/server/src/auth/http.ts # V2 has no HTTP dispatch route for the 503 helper
+apps/server/src/bin.ts # upstream's thin entry; commands live in binCli.ts
+packages/contracts/src/environmentHttp.ts # drain schemas re-added; V1 snapshot endpoint gone
+apps/server/src/server.ts # layer wiring re-added in V2 form
+
+# Stall watchdog: deferred (#28), kept on feat/turn-activity-registry.
+apps/server/src/orchestration/ThreadTurnActivity.ts
+apps/server/src/orchestration/ThreadTurnActivity.test.ts
+apps/server/src/orchestration/ThreadTurnWatchdog.ts
+apps/server/src/orchestration/ThreadTurnWatchdog.test.ts
+apps/server/src/project/AgentSessionImporter.test.ts # watchdog import only
+
+# OpenCode wave 0/1 and refresh policy: dropped per the V2 report.
+apps/server/src/provider/Drivers/OpenCodeDriver.ts # refresh policy dropped; scoped agents re-added
+apps/server/src/provider/Drivers/OpenCodeDriver.test.ts # refresh-policy tests
+apps/server/src/provider/Layers/OpenCodeProvider.ts # wave 0 dropped; scoped agents re-added
+apps/server/src/provider/Layers/OpenCodeProvider.test.ts # wave 0 cases
+apps/server/src/provider/Layers/openCodeUsageLimits.ts # wave 1
+apps/web/src/components/chat/ContextWindowMeter.logic.ts # wave 1 resume banner
+apps/web/src/components/chat/ContextWindowMeter.logic.test.ts # wave 1 resume banner
+docs/user/providers-opencode.md # described the dropped refresh policy
+
+# Scoped agents: `agents` is optional now, so providers no longer write `agents: []`.
+apps/server/src/provider/Layers/AntigravityProvider.ts
+apps/server/src/provider/Layers/CursorProvider.ts
+apps/server/src/provider/Layers/ProviderRegistry.test.ts # merge glue removed
+packages/client-runtime/src/providerSkills.test.ts # one fixture line
+
+# Send-never-settles: 120 s start timeout dropped (V2 replies at commit); send body wrapped, not re-indented.
+packages/client-runtime/src/operations/commands.ts
+packages/client-runtime/src/operations/commands.test.ts
+packages/client-runtime/src/state/threadCommands.test.ts # rewritten for V2 commands
+apps/web/src/components/ChatView.tsx # re-indent replaced by a wrapper; wave 1 hunk dropped
+apps/web/src/components/chat/ComposerPrimaryActions.test.tsx # upstream has two render sites
+
+# Reconnect feedback: upstream's supervisor contradicts the old test; mobile summary is client-runtime's now.
+packages/client-runtime/src/connection/supervisor.test.ts
+apps/mobile/src/state/use-remote-environment-registry.ts
+apps/mobile/src/state/workspaceModel.ts
+
+# iPad feed jump: upstream's 1.22.6 patch taken whole (#17); lockfile regenerated.
+patches/react-native-keyboard-controller@1.22.4.patch
+pnpm-lock.yaml
