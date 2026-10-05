@@ -1821,6 +1821,9 @@ const makeWsRpcLayer = (
                     commandType: command.type,
                     message: detail ?? "Failed to dispatch orchestration V2 command",
                     ...(detail === undefined ? {} : { detail }),
+                    ...(cause._tag === "ServerDrainingError"
+                      ? { reason: "server-draining" as const }
+                      : {}),
                     cause,
                   });
                 }),
@@ -2020,6 +2023,14 @@ const makeWsRpcLayer = (
                       commandId: input.commandId,
                       projectId: input.projectId,
                       message: "Failed to launch thread",
+                      cause,
+                    }),
+                  ServerDrainingError: (cause) =>
+                    new OrchestrationV2ThreadLaunchError({
+                      commandId: input.commandId,
+                      projectId: input.projectId,
+                      message: cause.message,
+                      reason: "server-draining",
                       cause,
                     }),
                 }),

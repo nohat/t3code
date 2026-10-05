@@ -11,6 +11,7 @@ import { acpMcpBridgeCommand, acpMcpCallCommand } from "./cli/acpMcpBridge.ts";
 import { authCommand } from "./cli/auth.ts";
 import { appCommand } from "./cli/app.ts";
 import { connectCommand } from "./cli/connect.ts";
+import { drainCommand } from "./cli/drain.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { papercutsCommand } from "./cli/papercuts.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
@@ -74,6 +75,7 @@ export const makeCli = ({ cloudEnabled = hasCloudPublicConfig } = {}) =>
       authCommand,
       projectCommand,
       papercutsCommand,
+      drainCommand,
       serviceCommand,
       updateCommand,
       uninstallCommand,
