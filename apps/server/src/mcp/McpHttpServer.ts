@@ -20,6 +20,7 @@ import * as ServerConfig from "../config.ts";
 import * as DeviceService from "../device/DeviceService.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
+import * as OrchestratorModelHints from "./OrchestratorModelHints.ts";
 import { PreviewControlsToolkit } from "./toolkits/previewControls/tools.ts";
 import { PreviewControlsHandlersLive } from "./toolkits/previewControls/handlers.ts";
 import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
@@ -662,7 +663,7 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
 
 export const OrchestratorToolkitRegistrationLive = McpServer.toolkit(OrchestratorToolkit).pipe(
   Layer.provide(OrchestratorToolkitHandlersLive),
-  Layer.provide(OrchestratorMcpService.layer),
+  Layer.provide(OrchestratorMcpService.layer.pipe(Layer.provide(OrchestratorModelHints.layer))),
   Layer.provide(ThreadMetadataMcpService.layer),
 );
 
