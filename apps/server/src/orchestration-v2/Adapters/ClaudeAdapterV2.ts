@@ -137,6 +137,8 @@ import {
 
 export const CLAUDE_PROVIDER = ProviderDriverKind.make("claudeAgent");
 export const CLAUDE_AGENT_SDK_QUERY_PROTOCOL = "claude-agent-sdk.query" as const;
+/** Fork: bound on control requests a silent CLI may never answer (fork issue #1). */
+const CLAUDE_CONTROL_REQUEST_TIMEOUT = "3 seconds";
 
 function claudeContextWindow(modelSelection: ModelSelection): number | null {
   if (modelSelection.model === "claude-opus-4-6" || modelSelection.model === "claude-opus-4-7") {
@@ -6942,8 +6944,20 @@ export function makeClaudeAdapterV2(
             // a denied ExitPlanMode leaves it there. Put the live process back
             // in the thread's mode before the next prompt.
             if (existing.permissionMode !== existing.openedPermissionMode) {
-              yield* existing.query.setPermissionMode(existing.openedPermissionMode);
-              existing.permissionMode = existing.openedPermissionMode;
+              // A silent CLI never answers the control request; bound it so
+              // the turn still starts. The mode stays stale, so the next
+              // prompt tries again.
+              const restored = yield* existing.query
+                .setPermissionMode(existing.openedPermissionMode)
+                .pipe(Effect.timeoutOption(CLAUDE_CONTROL_REQUEST_TIMEOUT));
+              if (Option.isSome(restored)) {
+                existing.permissionMode = existing.openedPermissionMode;
+              } else {
+                yield* Effect.logWarning("orchestration-v2.claude-set-permission-mode-timeout", {
+                  providerSessionId: input.providerSessionId,
+                  permissionMode: existing.openedPermissionMode,
+                });
+              }
             }
             return existing;
           }
@@ -7337,7 +7351,17 @@ export function makeClaudeAdapterV2(
               next.add(turnInput.providerTurnId);
               return next;
             });
-            yield* existing.query.interrupt;
+            // A silent CLI never acknowledges the interrupt; bound it so
+            // Stop falls through to closing the process.
+            const interrupted = yield* existing.query.interrupt.pipe(
+              Effect.timeoutOption(CLAUDE_CONTROL_REQUEST_TIMEOUT),
+            );
+            if (Option.isNone(interrupted)) {
+              yield* Effect.logWarning("orchestration-v2.claude-interrupt-request-timeout", {
+                providerSessionId: input.providerSessionId,
+                providerTurnId: turnInput.providerTurnId,
+              });
+            }
             yield* existing.query.close.pipe(Effect.ignore);
             const closed = yield* Deferred.await(existing.closed).pipe(
               Effect.timeoutOption("10 seconds"),

@@ -43,6 +43,7 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { Tool } from "effect/ai";
 import { formatClaudeResumeCompactionQuestion } from "@t3tools/shared/claudeCompaction";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
@@ -2075,6 +2076,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
   const makeWakeHarnessWithOptions = (options?: {
     readonly close?: (sdkMessages: Queue.Queue<SDKMessage>) => Effect.Effect<void>;
     readonly interrupt?: Effect.Effect<void>;
+    readonly setPermissionMode?: Effect.Effect<void>;
     readonly environment?: NodeJS.ProcessEnv;
   }) =>
     Effect.gen(function* () {
@@ -2144,7 +2146,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
                 setPermissionMode: (mode) =>
                   Effect.sync(() => {
                     permissionModeChanges.push(mode);
-                  }),
+                  }).pipe(Effect.andThen(options?.setPermissionMode ?? Effect.void)),
                 interrupt: options?.interrupt ?? Effect.void,
                 close: options?.close?.(sdkMessages) ?? Effect.void,
               };
@@ -3388,6 +3390,115 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         // The second prompt reuses the live process, which is still in the
         // plan mode Claude entered, so it is put back in the thread's mode.
         assert.deepEqual(harness.permissionModeChanges, ["bypassPermissions"]);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  // Fork (issue #1): a silent CLI must not hold a prompt or Stop hostage.
+  it.effect("starts the next turn when restoring the permission mode gets no reply", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const modeRequested = yield* Deferred.make<void>();
+        const harness = yield* makeWakeHarnessWithOptions({
+          setPermissionMode: Deferred.succeed(modeRequested, undefined).pipe(
+            Effect.andThen(Effect.never),
+          ),
+        });
+        const now = yield* DateTime.now;
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-claude-silent-mode-1"),
+            text: "Plan the work.",
+            attachments: [],
+          }),
+        );
+        // Claude entered plan mode on its own (EnterPlanMode).
+        yield* Queue.offer(
+          harness.sdkMessages,
+          claudeSdkFrame({
+            type: "system",
+            subtype: "status",
+            status: null,
+            permissionMode: "plan",
+            uuid: "00000000-0000-4000-8000-000000000901",
+            session_id: WAKE_NATIVE_SESSION,
+          }),
+        );
+        yield* Queue.offer(
+          harness.sdkMessages,
+          makeResultFrame({ uuid: "00000000-0000-4000-8000-000000000902", result: "Done." }),
+        );
+        yield* Queue.take(harness.terminalReceipts);
+
+        const secondTurn = yield* harness.runtime
+          .startTurn(
+            makeClaudeTestTurnInput({
+              threadId: harness.threadId,
+              providerThread: harness.providerThread,
+              now,
+              attemptId: RunAttemptId.make("attempt-claude-silent-mode-2"),
+              providerTurnOrdinal: 2,
+              text: "Continue.",
+              attachments: [],
+            }),
+          )
+          .pipe(Effect.forkScoped);
+        yield* Deferred.await(modeRequested);
+        assert.lengthOf(harness.offeredMessages, 1);
+        yield* TestClock.adjust("3 seconds");
+        yield* Fiber.join(secondTurn);
+
+        assert.deepEqual(harness.permissionModeChanges, ["bypassPermissions"]);
+        assert.lengthOf(harness.offeredMessages, 2);
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
+  it.effect("closes the CLI process when an interrupt gets no reply", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let closes = 0;
+        const interruptStarted = yield* Deferred.make<void>();
+        const harness = yield* makeWakeHarnessWithOptions({
+          interrupt: Deferred.succeed(interruptStarted, undefined).pipe(
+            Effect.andThen(Effect.never),
+          ),
+          close: (sdkMessages) =>
+            Effect.sync(() => {
+              closes++;
+            }).pipe(Effect.andThen(Queue.shutdown(sdkMessages))),
+        });
+        const idAllocator = yield* IdAllocator.IdAllocatorV2;
+        const attemptId = RunAttemptId.make("attempt-claude-silent-interrupt");
+        const providerTurnId = idAllocator.derive.providerTurn({
+          driver: ClaudeAdapterV2.CLAUDE_PROVIDER,
+          nativeTurnId: `turn:${attemptId}`,
+        });
+        yield* harness.runtime.startTurn(
+          makeClaudeTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now: yield* DateTime.now,
+            attemptId,
+            text: "Stop this task.",
+            attachments: [],
+          }),
+        );
+
+        const stop = yield* harness.runtime
+          .interruptTurn({ providerThread: harness.providerThread, providerTurnId })
+          .pipe(Effect.forkScoped);
+        yield* Deferred.await(interruptStarted);
+        assert.equal(closes, 0);
+        yield* TestClock.adjust("3 seconds");
+        yield* Fiber.join(stop);
+
+        assert.equal(closes, 1);
+        yield* awaitUntil(() => harness.terminalEvents().length === 1, "interrupted terminal");
+        assert.equal(harness.terminalEvents()[0]?.status, "interrupted");
       }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
     ),
   );
