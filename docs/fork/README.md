@@ -107,6 +107,8 @@ A dev stack started by an agent must be unable to reach the live home and unable
 5. **Health check** the new server (version and port from the server itself). On failure, swap back and restart.
 6. **Report** through `agent_inbox`. Silence means success.
 
+Orchestration V2 (from the #36 catch-up, `sync/upstream-20261005`): the drain count comes from the server (`t3 drain status`, runs in `preparing`/`starting`/`running` plus unheld `queued`; `waiting` reported apart), then from `statev2.sqlite`, then v1. Restarts use `launchctl bootout` and `bootstrap` (plist `ExitTimeOut` 60 s) so V2 shuts down gracefully. The first V2 boot takes `--first-boot-budget-seconds 240` and is preceded by `scripts/fork/v2-cutover-prepare.ts` (backup, build `statev2.sqlite`, drop the `PushDevices` id-55 ledger row from the copy only); a failed first boot moves `statev2.sqlite*` aside, and a rollback onto v1 needs `--accept-data-loss`. Sequence and risks: [orchestrator-v2.md](./orchestrator-v2.md), Part 4.
+
 I recommend keeping this in the fork rather than registering it in scaffold's `deploy-ops`: scaffold's pipeline is built around Python batteries and launchd units, and coupling two release trains conflicts with "one clear place". Scaffold watches the result. This is reversible.
 
 ### 5. Automation of the admin
