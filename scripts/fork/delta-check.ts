@@ -7,8 +7,10 @@
 // The fork's delta before the merge is `git diff -M --numstat old-main old-fork`;
 // after it is `git diff -M --numstat new-main merged`. A fork file is a loss when
 // its added-line count fell, or when it vanished although upstream did not delete
-// it. Renames on either side (upstream's, or git's rename-following during the
-// merge) are followed. `--allow` names a file of paths (one per line, `#` starts a
+// it. A file the merge left identical to upstream counts as absorbed only when
+// upstream's version already contains every line the fork added; otherwise its
+// fork lines were dropped. Renames on either side (upstream's, or git's
+// rename-following during the merge) are followed. `--allow` names a file of paths (one per line, `#` starts a
 // comment) whose loss was decided on purpose, such as a dropped feature. Prints
 // counts and paths only; exits 1 on any unallowed loss.
 import { execFileSync } from "node:child_process";
@@ -43,8 +45,10 @@ export interface DeltaInputs {
   readonly mergeRenames: ReadonlyMap<string, string>;
   /** Paths that existed in the old base and are gone from the new base. */
   readonly upstreamDeleted: ReadonlySet<string>;
-  /** Paths present in the merged tree with content identical to the new base. */
-  readonly identicalToUpstream: (path: string) => boolean;
+  /** Whether the path exists in the merged tree. */
+  readonly existsInMerged: (path: string) => boolean;
+  /** Whether the new base's file at `at` already holds every line the fork added to `path`. */
+  readonly upstreamHasForkLines: (path: string, at: string) => boolean;
 }
 
 /** Parses `git diff --numstat -z` output; a rename yields its destination path. */
@@ -120,9 +124,14 @@ export function classify(inputs: DeltaInputs): FileVerdict[] {
       );
       continue;
     }
-    const absorbed = candidates.find((candidate) => inputs.identicalToUpstream(candidate));
-    if (absorbed !== undefined) {
-      verdicts.push({ kind: "absorbed", path, at: absorbed });
+    // Present but absent from the after-diff: identical to upstream.
+    const present = candidates.find((candidate) => inputs.existsInMerged(candidate));
+    if (present !== undefined) {
+      verdicts.push(
+        inputs.upstreamHasForkLines(path, present)
+          ? { kind: "absorbed", path, at: present }
+          : { kind: "lines-dropped", path, at: present, before, after: 0 },
+      );
       continue;
     }
     if (inputs.upstreamDeleted.has(path) && !inputs.upstreamRenames.has(path)) {
@@ -148,7 +157,21 @@ export function parseAllowList(text: string): Set<string> {
 }
 
 function git(args: readonly string[]): string {
-  return execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  // A user-level `color.ui=always` would otherwise color diff output.
+  return execFileSync("git", ["-c", "color.ui=false", ...args], {
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+}
+
+/** Trimmed, non-empty lines a unified diff adds. */
+export function addedLines(diff: string): string[] {
+  return diff
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1).trim())
+    .filter((line) => line !== "");
 }
 
 function numstat(from: string, to: string): Map<string, number> {
@@ -180,11 +203,23 @@ function main(): void {
   ];
   const upstream = parseNameStatusZ(git(["diff", "-M", "--name-status", "-z", oldMain, newMain]));
   const mergeSide = parseNameStatusZ(git(["diff", "-M", "--name-status", "-z", oldFork, merged]));
-  const identical = (path: string): boolean => {
+  const existsInMerged = (path: string): boolean => {
     try {
-      return (
-        git(["rev-parse", `${newMain}:${path}`]).trim() ===
-        git(["rev-parse", `${merged}:${path}`]).trim()
+      git(["cat-file", "-e", `${merged}:${path}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const upstreamHasForkLines = (path: string, at: string): boolean => {
+    try {
+      const upstreamLines = new Set(
+        git(["show", `${newMain}:${at}`])
+          .split("\n")
+          .map((line) => line.trim()),
+      );
+      return addedLines(git(["diff", oldMain, oldFork, "--", path])).every((line) =>
+        upstreamLines.has(line),
       );
     } catch {
       return false;
@@ -197,7 +232,8 @@ function main(): void {
     upstreamRenames: upstream.renames,
     mergeRenames: mergeSide.renames,
     upstreamDeleted: upstream.deleted,
-    identicalToUpstream: identical,
+    existsInMerged,
+    upstreamHasForkLines,
   });
 
   const counts = new Map<string, number>();
