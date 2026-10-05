@@ -25,9 +25,9 @@ own provider or model.
 3. Choose the cheapest model that can reasonably do the task. Spend more only
    when the task needs it (hard reasoning, large refactors, long context).
 4. Dispatch:
-   - A child of this thread: `delegate_task` with `target: { providerInstanceId,
-model, options }`, a title, and a self-contained `task`. Cross-provider
-     works; the child shares this thread's project.
+   - A child of this thread: `delegate_task` with a title, a self-contained
+     `task`, and a `target` naming `providerInstanceId`, `model`, and
+     `options`. Cross-provider works; the child shares this thread's project.
    - Independent or other-project work: `t3_thread_launch` with `projectId`
      and `modelSelection: { instanceId, model, options }`.
 5. Follow up: `task_status` with the returned task id for delegated work;
