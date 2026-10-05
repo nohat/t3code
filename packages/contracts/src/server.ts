@@ -173,7 +173,10 @@ export const ServerProviderWorkspaceSnapshot = Schema.Struct({
   /** Skills are available, but command discovery still needs a retry. */
   slashCommandsPending: Schema.optional(Schema.Boolean),
   skills: Schema.Array(ServerProviderSkill),
+  // Optional on the type so producers without a directory-scoped roster
+  // (every driver but OpenCode 1.x) need not send it; decoding fills [].
   agents: Schema.Array(ServerProviderWorkspaceAgent).pipe(
+    Schema.optional,
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   agentCurrentValue: Schema.optional(TrimmedNonEmptyString),

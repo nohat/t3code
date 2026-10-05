@@ -1122,6 +1122,7 @@ import {
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
   hasCompleteProviderWorkspaceSnapshot,
+  resolveProviderModelsForCwd,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
 } from "@t3tools/client-runtime/providerSkills";
@@ -2267,9 +2268,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderEntry,
     workspaceRefreshRetry,
   ]);
+  // Directory-scoped agents (e.g. a project's `.opencode/agents` primaries)
+  // arrive on the workspace snapshot — resolve them here so the agent picker
+  // and dispatch validation see the same roster as the session directory.
   const selectedProviderModels = useMemo<ReadonlyArray<ServerProvider["models"][number]>>(
-    () => selectedProviderEntry?.models ?? [],
-    [selectedProviderEntry],
+    () =>
+      selectedProviderEntry
+        ? resolveProviderModelsForCwd(selectedProviderEntry.snapshot, gitCwd)
+        : [],
+    [selectedProviderEntry, gitCwd],
   );
 
   const composerPromptInjectionState = useMemo(

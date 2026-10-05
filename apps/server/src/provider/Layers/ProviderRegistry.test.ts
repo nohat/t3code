@@ -639,9 +639,36 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             checkedAt: scopedSnapshot.checkedAt,
             slashCommands: scopedSnapshot.slashCommands,
             skills: scopedSnapshot.skills,
-            agents: [],
           },
         ]);
+
+        const pendingSnapshot = {
+          ...scopedSnapshot,
+          slashCommands: [COMPACT_SLASH_COMMAND],
+          slashCommandsPending: true,
+        } satisfies ProviderWorkspaceSnapshot;
+        const partial = upsertProviderWorkspaceSnapshot(result, "/project", pendingSnapshot);
+        assert.deepStrictEqual(partial.workspaceSnapshots?.[0]?.slashCommands, [
+          { name: "project" },
+        ]);
+        assert.strictEqual(partial.workspaceSnapshots?.[0]?.slashCommandsPending, true);
+        const otherProject = upsertProviderWorkspaceSnapshot(
+          partial,
+          "/other-project",
+          pendingSnapshot,
+        );
+        assert.deepStrictEqual(otherProject.workspaceSnapshots?.[1]?.slashCommands, [
+          COMPACT_SLASH_COMMAND,
+        ]);
+        const recovered = upsertProviderWorkspaceSnapshot(partial, "/project", {
+          ...scopedSnapshot,
+          slashCommands: [COMPACT_SLASH_COMMAND, { name: "replacement" }],
+        });
+        assert.deepStrictEqual(recovered.workspaceSnapshots?.[0]?.slashCommands, [
+          COMPACT_SLASH_COMMAND,
+          { name: "replacement" },
+        ]);
+        assert.strictEqual(recovered.workspaceSnapshots?.[0]?.slashCommandsPending, undefined);
       });
 
       it("carries the scoped agent roster on the workspace snapshot", () => {
@@ -694,34 +721,6 @@ it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), Test
             agentCurrentValue: "build",
           },
         ]);
-
-        const pendingSnapshot = {
-          ...scopedSnapshot,
-          slashCommands: [COMPACT_SLASH_COMMAND],
-          slashCommandsPending: true,
-        } satisfies ProviderWorkspaceSnapshot;
-        const partial = upsertProviderWorkspaceSnapshot(result, "/project", pendingSnapshot);
-        assert.deepStrictEqual(partial.workspaceSnapshots?.[0]?.slashCommands, [
-          { name: "project" },
-        ]);
-        assert.strictEqual(partial.workspaceSnapshots?.[0]?.slashCommandsPending, true);
-        const otherProject = upsertProviderWorkspaceSnapshot(
-          partial,
-          "/other-project",
-          pendingSnapshot,
-        );
-        assert.deepStrictEqual(otherProject.workspaceSnapshots?.[1]?.slashCommands, [
-          COMPACT_SLASH_COMMAND,
-        ]);
-        const recovered = upsertProviderWorkspaceSnapshot(partial, "/project", {
-          ...scopedSnapshot,
-          slashCommands: [COMPACT_SLASH_COMMAND, { name: "replacement" }],
-        });
-        assert.deepStrictEqual(recovered.workspaceSnapshots?.[0]?.slashCommands, [
-          COMPACT_SLASH_COMMAND,
-          { name: "replacement" },
-        ]);
-        assert.strictEqual(recovered.workspaceSnapshots?.[0]?.slashCommandsPending, undefined);
       });
 
       it("preserves previously discovered provider models when a refresh returns none", () => {

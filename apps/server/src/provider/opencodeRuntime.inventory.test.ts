@@ -117,7 +117,7 @@ it.layer(testLayer)("OpenCodeRuntime inventory", (it) => {
 
   it.effect("loads directory-scoped agents for the session project", () =>
     Effect.gen(function* () {
-      const runtime = yield* OpenCodeRuntime;
+      const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
       const requests: Request[] = [];
       const client = createOpencodeClient({
         baseUrl: "http://opencode.test",

@@ -7,6 +7,7 @@ import {
   getProviderSlashCommandsForSlashMenu,
   getProviderSkillsForSlashMenu,
   hasCompleteProviderWorkspaceSnapshot,
+  resolveProviderModelsForCwd,
   resolveProviderSkillsForCwd,
   resolveProviderSlashCommandsForCwd,
   resolveProviderSkillSourceKind,
@@ -273,5 +274,84 @@ describe("workspace provider snapshots", () => {
     expect(hasCompleteProviderWorkspaceSnapshot(provider, "/workspace/project-b")).toBe(false);
     expect(hasCompleteProviderWorkspaceSnapshot(undefined, "/workspace/project-a")).toBe(false);
     expect(hasCompleteProviderWorkspaceSnapshot(provider, null)).toBe(false);
+  });
+
+  it("applies the workspace agent roster to model agent descriptors", () => {
+    const models = [
+      {
+        slug: "openai/gpt-test",
+        name: "GPT Test",
+        isCustom: false,
+        capabilities: {
+          optionDescriptors: [
+            {
+              id: "variant",
+              label: "Reasoning",
+              type: "select" as const,
+              options: [{ id: "medium", label: "Medium" }],
+              currentValue: "medium",
+            },
+            {
+              id: "agent",
+              label: "Agent",
+              type: "select" as const,
+              options: [{ id: "build", label: "Build", isDefault: true }],
+              currentValue: "build",
+            },
+          ],
+        },
+      },
+    ];
+    const scoped = {
+      ...provider,
+      models,
+      workspaceSnapshots: [
+        {
+          cwd: "/workspace/project-a",
+          checkedAt: "2026-01-01T00:01:00.000Z",
+          slashCommands: [{ name: "project" }],
+          skills: [],
+          agents: [
+            { id: "build", label: "Build", isDefault: true },
+            { id: "orchestrator", label: "Orchestrator" },
+          ],
+          agentCurrentValue: "build",
+        },
+      ],
+    };
+    const resolved = resolveProviderModelsForCwd(scoped, "/workspace/project-a");
+    const agentDescriptor = resolved[0]?.capabilities?.optionDescriptors?.find(
+      (descriptor) => descriptor.id === "agent",
+    );
+    expect(
+      agentDescriptor?.type === "select" ? agentDescriptor.options.map((option) => option.id) : [],
+    ).toEqual(["build", "orchestrator"]);
+    // Reasoning descriptors pass through untouched.
+    expect(resolved[0]?.capabilities?.optionDescriptors?.length).toBe(2);
+  });
+
+  it("keeps base models when the cwd has no agent roster", () => {
+    const models = [
+      {
+        slug: "openai/gpt-test",
+        name: "GPT Test",
+        isCustom: false,
+        capabilities: {
+          optionDescriptors: [
+            {
+              id: "agent",
+              label: "Agent",
+              type: "select" as const,
+              options: [{ id: "build", label: "Build", isDefault: true }],
+              currentValue: "build",
+            },
+          ],
+        },
+      },
+    ];
+    expect(resolveProviderModelsForCwd({ models, workspaceSnapshots: [] }, null)).toBe(models);
+    expect(resolveProviderModelsForCwd({ ...provider, models }, "/workspace/project-b")).toBe(
+      models,
+    );
   });
 });

@@ -137,7 +137,7 @@ export function upsertProviderWorkspaceSnapshot(
       : scopedSnapshot.slashCommands,
     ...(scopedSnapshot.slashCommandsPending ? { slashCommandsPending: true } : {}),
     skills: scopedSnapshot.skills,
-    ...(scopedWorkspaceAgents(scopedSnapshot) ?? { agents: [] }),
+    ...scopedWorkspaceAgents(scopedSnapshot),
   } satisfies NonNullable<ServerProvider["workspaceSnapshots"]>[number];
   return {
     ...provider,
