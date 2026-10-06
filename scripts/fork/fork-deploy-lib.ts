@@ -228,7 +228,11 @@ export function renderLaunchAgent(options: {
   readonly port: number;
   readonly logDir: string;
 }): string {
-  const env = { T3CODE_HOME: options.home, T3CODE_PORT: String(options.port) };
+  const env = {
+    T3CODE_HOME: options.home,
+    T3CODE_PORT: String(options.port),
+    T3CODE_TELEMETRY_ENABLED: "false",
+  };
   const envEntries = Object.entries(env)
     .map(([key, value]) => `    <key>${key}</key><string>${xml(value)}</string>`)
     .join("\n");
