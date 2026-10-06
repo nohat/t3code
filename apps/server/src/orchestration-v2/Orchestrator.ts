@@ -9441,6 +9441,53 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "orchestration_v2.thread_id": commandThreadId(command),
     });
 
+    if (command.type === "message.dispatch" && command.automaticAuthority !== undefined) {
+      // Receipt replay has already happened. All checks and planning share the
+      // thread mutation lock; a remote read is never itself admission.
+      const reject = (cause: string) =>
+        new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause,
+        });
+      const sequence = yield* eventSink
+        .latestSequence({ threadId: command.threadId })
+        .pipe(Effect.mapError((cause) => reject(String(cause))));
+      if (sequence !== command.automaticAuthority.expectedThreadSequence)
+        return yield* reject(
+          "Automatic authority changed; retain queued content and review the thread.",
+        );
+      const projection = yield* loadProjectionForCommand(command, ["runs"]);
+      const latest = projection.runs.at(-1);
+      if (
+        projection.thread.archivedAt !== null ||
+        projection.thread.deletedAt !== null ||
+        latest?.status === "interrupted" ||
+        latest?.status === "cancelled" ||
+        projection.runs.some((run) => run.status === "queued" && run.queueHeld)
+      )
+        return yield* reject("Automatic work is suppressed by thread Stop, archive or deletion.");
+      for (const run of projection.runs.filter(
+        (run) =>
+          run === latest ||
+          run.status === "preparing" ||
+          run.status === "starting" ||
+          run.status === "running" ||
+          run.status === "waiting",
+      )) {
+        const pending = yield* projectionStore
+          .hasUnpairedRunInterruptRequest(
+            command.threadId,
+            idAllocator.derive.runSignalTurnItem({ runId: run.id, signal: "interrupt-request" }),
+            idAllocator.derive.runSignalTurnItem({ runId: run.id, signal: "interrupt-result" }),
+          )
+          .pipe(
+            Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })),
+          );
+        if (pending) return yield* reject("Automatic work is suppressed by a pending interrupt.");
+      }
+    }
+
     const events = yield* Ref.make<Array<OrchestrationV2DomainEvent>>([]);
     const effects = yield* Ref.make<Array<PendingOrchestrationEffectV2>>([]);
     let cancelUnsettledEffects:
