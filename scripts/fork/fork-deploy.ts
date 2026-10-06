@@ -32,7 +32,7 @@ import * as NodeUtil from "node:util";
 
 import {
   atomicSwap,
-  automaticRollbackAllowed,
+  releaseTransitionAllowed,
   classifyV2Copy,
   deployFailureMessage,
   COMPLETE_MARKER,
@@ -409,11 +409,23 @@ async function deploy(ref: string): Promise<number> {
       );
     }
 
+    const currentUsesV2 = before ? releaseUsesV2State(config.root, before) : null;
+    const targetUsesV2 = releaseUsesV2State(config.root, sha);
+    if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, false)) {
+      const warning =
+        "This transition can hide new V2 history and authentication sessions. statev2.sqlite is preserved; fix forward by default.";
+      console.error(`fork-deploy: ${warning}`);
+      if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, values["accept-data-loss"])) {
+        report(
+          `deploy of ${sha} refused: V2 history/auth loss was not accepted`,
+          `current=${before ?? "unknown"}; ${warning} Use --accept-data-loss only after explicitly accepting that loss.`,
+        );
+        return 1;
+      }
+    }
+
     // A binary V1-to-V2 transition needs the longer probe budget. Copy ownership is separate.
-    const firstV2Boot =
-      before !== null &&
-      releaseUsesV2State(config.root, sha) === true &&
-      releaseUsesV2State(config.root, before) === false;
+    const firstV2Boot = before !== null && targetUsesV2 === true && currentUsesV2 === false;
     const bootBudget = firstV2Boot
       ? parseSeconds(values["first-boot-budget-seconds"], "--first-boot-budget-seconds")
       : 90;
@@ -425,7 +437,7 @@ async function deploy(ref: string): Promise<number> {
     draining = !values.force && startDrain(drainSeconds + 600);
     // The serving release's own count first; then the database it uses. Unreadable means no
     // server holds the database; if one is answering, assume it is busy.
-    const servingUsesV2 = before ? releaseUsesV2State(config.root, before) : null;
+    const servingUsesV2 = currentUsesV2;
     const countRunning = async () =>
       drainCommand(["status"])?.runningTurns ??
       (servingUsesV2 === null
@@ -479,7 +491,7 @@ async function deploy(ref: string): Promise<number> {
       return 3;
     }
     if (
-      !automaticRollbackAllowed(
+      !releaseTransitionAllowed(
         releaseUsesV2State(config.root, sha),
         releaseUsesV2State(config.root, previous),
         values["accept-data-loss"],
@@ -563,20 +575,18 @@ async function rollback(to?: string): Promise<number> {
     return 1;
   }
   const current = readCurrent(config.root);
-  if (
-    current !== null &&
-    releaseUsesV2State(config.root, current) === true &&
-    releaseUsesV2State(config.root, target) !== true
-  ) {
+  const currentUsesV2 = current ? releaseUsesV2State(config.root, current) : null;
+  const targetUsesV2 = releaseUsesV2State(config.root, target);
+  if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, false)) {
     const hidden = countV2OnlyRows(userdataDir);
     const counts = hidden
       ? `${hidden.threads} thread(s) and ${hidden.messages} message(s)`
       : "an unknown number of threads and messages";
     console.error(
-      `fork-deploy: ${target} reads state.sqlite as of the V2 cutover; ${counts} created on V2 ` +
-        "will be hidden (statev2.sqlite is kept), and sessions paired since must pair again.",
+      `fork-deploy: ${target} may read state.sqlite as of the V2 cutover; ${counts} created on V2 ` +
+        "may be hidden (statev2.sqlite is kept), and authentication sessions paired since may need pairing again. Fix forward by default.",
     );
-    if (!values["accept-data-loss"]) {
+    if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, values["accept-data-loss"])) {
       console.error("fork-deploy: re-run with --accept-data-loss to roll back anyway");
       return 1;
     }

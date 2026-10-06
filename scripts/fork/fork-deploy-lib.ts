@@ -372,13 +372,14 @@ export function automaticRollbackAllowed(
   previousUsesV2: boolean | null,
   acceptDataLoss: boolean,
 ): boolean {
-  return acceptDataLoss || candidateUsesV2 === false || previousUsesV2 === true;
+  return releaseTransitionAllowed(candidateUsesV2, previousUsesV2, acceptDataLoss);
 }
 
+/** Shared by deploy, explicit rollback and failed-boot recovery before changing generations. */
 export function releaseTransitionAllowed(
-  _currentUsesV2: boolean | null,
-  _targetUsesV2: boolean | null,
-  _acceptDataLoss: boolean,
+  currentUsesV2: boolean | null,
+  targetUsesV2: boolean | null,
+  acceptDataLoss: boolean,
 ): boolean {
-  return true;
+  return acceptDataLoss || currentUsesV2 === false || targetUsesV2 === true;
 }
