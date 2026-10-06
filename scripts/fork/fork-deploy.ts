@@ -399,9 +399,12 @@ async function deploy(ref: string): Promise<number> {
     draining = !values.force && startDrain(drainSeconds + 600);
     // The serving release's own count first; then the database it uses. Unreadable means no
     // server holds the database; if one is answering, assume it is busy.
+    const servingUsesV2 = before ? releaseUsesV2State(config.root, before) : null;
     const countRunning = async () =>
       drainCommand(["status"])?.runningTurns ??
-      countRunningSessions(resolveStateDb(config.home)) ??
+      (servingUsesV2 === null
+        ? null
+        : countRunningSessions(resolveStateDb(config.home, servingUsesV2))) ??
       ((await probeHealth(config.port)) ? 1 : 0);
     // Drained, a single zero is not proof: a command that cleared the guard just before it came
     // on can still start a turn, so require several in a row.
@@ -554,9 +557,10 @@ async function status(): Promise<number> {
   log(
     `launchd pid=${launchdPid(config.label, uid) ?? "(not running)"} healthy=${await probeHealth(config.port)}`,
   );
-  const stateDb = resolveStateDb(config.home);
+  const servingUsesV2 = current ? releaseUsesV2State(config.root, current) : null;
+  const stateDb = servingUsesV2 === null ? null : resolveStateDb(config.home, servingUsesV2);
   log(
-    `running turns: ${drainCommand(["status"])?.runningTurns ?? (existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb})`,
+    `running turns: ${drainCommand(["status"])?.runningTurns ?? (stateDb === null ? "(unknown serving generation)" : existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb ?? "unknown"})`,
   );
   return 0;
 }

@@ -84,14 +84,12 @@ export function pruneReleases(root: string, keep: number): string[] {
 export const STATE_DB_V1 = "state.sqlite";
 export const STATE_DB_V2 = "statev2.sqlite";
 
-/**
- * The database the server under `home` uses. A V2 server copies `state.sqlite` into
- * `statev2.sqlite` on its first boot and never writes the v1 file again, so once the V2 file
- * exists the v1 one is frozen and its counts are stale.
- */
-export function resolveStateDb(home: string): string {
-  const v2 = join(home, "userdata", STATE_DB_V2);
-  return existsSync(v2) ? v2 : join(home, "userdata", STATE_DB_V1);
+/** Selects the serving release's database, including after a rollback that retains V2 data. */
+export function resolveStateDb(home: string, servingUsesV2: boolean | null): string {
+  if (servingUsesV2 === null) {
+    throw new Error("cannot identify the serving release database generation");
+  }
+  return join(home, "userdata", servingUsesV2 ? STATE_DB_V2 : STATE_DB_V1);
 }
 
 /**
