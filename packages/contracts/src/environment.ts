@@ -100,6 +100,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   connectionProbe: Schema.optionalKey(Schema.Boolean),
   /** Automatic dispatch validates observed authority inside the mutation lock. */
   atomicAutomaticDispatch: Schema.optionalKey(Schema.Boolean),
+  atomicContinuationResume: Schema.optionalKey(Schema.Boolean),
   /** Missing on older servers, which still accept inline image attachments. */
   attachmentUploads: Schema.optionalKey(Schema.Boolean),
   /** Uploaded files may accompany question answers. */

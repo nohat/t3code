@@ -2757,6 +2757,8 @@ export const OrchestrationV2Command = Schema.Union([
       Schema.Struct({
         purpose: Schema.Literals(["checklist", "continuation"]),
         expectedThreadSequence: NonNegativeInt,
+        /** Explicit user Resume cutoff; never releases other held runs. */
+        resumeAfterRunId: Schema.optional(RunId),
       }),
     ),
     notification: Schema.optional(OrchestrationV2Notification),

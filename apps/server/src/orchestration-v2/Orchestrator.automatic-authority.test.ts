@@ -245,7 +245,11 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
             resumeAfterRunId: scenario === "wrong-run" ? "not-the-stopped-run" : stopped.id,
           },
         };
-        if (scenario === "newer-stop")
+        if (scenario === "newer-stop") {
+          // A provider can still report this SAME run executing while Stop settles.
+          // Commit the second Stop through the ordinary mutation service.
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`UPDATE orchestration_v2_projection_runs SET status='running', payload_json=json_set(payload_json, '$.status', 'running') WHERE thread_id=${threadId} AND run_id=${stopped.id}`;
           yield* service.dispatch({
             type: "run.interrupt",
             commandId: CommandId.make("newer-same-run-stop"),
@@ -253,6 +257,7 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
             runId: stopped.id,
             holdQueue: true,
           });
+        }
         if (scenario === "archive")
           yield* service.dispatch({
             type: "thread.archive",

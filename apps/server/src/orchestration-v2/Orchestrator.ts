@@ -9460,13 +9460,28 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       const projection = yield* loadProjectionForCommand(command, ["runs", "turnItems"], {
         turnItemTypes: ["run_interrupt_request", "run_interrupt_result"],
       });
-      const latest = projection.runs.at(-1);
+      const latest = projection.runs.findLast((run) => run.status !== "queued");
+      const resumeRunId = command.automaticAuthority.resumeAfterRunId;
+      const stopped = latest?.status === "interrupted" || latest?.status === "cancelled";
+      if (
+        resumeRunId !== undefined &&
+        (command.automaticAuthority.purpose !== "continuation" ||
+          latest?.id !== resumeRunId ||
+          !stopped ||
+          projection.runs.some(
+            (run) =>
+              run.status === "preparing" ||
+              run.status === "starting" ||
+              run.status === "running" ||
+              run.status === "waiting",
+          ))
+      )
+        return yield* reject("Explicit Resume does not match the selected stopped run.");
       if (
         projection.thread.archivedAt !== null ||
         projection.thread.deletedAt !== null ||
-        latest?.status === "interrupted" ||
-        latest?.status === "cancelled" ||
-        projection.runs.some((run) => run.status === "queued" && run.queueHeld)
+        (resumeRunId === undefined &&
+          (stopped || projection.runs.some((run) => run.status === "queued" && run.queueHeld)))
       )
         return yield* reject("Automatic work is suppressed by thread Stop, archive or deletion.");
       const answered = new Set(
