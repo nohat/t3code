@@ -148,6 +148,17 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
         assert.equal((yield* counts).runs, before.runs + 1);
       }).pipe(Effect.provide(testLayer)),
   );
+  for (const initialMode of ["defer_start", "start_immediately"] as const)
+    it.effect(`accepts unchanged authority with ${initialMode} work`, () =>
+      Effect.gen(function* () {
+        const service = yield* setup;
+        yield* rawDispatch({ ...message("existing"), dispatchMode: { type: initialMode } });
+        const observed = yield* service.getThreadSnapshot(threadId);
+        const before = yield* counts;
+        yield* rawDispatch(message("protected-followup", observed.snapshotSequence));
+        assert.equal((yield* counts).runs, before.runs + 1);
+      }).pipe(Effect.provide(testLayer)),
+    );
   it.effect(
     "accepts unchanged authority and replay preserves its original receipt after revocation",
     () =>
