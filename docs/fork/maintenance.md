@@ -42,7 +42,7 @@ Not yet built, in order: a user-level `PreToolUse` hook denying `gh repo delete`
 
 ## Fork builds
 
-Not changed yet. The desktop app id is a constant in `scripts/build-desktop-artifact.ts`; the artifact version and update feed come from environment variables. The fork builds in a scrubbed environment with a fork-suffixed version (for example `0.0.44-nohat.<sha>`), leaves the update repository unset so there is no feed, patches the bundle id on a scratch copy at build time, and never edits `package.json` versions. Tag `fork/prod` as `fork/<date>-<sha>`. Unverified: that the environment version is what the running app reports.
+Versions follow [versioning.md](./versioning.md): the fork ships its own semver line from 1.0.0, one number for macOS, server, and iOS together. `fork-deploy` resolves the version from the `fork-versions.json` registry in the deploy root (minting the next bump with a recorded `--summary`/`--why`), passes it as `--build-version` plus `T3CODE_FORK_VERSION` into `build-desktop-artifact.ts`, which feeds the artifact, the bundled server, the web client, and the mobile build. The desktop app id is a constant in `scripts/build-desktop-artifact.ts`; the update feed stays unset so there is no feed; the bundle id is patched on a scratch copy at build time; `package.json` versions are never edited. Tag `fork/prod` as `fork/<date>-<sha>`.
 
 ## Keeping fixes upstreamable
 

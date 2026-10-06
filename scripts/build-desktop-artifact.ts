@@ -1543,6 +1543,11 @@ const BuildEnvConfig = Config.all({
   target: Config.String("T3CODE_DESKTOP_TARGET").pipe(Config.option),
   arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
   version: Config.String("T3CODE_DESKTOP_VERSION").pipe(Config.option),
+  // Fork release version, set by fork-deploy. Overrides the desktop flag and
+  // the server package.json fallback, so one number covers the artifact, the
+  // bundled server, the web client, and the mobile build when it runs in this
+  // environment.
+  forkVersion: Config.String("T3CODE_FORK_VERSION").pipe(Config.option),
   outputDir: Config.String("T3CODE_DESKTOP_OUTPUT_DIR").pipe(Config.option),
   skipBuild: Config.Boolean("T3CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
   keepStage: Config.Boolean("T3CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
@@ -1619,7 +1624,9 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
       supportedArchitectures: [...supportedArchitectures],
     });
   }
-  const version = mergeOptions(input.buildVersion, env.version, undefined);
+  const version = Option.getOrElse(env.forkVersion, () =>
+    mergeOptions(input.buildVersion, env.version, undefined),
+  );
   const releaseDir = resolveBooleanFlag(input.mockUpdates, env.mockUpdates)
     ? "release-mock"
     : "release";
@@ -3442,11 +3449,20 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
   if (!options.skipBuild) {
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
+    // The fork version must reach the web bundle too: APP_VERSION is baked at
+    // Vite build time from process.env, and the scrubbed fork-deploy env does
+    // not otherwise carry it. T3CODE_DESKTOP_VERSION is left alone so an
+    // explicit flag or env keeps meaning "artifact metadata only".
+    const innerBuildEnv =
+      appVersion !== undefined && process.env.T3CODE_FORK_VERSION?.trim()
+        ? { APP_VERSION: appVersion }
+        : undefined;
     const spawnCommand = yield* resolveSpawnCommand("vp", ["run", "build:desktop"]);
     yield* runCommand(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: repoRoot,
         shell: spawnCommand.shell,
+        ...(innerBuildEnv ? { env: { ...process.env, ...innerBuildEnv } } : {}),
       }),
       { label: "vp run build:desktop", verbose: options.verbose },
     );
@@ -3907,7 +3923,9 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
   buildVersion: Flag.String("build-version").pipe(
-    Flag.withDescription("Artifact version metadata (env: T3CODE_DESKTOP_VERSION)."),
+    Flag.withDescription(
+      "Artifact version metadata (env: T3CODE_DESKTOP_VERSION; T3CODE_FORK_VERSION wins when both are set).",
+    ),
     Flag.optional,
   ),
   outputDir: Flag.String("output-dir").pipe(
