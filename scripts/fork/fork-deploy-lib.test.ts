@@ -98,6 +98,7 @@ describe("renderLaunchAgent", () => {
     expect(plist).toContain("App &amp; Co.app");
     expect(plist).toContain("<key>SuccessfulExit</key><false/>");
     expect(plist).toContain("<key>T3CODE_PORT</key><string>13774</string>");
+    expect(plist).toContain("<key>T3CODE_TELEMETRY_ENABLED</key><string>false</string>");
     // Room for a V2 server's graceful shutdown before launchd sends SIGKILL.
     expect(plist).toContain("<key>ExitTimeOut</key><integer>60</integer>");
   });
