@@ -88,6 +88,32 @@ class GitHookTests(unittest.TestCase):
         subprocess.run(["python3", str(installer), str(self.root)], check=True, capture_output=True)
         result = subprocess.run(["git", "commit", "--allow-empty", "-m", "forbidden"], cwd=self.root, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_installer_upgrades_legacy_registration_without_duplicates(self):
+        source = self.root / "scripts/fork/agent-config"
+        source.mkdir(parents=True)
+        for name in ("install.sh", "fork_guard.py", "install_git_guards.py", "t3code-fork-posture.sh"):
+            source.joinpath(name).write_bytes(SCRIPT.with_name(name).read_bytes())
+        skill = self.root / ".agents/skills/defect-session/SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("test skill")
+        claude = self.root / "custom-claude"
+        claude.mkdir()
+        settings = claude / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"SessionStart": [{"hooks": [
+            {"type": "command", "command": "$HOME/.claude/hooks/t3code-fork-posture.sh"},
+            {"type": "command", "command": "echo unrelated"}
+        ]}]}}))
+        for _ in range(2):
+            subprocess.run(["sh", str(source / "install.sh")], cwd=self.root,
+                           env={**os.environ, "CLAUDE_HOME": str(claude)}, check=True, capture_output=True)
+        data = json.loads(settings.read_text())
+        commands = [hook["command"] for entry in data["hooks"]["SessionStart"] for hook in entry["hooks"]]
+        self.assertEqual(sum("t3code-fork-posture.sh" in command for command in commands), 1)
+        self.assertIn("echo unrelated", commands)
+        guards = [hook["command"] for entry in data["hooks"]["PreToolUse"] for hook in entry["hooks"]]
+        self.assertEqual(len(guards), 1)
+        self.assertIn(str(claude), guards[0])
         self.assertIn("upstream mirror", result.stderr)
         self.run_git("checkout", "-b", "feat/test")
         self.run_git("commit", "--allow-empty", "-m", "allowed")
