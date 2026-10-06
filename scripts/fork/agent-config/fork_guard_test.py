@@ -89,6 +89,13 @@ class GitHookTests(unittest.TestCase):
         result = subprocess.run(["git", "commit", "--allow-empty", "-m", "forbidden"], cwd=self.root, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
 
+        self.assertIn("upstream mirror", result.stderr)
+        self.run_git("checkout", "-b", "feat/test")
+        self.run_git("commit", "--allow-empty", "-m", "allowed")
+        self.run_git("checkout", "main")
+        result = subprocess.run(["git", "commit", "--allow-empty", "-m", "forbidden again"], cwd=self.root, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_installer_upgrades_legacy_registration_without_duplicates(self):
         source = self.root / "scripts/fork/agent-config"
         source.mkdir(parents=True)
@@ -114,12 +121,6 @@ class GitHookTests(unittest.TestCase):
         guards = [hook["command"] for entry in data["hooks"]["PreToolUse"] for hook in entry["hooks"]]
         self.assertEqual(len(guards), 1)
         self.assertIn(str(claude), guards[0])
-        self.assertIn("upstream mirror", result.stderr)
-        self.run_git("checkout", "-b", "feat/test")
-        self.run_git("commit", "--allow-empty", "-m", "allowed")
-        self.run_git("checkout", "main")
-        result = subprocess.run(["git", "commit", "--allow-empty", "-m", "forbidden again"], cwd=self.root, capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":
