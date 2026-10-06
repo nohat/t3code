@@ -9,6 +9,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 
@@ -54,6 +55,9 @@ const insertRun = (input: {
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const payloadJson = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+      modelSelection: { instanceId: input.instanceId, model: input.model },
+    });
     yield* sql`
       INSERT INTO orchestration_v2_projection_runs (
         run_id, thread_id, ordinal, provider, provider_instance_id, provider_thread_id,
@@ -62,7 +66,7 @@ const insertRun = (input: {
       VALUES (
         ${input.runId}, ${input.threadId}, ${input.ordinal ?? 1}, ${input.instanceId}, ${input.instanceId}, NULL,
         'completed', ${input.requestedAt}, NULL,
-        ${JSON.stringify({ modelSelection: { instanceId: input.instanceId, model: input.model } })}
+        ${payloadJson}
       )
     `;
   });
@@ -174,7 +178,8 @@ it.effect("adds pricing and recent use to orchestrator_capabilities models", () 
         ProviderAdapterRegistry.ProviderAdapterRegistryV2,
         ProviderAdapterRegistry.ProviderAdapterRegistryV2.of({
           list: () => Effect.succeed([codexInstanceId]),
-          get: (instanceId) => Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape),
+          get: (instanceId: ProviderInstanceId) =>
+            Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape),
         } as unknown as ProviderAdapterRegistry.ProviderAdapterRegistryV2["Service"]),
       ),
       Layer.mock(ProjectService.ProjectService)({}),

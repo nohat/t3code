@@ -42,6 +42,7 @@ import * as EventSink from "../src/orchestration-v2/EventSink.ts";
 import * as ProjectionStore from "../src/orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagementService from "../src/orchestration-v2/ThreadManagementService.ts";
 import * as ProjectStore from "../src/orchestration-v2/ProjectStore.ts";
+import * as ServerDrainState from "../src/orchestration-v2/ServerDrainState.ts";
 import * as ProjectService from "../src/project/ProjectService.ts";
 import * as ProjectEnrichmentService from "../src/project/ProjectEnrichmentService.ts";
 import { orchestrationHttpApiLayer } from "../src/orchestration-v2/http.ts";
@@ -109,6 +110,7 @@ const enrichment = Layer.unwrap(
 );
 // The transfer history has no project events, so shell streams never read a project shell.
 const services = management.pipe(
+  Layer.provideMerge(ServerDrainState.layer),
   Layer.provideMerge(ProjectStore.layer),
   Layer.provideMerge(Layer.mock(ProjectService.ProjectService)({})),
   Layer.provideMerge(enrichment),
