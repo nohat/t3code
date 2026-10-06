@@ -149,11 +149,15 @@ describe("V2 cutover helpers", () => {
     return home;
   };
 
-  it("reads statev2.sqlite once it exists, since state.sqlite is frozen from then on", () => {
-    const v1Only = makeUserdata(["state.sqlite"]);
-    expect(resolveStateDb(v1Only)).toBe(join(v1Only, "userdata", "state.sqlite"));
+  it("counts the serving V1 database even when a prepared or retained V2 copy exists", () => {
     const both = makeUserdata(["state.sqlite", "statev2.sqlite"]);
-    expect(resolveStateDb(both)).toBe(join(both, "userdata", "statev2.sqlite"));
+    expect(resolveStateDb(both, false)).toBe(join(both, "userdata", "state.sqlite"));
+    expect(resolveStateDb(both, true)).toBe(join(both, "userdata", "statev2.sqlite"));
+  });
+
+  it("refuses database fallback when the serving release generation is unknown", () => {
+    const both = makeUserdata(["state.sqlite", "statev2.sqlite"]);
+    expect(() => resolveStateDb(both, null)).toThrow(/serving release/);
   });
 
   it("counts V2 runs the way the server does: held queued and waiting runs do not block", () => {

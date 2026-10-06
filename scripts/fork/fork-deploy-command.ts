@@ -1,8 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
-export const FIRST_V2_BOOT_BUDGET_SECONDS = 90;
+export const FIRST_V2_BOOT_BUDGET_SECONDS = 240;
 
 interface CommandOptions {
   readonly command: readonly string[];
@@ -26,22 +27,37 @@ interface CommandDependencies {
   ) => { status: number | null; error?: Error };
 }
 
-/** Runs release commands with an environment scrubbed of the agent's dev shell. */
+/** Submits release commands to buildctl with only the build's intended environment. */
 export function runGovernedCommand(
   options: CommandOptions,
-  dependencies: CommandDependencies = { exists: existsSync, spawn: spawnSync },
+  dependencies: CommandDependencies = {
+    exists: NodeFS.existsSync,
+    spawn: NodeChildProcess.spawnSync,
+  },
 ): void {
-  const [file, ...args] = options.command;
-  const result = dependencies.spawn(file!, args, {
-    cwd: options.cwd,
-    stdio: "inherit",
-    env: {
-      HOME: options.home,
-      PATH: options.buildPath,
-      TMPDIR: options.callerEnv.TMPDIR ?? "/tmp",
-      LANG: "en_US.UTF-8",
-      ...options.extraEnv,
+  const scaffoldRoot = NodePath.join(options.home, "code", "scaffold");
+  const buildctl =
+    options.callerEnv.BUILDCTL ??
+    NodePath.join(scaffoldRoot, "components", "deploy-ops", "buildctl.py");
+  const python = NodePath.join(scaffoldRoot, "venv", "bin", "python");
+  if (!dependencies.exists(buildctl) || !dependencies.exists(python)) {
+    throw new Error(`build governor missing: ${buildctl} or ${python}; refusing unmanaged build`);
+  }
+  const result = dependencies.spawn(
+    python,
+    [buildctl, "run", "--cwd", options.cwd, "--label", "t3-deploy", "--", ...options.command],
+    {
+      cwd: options.cwd,
+      stdio: "inherit",
+      env: {
+        HOME: options.home,
+        PATH: options.buildPath,
+        TMPDIR: options.callerEnv.TMPDIR ?? "/tmp",
+        LANG: "en_US.UTF-8",
+        ...options.extraEnv,
+      },
     },
-  });
+  );
+  if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${options.command.join(" ")} exited ${result.status}`);
 }

@@ -19,7 +19,9 @@ const options = {
 
 describe("runGovernedCommand", () => {
   it("submits through the governor with a scrubbed environment and the fork version", () => {
-    const spawn = vi.fn(() => ({ status: 0 }));
+    const spawn = vi.fn<(file: string, args: string[], options: unknown) => { status: number }>(
+      () => ({ status: 0 }),
+    );
     runGovernedCommand(options, { exists: () => true, spawn });
     expect(spawn).toHaveBeenCalledExactlyOnceWith(
       "/home/code/scaffold/venv/bin/python",
@@ -48,7 +50,9 @@ describe("runGovernedCommand", () => {
   });
 
   it("uses the home-relative governor by default", () => {
-    const spawn = vi.fn(() => ({ status: 0 }));
+    const spawn = vi.fn<(file: string, args: string[], options: unknown) => { status: number }>(
+      () => ({ status: 0 }),
+    );
     runGovernedCommand({ ...options, callerEnv: {}, extraEnv: {} }, { exists: () => true, spawn });
     expect(spawn.mock.calls[0]?.[1]?.[0]).toBe(
       "/home/code/scaffold/components/deploy-ops/buildctl.py",

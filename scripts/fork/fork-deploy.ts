@@ -11,7 +11,7 @@
  *   node scripts/fork/fork-deploy.ts plist
  *
  * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
- * answers, so that one deploy probes for --first-boot-budget-seconds (default 90; use 240) and,
+ * answers, so that one deploy probes for --first-boot-budget-seconds (default 240) and,
  * if it rolls back, moves the copy aside so the next attempt copies again. Rolling back from V2
  * to v1 hides everything written since the cutover, so it needs --accept-data-loss.
  * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
@@ -52,6 +52,7 @@ import {
   resolveStateDb,
   serverCliCommand,
 } from "./fork-deploy-lib.ts";
+import { FIRST_V2_BOOT_BUDGET_SECONDS, runGovernedCommand } from "./fork-deploy-command.ts";
 import {
   appendBumpDecision,
   FORK_INITIAL_VERSION,
@@ -94,7 +95,7 @@ const { positionals, values } = parseArgs({
     force: { type: "boolean", default: false },
     "drain-timeout": { type: "string", default: "600" },
     to: { type: "string" },
-    "first-boot-budget-seconds": { type: "string", default: "90" },
+    "first-boot-budget-seconds": { type: "string", default: String(FIRST_V2_BOOT_BUDGET_SECONDS) },
     "accept-data-loss": { type: "boolean", default: false },
     // Which segment to bump when a build mints a fresh version. Rebuilds of an
     // already-released sha reuse its version and ignore this.
@@ -134,19 +135,14 @@ function runWithEnv(
   cwd: string,
   extraEnv: Readonly<Record<string, string>>,
 ): void {
-  const [file, ...args] = command;
-  const result = spawnSync(file!, args, {
+  runGovernedCommand({
+    command,
     cwd,
-    stdio: "inherit",
-    env: {
-      HOME: homedir(),
-      PATH: config.buildPath,
-      TMPDIR: process.env.TMPDIR ?? "/tmp",
-      LANG: "en_US.UTF-8",
-      ...extraEnv,
-    },
+    home: homedir(),
+    buildPath: config.buildPath,
+    callerEnv: process.env,
+    extraEnv,
   });
-  if (result.status !== 0) throw new Error(`${command.join(" ")} exited ${result.status}`);
 }
 
 /** Runs a command with only PATH and HOME, so nothing from an agent or dev shell leaks in. */
