@@ -122,7 +122,14 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
           }
         }).pipe(Effect.provide(testLayer)),
     );
-  for (const choice of ["stale", "fresh", "manual", "pending-interrupt", "held-queue"] as const)
+  for (const choice of [
+    "stale",
+    "fresh",
+    "manual",
+    "pending-interrupt",
+    "held-queue",
+    "older-pending-interrupt",
+  ] as const)
     it.effect(`interrupt authority ${choice} is exercised independently`, () =>
       Effect.gen(function* () {
         const service = yield* setup;
@@ -142,12 +149,19 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
           runId: run.id,
           holdQueue: true,
         });
-        if (choice === "pending-interrupt") {
+        if (choice === "pending-interrupt" || choice === "older-pending-interrupt") {
           // Replay the projection boundary while a provider interrupt is pending:
           // request exists, result absent, executing state not yet settled.
           const sql = yield* SqlClient.SqlClient;
           yield* sql`DELETE FROM orchestration_v2_projection_turn_items WHERE thread_id=${threadId} AND type='run_interrupt_result'`;
           yield* sql`UPDATE orchestration_v2_projection_runs SET status='running', payload_json=json_set(payload_json, '$.status', 'running') WHERE thread_id=${threadId} AND run_id=${run.id}`;
+          if (choice === "older-pending-interrupt") {
+            yield* sql`UPDATE orchestration_v2_projection_runs SET status='completed', payload_json=json_set(payload_json, '$.status', 'completed') WHERE thread_id=${threadId} AND run_id=${run.id}`;
+            yield* rawDispatch({
+              ...message("explicit-later-queue"),
+              dispatchMode: { type: "defer_start" },
+            });
+          }
         }
         const current = yield* service.getThreadSnapshot(threadId);
         const before = yield* counts;
