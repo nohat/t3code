@@ -1,18 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off globalDate:off globalTimers:off globalFetch:off
-import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { basename, join } from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeSqlite from "node:sqlite";
+import * as NodePath from "node:path";
 
 /**
  * Layout under the deploy root:
@@ -20,22 +10,47 @@ import { basename, join } from "node:path";
  *   current -> releases/<sha>  what launchd runs
  *   .previous                  sha that was live before the last swap (rollback target)
  */
+/** Operator-owned newline-separated release IDs; pruning never rewrites this file. */
 export const PINNED_RELEASES_FILE = ".pinned-releases";
 
-export function classifyV2Copy(_userdataDir: string): "fresh" | "retained" {
-  return "fresh";
+/** Classify only while stopped. Any migrated, unreadable or unfamiliar copy is retained. */
+export function classifyV2Copy(userdataDir: string): "fresh" | "retained" {
+  const path = NodePath.join(userdataDir, STATE_DB_V2);
+  if (!NodeFS.existsSync(path)) {
+    return ["-wal", "-shm"].some((suffix) => NodeFS.existsSync(`${path}${suffix}`))
+      ? "retained"
+      : "fresh";
+  }
+  try {
+    const db = new NodeSqlite.DatabaseSync(path, { readOnly: true });
+    try {
+      const names = db.prepare("select name from sqlite_master where type = 'table'").all();
+      const tables = new Set(names.map((row) => String(row.name)));
+      if ([...tables].some((name) => name.startsWith("orchestration_v2_"))) return "retained";
+      if (!tables.has("projection_threads") || !tables.has("effect_sql_migrations"))
+        return "retained";
+      const ledger = db
+        .prepare("select max(migration_id) as maximum from effect_sql_migrations")
+        .get();
+      return typeof ledger?.maximum === "number" && ledger.maximum < 55 ? "fresh" : "retained";
+    } finally {
+      db.close();
+    }
+  } catch {
+    return "retained";
+  }
 }
 
 export const COMPLETE_MARKER = ".release-complete";
 
-export const releaseDir = (root: string, sha: string) => join(root, "releases", sha);
+export const releaseDir = (root: string, sha: string) => NodePath.join(root, "releases", sha);
 
 export const isComplete = (root: string, sha: string) =>
-  existsSync(join(releaseDir(root, sha), COMPLETE_MARKER));
+  NodeFS.existsSync(NodePath.join(releaseDir(root, sha), COMPLETE_MARKER));
 
 export function readCurrent(root: string): string | null {
   try {
-    return basename(realpathSync(join(root, "current")));
+    return NodePath.basename(NodeFS.realpathSync(NodePath.join(root, "current")));
   } catch {
     return null;
   }
@@ -43,7 +58,7 @@ export function readCurrent(root: string): string | null {
 
 export function readPrevious(root: string): string | null {
   try {
-    return readFileSync(join(root, ".previous"), "utf8").trim() || null;
+    return NodeFS.readFileSync(NodePath.join(root, ".previous"), "utf8").trim() || null;
   } catch {
     return null;
   }
@@ -59,29 +74,37 @@ export function atomicSwap(
   const before = readCurrent(root);
   // A rollback must not make the release it abandoned the next rollback target.
   if (before && before !== sha && !options?.rollback) {
-    writeFileSync(join(root, ".previous"), `${before}\n`);
+    NodeFS.writeFileSync(NodePath.join(root, ".previous"), `${before}\n`);
   }
-  const tmp = join(root, `.current.${process.pid}`);
-  rmSync(tmp, { force: true });
-  symlinkSync(join("releases", sha), tmp);
-  renameSync(tmp, join(root, "current"));
+  const tmp = NodePath.join(root, `.current.${process.pid}`);
+  NodeFS.rmSync(tmp, { force: true });
+  NodeFS.symlinkSync(NodePath.join("releases", sha), tmp);
+  NodeFS.renameSync(tmp, NodePath.join(root, "current"));
 }
 
 export function listCompleteReleases(root: string): string[] {
-  const dir = join(root, "releases");
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
+  const dir = NodePath.join(root, "releases");
+  if (!NodeFS.existsSync(dir)) return [];
+  return NodeFS.readdirSync(dir)
     .filter((name) => isComplete(root, name))
-    .sort((a, b) => statSync(releaseDir(root, b)).mtimeMs - statSync(releaseDir(root, a)).mtimeMs);
+    .sort(
+      (a, b) =>
+        NodeFS.statSync(releaseDir(root, b)).mtimeMs - NodeFS.statSync(releaseDir(root, a)).mtimeMs,
+    );
 }
 
-/** Keeps `current`, the rollback target, and the newest `keep` releases. */
+/** Keeps current, previous, explicit durable pins and the newest `keep` releases. */
 export function pruneReleases(root: string, keep: number): string[] {
-  const sacred = new Set([readCurrent(root), readPrevious(root)]);
+  const pinsPath = NodePath.join(root, PINNED_RELEASES_FILE);
+  // A present but unreadable pin file must abort pruning rather than discard recovery.
+  const pins = NodeFS.existsSync(pinsPath)
+    ? NodeFS.readFileSync(pinsPath, "utf8").split(/\s+/).filter(Boolean)
+    : [];
+  const sacred = new Set([readCurrent(root), readPrevious(root), ...pins]);
   const removed: string[] = [];
   for (const sha of listCompleteReleases(root).slice(keep)) {
     if (sacred.has(sha)) continue;
-    rmSync(releaseDir(root, sha), { recursive: true, force: true });
+    NodeFS.rmSync(releaseDir(root, sha), { recursive: true, force: true });
     removed.push(sha);
   }
   return removed;
@@ -95,7 +118,7 @@ export function resolveStateDb(home: string, servingUsesV2: boolean | null): str
   if (servingUsesV2 === null) {
     throw new Error("cannot identify the serving release database generation");
   }
-  return join(home, "userdata", servingUsesV2 ? STATE_DB_V2 : STATE_DB_V1);
+  return NodePath.join(home, "userdata", servingUsesV2 ? STATE_DB_V2 : STATE_DB_V1);
 }
 
 /**
@@ -103,7 +126,7 @@ export function resolveStateDb(home: string, servingUsesV2: boolean | null): str
  * `t3 drain status` count: queued runs the user has not held start when the active run ends.
  */
 export function runningSessionsQuery(stateDb: string): string {
-  return basename(stateDb) === STATE_DB_V2
+  return NodePath.basename(stateDb) === STATE_DB_V2
     ? "select count(*) from orchestration_v2_projection_runs where status in ('preparing','starting','running') or (status = 'queued' and json_extract(payload_json, '$.queueHeld') is not 1);"
     : "select count(*) from projection_thread_sessions where status = 'running';";
 }
@@ -114,9 +137,13 @@ export function runningSessionsQuery(stateDb: string): string {
  * running server's own count (`t3 drain status`); this is the fallback.
  */
 export function countRunningSessions(stateDb: string): number | null {
-  const result = spawnSync("sqlite3", ["-readonly", stateDb, runningSessionsQuery(stateDb)], {
-    encoding: "utf8",
-  });
+  const result = NodeChildProcess.spawnSync(
+    "sqlite3",
+    ["-readonly", stateDb, runningSessionsQuery(stateDb)],
+    {
+      encoding: "utf8",
+    },
+  );
   return result.status === 0 ? Number.parseInt(result.stdout.trim(), 10) : null;
 }
 
@@ -129,7 +156,7 @@ export function releaseUsesV2State(root: string, sha: string): boolean | null {
   const bin = serverCliCommand(root, sha)?.[1];
   if (!bin) return null;
   const asar = bin.slice(0, bin.indexOf("app.asar") + "app.asar".length);
-  const result = spawnSync("grep", ["-q", "-a", "-F", STATE_DB_V2, asar]);
+  const result = NodeChildProcess.spawnSync("grep", ["-q", "-a", "-F", STATE_DB_V2, asar]);
   return result.status === 0 ? true : result.status === 1 ? false : null;
 }
 
@@ -140,10 +167,10 @@ export function releaseUsesV2State(root: string, sha: string): boolean | null {
 export function countV2OnlyRows(
   userdataDir: string,
 ): { readonly threads: number; readonly messages: number } | null {
-  const v1 = join(userdataDir, STATE_DB_V1);
-  const v2 = join(userdataDir, STATE_DB_V2);
-  if (!existsSync(v1) || !existsSync(v2)) return null;
-  const result = spawnSync(
+  const v1 = NodePath.join(userdataDir, STATE_DB_V1);
+  const v2 = NodePath.join(userdataDir, STATE_DB_V2);
+  if (!NodeFS.existsSync(v1) || !NodeFS.existsSync(v2)) return null;
+  const result = NodeChildProcess.spawnSync(
     "sqlite3",
     [
       "-readonly",
@@ -178,12 +205,12 @@ export function movedAsideName(file: string, now: Date): string {
  */
 export function moveStateV2Aside(userdataDir: string, now: Date): string[] {
   const files = ["", "-wal", "-shm"]
-    .map((suffix) => join(userdataDir, `${STATE_DB_V2}${suffix}`))
-    .filter((file) => existsSync(file));
+    .map((suffix) => NodePath.join(userdataDir, `${STATE_DB_V2}${suffix}`))
+    .filter((file) => NodeFS.existsSync(file));
   const moves = files.map((file) => [file, movedAsideName(file, now)] as const);
-  const taken = moves.find(([, target]) => existsSync(target));
+  const taken = moves.find(([, target]) => NodeFS.existsSync(target));
   if (taken) throw new Error(`refusing to overwrite ${taken[1]}`);
-  for (const [file, target] of moves) renameSync(file, target);
+  for (const [file, target] of moves) NodeFS.renameSync(file, target);
   return moves.map(([, target]) => target);
 }
 
@@ -208,7 +235,9 @@ export async function probeHealth(port: number, timeoutMs = 5000): Promise<boole
 }
 
 export function launchdPid(label: string, uid: number): number | null {
-  const result = spawnSync("launchctl", ["print", `gui/${uid}/${label}`], { encoding: "utf8" });
+  const result = NodeChildProcess.spawnSync("launchctl", ["print", `gui/${uid}/${label}`], {
+    encoding: "utf8",
+  });
   const match = /^\s*pid = (\d+)/m.exec(result.stdout);
   return match?.[1] ? Number(match[1]) : null;
 }
@@ -259,15 +288,15 @@ ${envEntries}
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ExitTimeOut</key><integer>${LAUNCH_AGENT_EXIT_TIMEOUT_SECONDS}</integer>
-  <key>StandardOutPath</key><string>${xml(join(options.logDir, "prod.out.log"))}</string>
-  <key>StandardErrorPath</key><string>${xml(join(options.logDir, "prod.err.log"))}</string>
+  <key>StandardOutPath</key><string>${xml(NodePath.join(options.logDir, "prod.out.log"))}</string>
+  <key>StandardErrorPath</key><string>${xml(NodePath.join(options.logDir, "prod.err.log"))}</string>
 </dict>
 </plist>
 `;
 }
 
 export function ensureDir(path: string): void {
-  mkdirSync(path, { recursive: true });
+  NodeFS.mkdirSync(path, { recursive: true });
 }
 
 /**
@@ -277,15 +306,25 @@ export function ensureDir(path: string): void {
  */
 export function serverCliCommand(root: string, sha: string): readonly string[] | null {
   const dir = releaseDir(root, sha);
-  if (!existsSync(dir)) return null;
-  const app = readdirSync(dir).find((name) => name.endsWith(".app"));
+  if (!NodeFS.existsSync(dir)) return null;
+  const app = NodeFS.readdirSync(dir).find((name) => name.endsWith(".app"));
   if (!app) return null;
-  const macOs = join(dir, app, "Contents", "MacOS");
-  const executable = existsSync(macOs) ? readdirSync(macOs)[0] : undefined;
+  const macOs = NodePath.join(dir, app, "Contents", "MacOS");
+  const executable = NodeFS.existsSync(macOs) ? NodeFS.readdirSync(macOs)[0] : undefined;
   if (!executable) return null;
   return [
-    join(macOs, executable),
-    join(dir, app, "Contents", "Resources", "app.asar", "apps", "server", "dist", "bin.mjs"),
+    NodePath.join(macOs, executable),
+    NodePath.join(
+      dir,
+      app,
+      "Contents",
+      "Resources",
+      "app.asar",
+      "apps",
+      "server",
+      "dist",
+      "bin.mjs",
+    ),
   ];
 }
 
@@ -315,4 +354,14 @@ export function parseDrainStatus(stdout: string): DrainStatus | null {
  */
 export function isQuiet(polls: readonly number[], required: number): boolean {
   return polls.length >= required && polls.slice(-required).every((count) => count === 0);
+}
+
+export function deployFailureMessage(
+  sha: string,
+  swapped: boolean,
+  current: string | null,
+): string {
+  return swapped
+    ? `MANUAL ACTION: deploy of ${sha} failed after the swap; current=${current ?? "unknown"}`
+    : `deploy of ${sha} stopped before the swap`;
 }

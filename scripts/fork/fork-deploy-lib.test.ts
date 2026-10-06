@@ -1,21 +1,14 @@
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off globalDate:off globalTimers:off globalFetch:off
-import {
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readlinkSync,
-  utimesSync,
-  writeFileSync,
-  existsSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeSqlite from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   atomicSwap,
   classifyV2Copy,
+  deployFailureMessage,
   PINNED_RELEASES_FILE,
   COMPLETE_MARKER,
   countRunningSessions,
@@ -36,12 +29,12 @@ import {
 } from "./fork-deploy-lib.ts";
 
 function makeRoot(shas: readonly string[]): string {
-  const root = mkdtempSync(join(tmpdir(), "fork-deploy-"));
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "fork-deploy-"));
   shas.forEach((sha, index) => {
-    mkdirSync(releaseDir(root, sha), { recursive: true });
-    writeFileSync(join(releaseDir(root, sha), COMPLETE_MARKER), sha);
+    NodeFS.mkdirSync(releaseDir(root, sha), { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(releaseDir(root, sha), COMPLETE_MARKER), sha);
     const time = new Date(Date.UTC(2026, 0, 1 + index));
-    utimesSync(releaseDir(root, sha), time, time);
+    NodeFS.utimesSync(releaseDir(root, sha), time, time);
   });
   return root;
 }
@@ -54,7 +47,9 @@ describe("atomicSwap", () => {
     atomicSwap(root, "bbb");
     expect(readCurrent(root)).toBe("bbb");
     expect(readPrevious(root)).toBe("aaa");
-    expect(readlinkSync(join(root, "current"))).toBe(join("releases", "bbb"));
+    expect(NodeFS.readlinkSync(NodePath.join(root, "current"))).toBe(
+      NodePath.join("releases", "bbb"),
+    );
   });
 
   it("keeps the last good release as the rollback target when rolling back", () => {
@@ -69,7 +64,7 @@ describe("atomicSwap", () => {
   it("refuses a release that was never marked complete and leaves current alone", () => {
     const root = makeRoot(["aaa"]);
     atomicSwap(root, "aaa");
-    mkdirSync(releaseDir(root, "partial"), { recursive: true });
+    NodeFS.mkdirSync(releaseDir(root, "partial"), { recursive: true });
     expect(() => atomicSwap(root, "partial")).toThrow(/incomplete/);
     expect(readCurrent(root)).toBe("aaa");
   });
@@ -82,8 +77,8 @@ describe("pruneReleases", () => {
     atomicSwap(root, "old2");
     const removed = pruneReleases(root, 2);
     expect(removed.sort()).toEqual(["mid"]);
-    expect(existsSync(releaseDir(root, "old1"))).toBe(true);
-    expect(existsSync(releaseDir(root, "old2"))).toBe(true);
+    expect(NodeFS.existsSync(releaseDir(root, "old1"))).toBe(true);
+    expect(NodeFS.existsSync(releaseDir(root, "old2"))).toBe(true);
   });
 });
 
@@ -135,27 +130,32 @@ describe("drain helpers", () => {
   it("finds the server CLI inside a release, and null when the release is missing", () => {
     const root = makeRoot([]);
     expect(serverCliCommand(root, "abc")).toBeNull();
-    const macOs = join(releaseDir(root, "abc"), "T3 Code (Alpha).app", "Contents", "MacOS");
-    mkdirSync(macOs, { recursive: true });
-    writeFileSync(join(macOs, "T3 Code (Alpha)"), "");
+    const macOs = NodePath.join(
+      releaseDir(root, "abc"),
+      "T3 Code (Alpha).app",
+      "Contents",
+      "MacOS",
+    );
+    NodeFS.mkdirSync(macOs, { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(macOs, "T3 Code (Alpha)"), "");
     const command = serverCliCommand(root, "abc");
-    expect(command?.[0]).toBe(join(macOs, "T3 Code (Alpha)"));
+    expect(command?.[0]).toBe(NodePath.join(macOs, "T3 Code (Alpha)"));
     expect(command?.[1]).toMatch(/app\.asar\/apps\/server\/dist\/bin\.mjs$/);
   });
 });
 
 describe("V2 cutover helpers", () => {
   const makeUserdata = (files: readonly string[]) => {
-    const home = mkdtempSync(join(tmpdir(), "fork-deploy-home-"));
-    mkdirSync(join(home, "userdata"));
-    for (const file of files) writeFileSync(join(home, "userdata", file), "");
+    const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "fork-deploy-home-"));
+    NodeFS.mkdirSync(NodePath.join(home, "userdata"));
+    for (const file of files) NodeFS.writeFileSync(NodePath.join(home, "userdata", file), "");
     return home;
   };
 
   it("counts the serving V1 database even when a prepared or retained V2 copy exists", () => {
     const both = makeUserdata(["state.sqlite", "statev2.sqlite"]);
-    expect(resolveStateDb(both, false)).toBe(join(both, "userdata", "state.sqlite"));
-    expect(resolveStateDb(both, true)).toBe(join(both, "userdata", "statev2.sqlite"));
+    expect(resolveStateDb(both, false)).toBe(NodePath.join(both, "userdata", "state.sqlite"));
+    expect(resolveStateDb(both, true)).toBe(NodePath.join(both, "userdata", "statev2.sqlite"));
   });
 
   it("refuses database fallback when the serving release generation is unknown", () => {
@@ -165,8 +165,8 @@ describe("V2 cutover helpers", () => {
 
   it("counts V2 runs the way the server does: held queued and waiting runs do not block", () => {
     const home = makeUserdata([]);
-    const path = join(home, "userdata", "statev2.sqlite");
-    const db = new DatabaseSync(path);
+    const path = NodePath.join(home, "userdata", "statev2.sqlite");
+    const db = new NodeSqlite.DatabaseSync(path);
     db.exec("create table orchestration_v2_projection_runs (status text, payload_json text)");
     const insert = db.prepare("insert into orchestration_v2_projection_runs values (?, ?)");
     for (const status of ["preparing", "starting", "running", "queued"]) insert.run(status, "{}");
@@ -198,33 +198,33 @@ describe("V2 cutover helpers", () => {
 
   it("moves a failed V2 copy aside without touching state.sqlite or overwriting", () => {
     const home = makeUserdata(["state.sqlite", "statev2.sqlite", "statev2.sqlite-wal"]);
-    const userdata = join(home, "userdata");
+    const userdata = NodePath.join(home, "userdata");
     const now = new Date("2026-10-05T13:45:07Z");
     expect(moveStateV2Aside(userdata, now)).toEqual([
-      join(userdata, "statev2.failed-20261005T134507Z.sqlite"),
-      join(userdata, "statev2.failed-20261005T134507Z.sqlite-wal"),
+      NodePath.join(userdata, "statev2.failed-20261005T134507Z.sqlite"),
+      NodePath.join(userdata, "statev2.failed-20261005T134507Z.sqlite-wal"),
     ]);
-    expect(readdirSync(userdata).sort()).toEqual([
+    expect(NodeFS.readdirSync(userdata).sort()).toEqual([
       "state.sqlite",
       "statev2.failed-20261005T134507Z.sqlite",
       "statev2.failed-20261005T134507Z.sqlite-wal",
     ]);
-    writeFileSync(join(userdata, "statev2.sqlite"), "");
+    NodeFS.writeFileSync(NodePath.join(userdata, "statev2.sqlite"), "");
     expect(() => moveStateV2Aside(userdata, now)).toThrow(/refusing to overwrite/);
-    expect(existsSync(join(userdata, "statev2.sqlite"))).toBe(true);
+    expect(NodeFS.existsSync(NodePath.join(userdata, "statev2.sqlite"))).toBe(true);
   });
 
   it("tells a V2 release from a v1 one by the database its bundle names", () => {
     const root = makeRoot([]);
     const release = (sha: string, bundle: string) => {
-      const app = join(releaseDir(root, sha), "T3 Code.app", "Contents");
-      mkdirSync(join(app, "MacOS"), { recursive: true });
-      mkdirSync(join(app, "Resources"), { recursive: true });
-      writeFileSync(join(app, "MacOS", "T3 Code"), "");
-      writeFileSync(join(app, "Resources", "app.asar"), bundle);
+      const app = NodePath.join(releaseDir(root, sha), "T3 Code.app", "Contents");
+      NodeFS.mkdirSync(NodePath.join(app, "MacOS"), { recursive: true });
+      NodeFS.mkdirSync(NodePath.join(app, "Resources"), { recursive: true });
+      NodeFS.writeFileSync(NodePath.join(app, "MacOS", "T3 Code"), "");
+      NodeFS.writeFileSync(NodePath.join(app, "Resources", "app.asar"), bundle);
     };
-    release("v1", 'const dbPath = join(stateDir, "state.sqlite");');
-    release("v2", 'const dbPath = join(stateDir, "statev2.sqlite");');
+    release("v1", 'const dbPath = NodePath.join(stateDir, "state.sqlite");');
+    release("v2", 'const dbPath = NodePath.join(stateDir, "statev2.sqlite");');
     expect(releaseUsesV2State(root, "v1")).toBe(false);
     expect(releaseUsesV2State(root, "v2")).toBe(true);
     expect(releaseUsesV2State(root, "missing")).toBeNull();
@@ -232,8 +232,8 @@ describe("V2 cutover helpers", () => {
 
   it("counts the threads and messages only V2 has, reading both files read-only", () => {
     const home = makeUserdata([]);
-    const userdata = join(home, "userdata");
-    const v1 = new DatabaseSync(join(userdata, "state.sqlite"));
+    const userdata = NodePath.join(home, "userdata");
+    const v1 = new NodeSqlite.DatabaseSync(NodePath.join(userdata, "state.sqlite"));
     v1.exec(`
       create table projection_threads (thread_id text primary key);
       create table projection_thread_messages (message_id text primary key);
@@ -241,7 +241,7 @@ describe("V2 cutover helpers", () => {
       insert into projection_thread_messages values ('m-old');
     `);
     v1.close();
-    const v2 = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    const v2 = new NodeSqlite.DatabaseSync(NodePath.join(userdata, "statev2.sqlite"));
     v2.exec(`
       create table orchestration_v2_projection_threads (thread_id text primary key);
       create table orchestration_v2_projection_messages (message_id text primary key);
@@ -250,40 +250,51 @@ describe("V2 cutover helpers", () => {
     `);
     v2.close();
     expect(countV2OnlyRows(userdata)).toEqual({ threads: 1, messages: 2 });
-    expect(countV2OnlyRows(join(makeUserdata(["state.sqlite"]), "userdata"))).toBeNull();
+    expect(countV2OnlyRows(NodePath.join(makeUserdata(["state.sqlite"]), "userdata"))).toBeNull();
   });
 });
 
 describe("cutover ownership and durable pins", () => {
   it("keeps an explicitly pinned V1 after multiple V2 swaps", () => {
     const root = makeRoot(["v1", "v2a", "v2b", "v2c"]);
-    writeFileSync(join(root, PINNED_RELEASES_FILE), "v1\n");
+    NodeFS.writeFileSync(NodePath.join(root, PINNED_RELEASES_FILE), "v1\n");
     atomicSwap(root, "v1");
     atomicSwap(root, "v2a");
     atomicSwap(root, "v2b");
     atomicSwap(root, "v2c");
     expect(pruneReleases(root, 1)).toEqual(["v2a"]);
-    expect(existsSync(releaseDir(root, "v1"))).toBe(true);
+    expect(NodeFS.existsSync(releaseDir(root, "v1"))).toBe(true);
   });
 
   it("owns absent and pre-prepared V1 copies, but retains migrated V2 on re-entry", () => {
-    const userdata = mkdtempSync(join(tmpdir(), "copy-classification-"));
+    const userdata = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "copy-classification-"));
     expect(classifyV2Copy(userdata)).toBe("fresh");
-    const db = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    const db = new NodeSqlite.DatabaseSync(NodePath.join(userdata, "statev2.sqlite"));
     db.exec(
       "create table projection_threads(thread_id text); create table effect_sql_migrations(migration_id integer, name text); insert into effect_sql_migrations values (54, 'Old');",
     );
     db.close();
     expect(classifyV2Copy(userdata)).toBe("fresh");
-    const migrated = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    const migrated = new NodeSqlite.DatabaseSync(NodePath.join(userdata, "statev2.sqlite"));
     migrated.exec("create table orchestration_v2_projection_threads(thread_id text);");
     migrated.close();
     expect(classifyV2Copy(userdata)).toBe("retained");
   });
 
   it("retains unreadable or unrecognized copies rather than claiming them", () => {
-    const userdata = mkdtempSync(join(tmpdir(), "copy-unknown-"));
-    writeFileSync(join(userdata, "statev2.sqlite"), "not sqlite");
+    const userdata = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "copy-unknown-"));
+    NodeFS.writeFileSync(NodePath.join(userdata, "statev2.sqlite"), "not sqlite");
     expect(classifyV2Copy(userdata)).toBe("retained");
+  });
+});
+
+describe("deployment failure reporting", () => {
+  it("reports a post-swap restart failure with the actual current release", () => {
+    expect(deployFailureMessage("candidate", true, "previous")).toBe(
+      "MANUAL ACTION: deploy of candidate failed after the swap; current=previous",
+    );
+    expect(deployFailureMessage("candidate", false, "previous")).toBe(
+      "deploy of candidate stopped before the swap",
+    );
   });
 });
