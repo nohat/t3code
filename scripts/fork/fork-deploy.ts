@@ -3,17 +3,22 @@
 /**
  * Gated deploy of a packaged build to a single launchd-managed production instance.
  *
- *   node scripts/fork/fork-deploy.ts build <ref>
- *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>]
- *       [--first-boot-budget-seconds <seconds>]
+ *   node scripts/fork/fork-deploy.ts build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <t>] [--why <t>]
+ *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [same version flags]
  *   node scripts/fork/fork-deploy.ts rollback [--to <sha>] [--accept-data-loss]
  *   node scripts/fork/fork-deploy.ts status
+ *   node scripts/fork/fork-deploy.ts version <ref> [--bump ...] [--version ...]
  *   node scripts/fork/fork-deploy.ts plist
  *
  * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
  * answers, so that one deploy probes for --first-boot-budget-seconds (default 90; use 240) and,
  * if it rolls back, moves the copy aside so the next attempt copies again. Rolling back from V2
  * to v1 hides everything written since the cutover, so it needs --accept-data-loss.
+ * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
+ * the next version (bump level, default patch); a rebuild reuses the recorded
+ * one. Minting requires --summary (what ships) and --why (why this level), so
+ * the decision ledger in the deploy root records the reasoning. See
+ * docs/fork/versioning.md for the bump rules.
  *
  * Machine-specific settings (paths, port, notifier) live in a JSON file outside git, named by
  * --config or FORK_DEPLOY_CONFIG. Only failures, holds, and rollbacks are reported; silence
@@ -34,7 +39,6 @@ import {
   isComplete,
   isQuiet,
   launchdPid,
-  listCompleteReleases,
   moveStateV2Aside,
   parseDrainStatus,
   parseSeconds,
@@ -48,6 +52,20 @@ import {
   resolveStateDb,
   serverCliCommand,
 } from "./fork-deploy-lib.ts";
+import {
+  appendBumpDecision,
+  FORK_INITIAL_VERSION,
+  type ForkBumpLevel,
+  isForkVersion,
+  latestRegistryVersion,
+  listVersionedReleases,
+  readReleaseVersion,
+  readVersionRegistry,
+  recordForkVersion,
+  resolveForkVersion,
+  versionForSha,
+  writeReleaseVersion,
+} from "./fork-versions.ts";
 
 interface Config {
   /** Deploy root holding releases/, current, and the lock. */
@@ -78,6 +96,15 @@ const { positionals, values } = parseArgs({
     to: { type: "string" },
     "first-boot-budget-seconds": { type: "string", default: "90" },
     "accept-data-loss": { type: "boolean", default: false },
+    // Which segment to bump when a build mints a fresh version. Rebuilds of an
+    // already-released sha reuse its version and ignore this.
+    bump: { type: "string", default: "patch" },
+    // Explicit version for this build, bypassing the bump. Must be unused.
+    version: { type: "string" },
+    // One line: what ships. Recorded in the decision ledger with --why.
+    summary: { type: "string" },
+    // Why this level and not the neighbors. Required when minting a version.
+    why: { type: "string" },
   },
 });
 
@@ -101,8 +128,12 @@ function report(summary: string, body: string): void {
   });
 }
 
-/** Runs a command with only PATH and HOME, so nothing from an agent or dev shell leaks in. */
-function run(command: readonly string[], cwd: string): void {
+/** Runs a command with extra env vars, still scrubbed of the dev shell. */
+function runWithEnv(
+  command: readonly string[],
+  cwd: string,
+  extraEnv: Readonly<Record<string, string>>,
+): void {
   const [file, ...args] = command;
   const result = spawnSync(file!, args, {
     cwd,
@@ -112,9 +143,15 @@ function run(command: readonly string[], cwd: string): void {
       PATH: config.buildPath,
       TMPDIR: process.env.TMPDIR ?? "/tmp",
       LANG: "en_US.UTF-8",
+      ...extraEnv,
     },
   });
   if (result.status !== 0) throw new Error(`${command.join(" ")} exited ${result.status}`);
+}
+
+/** Runs a command with only PATH and HOME, so nothing from an agent or dev shell leaks in. */
+function run(command: readonly string[], cwd: string): void {
+  runWithEnv(command, cwd, {});
 }
 
 function git(...args: string[]): string {
@@ -123,7 +160,72 @@ function git(...args: string[]): string {
   return result.stdout.trim();
 }
 
-function buildRelease(sha: string): void {
+const BUMP_LEVELS = ["major", "minor", "patch"] as const;
+
+function parseBumpLevel(raw: string | undefined): ForkBumpLevel {
+  const level = (raw ?? "patch").trim().toLowerCase();
+  if (level === "major" || level === "minor" || level === "patch") return level;
+  throw new Error(`--bump must be one of ${BUMP_LEVELS.join(", ")}, got "${raw}"`);
+}
+
+/**
+ * Resolves the version a build of this sha ships as. A rebuild reuses the
+ * recorded version; a fresh sha mints one from the bump level (or an explicit
+ * --version) and records it, plus the decision rationale, before building.
+ */
+function resolveBuildVersion(fullSha: string): {
+  readonly version: string;
+  readonly fresh: boolean;
+} {
+  const registry = readVersionRegistry(config.root);
+  const existing = versionForSha(registry, fullSha);
+  if (existing) {
+    log(`${existing.sha.slice(0, 10)} already shipped as ${existing.version}; reusing it`);
+    return { version: existing.version, fresh: false };
+  }
+  const explicit = values.version?.trim();
+  if (explicit) {
+    if (!isForkVersion(explicit)) throw new Error(`--version "${explicit}" is not semver`);
+    if (versionForSha(registry, fullSha)) {
+      throw new Error(`sha ${fullSha} already has a version`);
+    }
+    for (const entry of Object.values(registry)) {
+      if (entry.version === explicit) {
+        throw new Error(`version ${explicit} already maps to ${entry.sha}; pick another`);
+      }
+    }
+    const summary = values.summary?.trim();
+    const why = values.why?.trim();
+    if (!summary || !why) {
+      throw new Error("--summary and --why are required when minting a version with --version");
+    }
+    recordForkVersion(config.root, fullSha, explicit);
+    appendBumpDecision(config.root, {
+      version: explicit,
+      level: latestRegistryVersion(registry) ? parseBumpLevel(values.bump) : "patch",
+      sha: fullSha,
+      summary,
+      rationale: `explicit --version: ${why}`,
+    });
+    return { version: explicit, fresh: true };
+  }
+  const level = parseBumpLevel(values.bump);
+  const { version } = resolveForkVersion(registry, fullSha, level);
+  const summary = values.summary?.trim();
+  const why = values.why?.trim();
+  if (!summary || !why) {
+    throw new Error(
+      `minting ${version} (${level} from ${latestRegistryVersion(registry) ?? "nothing"}): ` +
+        "--summary and --why are required so the ledger records the bump decision",
+    );
+  }
+  recordForkVersion(config.root, fullSha, version);
+  appendBumpDecision(config.root, { version, level, sha: fullSha, summary, rationale: why });
+  log(`minted fork version ${version} (${level}) for ${fullSha.slice(0, 10)}`);
+  return { version, fresh: true };
+}
+
+function buildRelease(sha: string, version: string): void {
   if (git("status", "--porcelain"))
     throw new Error("build tree has local changes; refusing to build");
   git("checkout", "--detach", sha);
@@ -134,7 +236,11 @@ function buildRelease(sha: string): void {
   const partial = `${releaseDir(config.root, sha)}.partial`;
   rmSync(out, { recursive: true, force: true });
   rmSync(partial, { recursive: true, force: true });
-  run(
+  // One version for every surface: the artifact, the bundled server, the web
+  // client, and the mobile build when it runs through this path all read
+  // T3CODE_FORK_VERSION.
+  const versionEnv = { T3CODE_FORK_VERSION: version };
+  runWithEnv(
     [
       "node",
       "scripts/build-desktop-artifact.ts",
@@ -144,16 +250,22 @@ function buildRelease(sha: string): void {
       "dmg",
       "--arch",
       "arm64",
+      "--build-version",
+      version,
       "--output-dir",
       out,
     ],
     config.buildTree,
+    versionEnv,
   );
   const zip = spawnSync("sh", ["-c", `ls "${out}"/*.zip`], { encoding: "utf8" }).stdout.trim();
   if (!zip) throw new Error("build produced no zip");
   mkdirSync(partial, { recursive: true });
   run(["ditto", "-x", "-k", zip, partial], config.buildTree);
   writeFileSync(join(partial, COMPLETE_MARKER), `${sha}\n`);
+  writeReleaseVersion(config.root, `${sha}.partial`, version);
+  // The release dir name is the destination: rename moves the version marker
+  // with it, so the marker must be written to the partial path first.
   renameSync(partial, releaseDir(config.root, sha));
   rmSync(out, { recursive: true, force: true });
 }
@@ -246,8 +358,12 @@ const QUIET_POLLS = 3;
 
 async function deploy(ref: string): Promise<number> {
   const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
+  const fullSha = git("rev-parse", `${ref}^{commit}`);
   const before = readCurrent(config.root);
-  if (before === sha) return (log(`${sha} is already live`), 0);
+  if (before === sha) {
+    const live = readReleaseVersion(config.root, sha);
+    return (log(`${sha} is already live${live ? ` as fork ${live}` : ""}`), 0);
+  }
 
   ensureDir(join(config.root, "releases"));
   const lock = join(config.root, ".deploy.lock");
@@ -260,9 +376,14 @@ async function deploy(ref: string): Promise<number> {
   let draining = false;
   let swapped = false;
   try {
+    const { version } = resolveBuildVersion(fullSha);
     if (!isComplete(config.root, sha)) {
-      log(`building ${sha}`);
-      buildRelease(sha);
+      log(`building ${sha} as fork ${version}`);
+      buildRelease(sha, version);
+    } else if (readReleaseVersion(config.root, sha) !== version) {
+      throw new Error(
+        "cached artifact does not carry this fork version; build a new revision instead",
+      );
     }
 
     // A first V2 boot copies the v1 database before it answers, so it gets the longer budget,
@@ -306,10 +427,10 @@ async function deploy(ref: string): Promise<number> {
     const oldPid = launchdPid(config.label, uid);
     atomicSwap(config.root, sha);
     swapped = true; // the restart clears drain mode, so it is only switched off when no swap happened
-    log(`swapped current ${before ?? "(none)"} -> ${sha}`);
+    log(`swapped current ${before ?? "(none)"} -> ${sha} (fork ${version})`);
     if (await restartAndProbe(oldPid, bootBudget)) {
       pruneReleases(config.root, config.keepReleases ?? 3);
-      log(`${sha} is live and healthy on port ${config.port}`);
+      log(`${sha} (fork ${version}) is live and healthy on port ${config.port}`);
       return 0;
     }
 
@@ -355,7 +476,12 @@ async function deploy(ref: string): Promise<number> {
 /** Builds a release without touching production, so the later deploy is only a swap. */
 async function build(ref: string): Promise<number> {
   const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
-  if (isComplete(config.root, sha)) return (log(`${sha} is already built`), 0);
+  const fullSha = git("rev-parse", `${ref}^{commit}`);
+  if (isComplete(config.root, sha)) {
+    const existing = readReleaseVersion(config.root, sha);
+    if (!existing) throw new Error("cached artifact is unversioned; build a new revision instead");
+    return (log(`${sha} is already built${existing ? ` as fork ${existing}` : ""}`), 0);
+  }
   ensureDir(join(config.root, "releases"));
   const lock = join(config.root, ".deploy.lock");
   try {
@@ -365,8 +491,9 @@ async function build(ref: string): Promise<number> {
     return 1;
   }
   try {
-    log(`building ${sha}`);
-    buildRelease(sha);
+    const { version } = resolveBuildVersion(fullSha);
+    log(`building ${sha} as fork ${version}`);
+    buildRelease(sha, version);
     return 0;
   } catch (error) {
     report(`build of ${sha} failed`, String(error instanceof Error ? error.message : error));
@@ -410,16 +537,54 @@ async function rollback(to?: string): Promise<number> {
 }
 
 async function status(): Promise<number> {
+  const current = readCurrent(config.root);
+  const previous = readPrevious(config.root);
+  const versionOf = (sha: string | null) =>
+    sha ? (readReleaseVersion(config.root, sha) ?? "(unversioned)") : "(none)";
+  log(`current=${current ?? "(none)"} fork=${versionOf(current)} previous=${previous ?? "(none)"}`);
+  const releases = listVersionedReleases(config.root);
   log(
-    `current=${readCurrent(config.root) ?? "(none)"} previous=${readPrevious(config.root) ?? "(none)"}`,
+    `releases: ${
+      releases.map((sha) => `${sha}@${readReleaseVersion(config.root, sha) ?? "?"}`).join(", ") ||
+      "(none)"
+    }`,
   );
-  log(`releases: ${listCompleteReleases(config.root).join(", ") || "(none)"}`);
+  const registry = readVersionRegistry(config.root);
+  const latest = latestRegistryVersion(registry);
+  log(
+    `fork line: latest=${latest ?? `(none; next build mints ${FORK_INITIAL_VERSION})`} ` +
+      `registry=${Object.keys(registry).length} release(s)`,
+  );
   log(
     `launchd pid=${launchdPid(config.label, uid) ?? "(not running)"} healthy=${await probeHealth(config.port)}`,
   );
   const stateDb = resolveStateDb(config.home);
   log(
     `running turns: ${drainCommand(["status"])?.runningTurns ?? (existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb})`,
+  );
+  return 0;
+}
+
+/** Prints the version a ref would ship as, without building. */
+function version(ref: string): number {
+  const fullSha = git("rev-parse", `${ref}^{commit}`);
+  const registry = readVersionRegistry(config.root);
+  const existing = versionForSha(registry, fullSha);
+  if (existing) {
+    log(`${fullSha.slice(0, 10)} already shipped as fork ${existing.version}`);
+    return 0;
+  }
+  const explicit = values.version?.trim();
+  if (explicit) {
+    if (!isForkVersion(explicit)) throw new Error(`--version "${explicit}" is not semver`);
+    log(`${fullSha.slice(0, 10)} would ship as fork ${explicit} (explicit)`);
+    return 0;
+  }
+  const level = parseBumpLevel(values.bump);
+  const { version: next } = resolveForkVersion(registry, fullSha, level);
+  log(
+    `${fullSha.slice(0, 10)} would ship as fork ${next} ` +
+      `(${level} from ${latestRegistryVersion(registry) ?? "nothing"})`,
   );
   return 0;
 }
@@ -460,11 +625,14 @@ const exitCode = await (async () => {
       return rollback(values.to);
     case "status":
       return status();
+    case "version":
+      if (ref) return version(ref);
+      break;
     case "plist":
       return plist();
   }
   console.error(
-    "usage: fork-deploy <build <ref> | deploy <ref> [--first-boot-budget-seconds 240] | rollback [--accept-data-loss] | status | plist>",
+    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] | rollback [--accept-data-loss] | status | version <ref> | plist>",
   );
   return 64;
 })();

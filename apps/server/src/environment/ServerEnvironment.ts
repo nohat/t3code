@@ -14,6 +14,21 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import packageJson from "../../package.json" with { type: "json" };
+
+/**
+ * Fork release version, baked at build time by fork-deploy via the server
+ * bundle define (see apps/server/vite.config.ts). Undefined on upstream and
+ * dev builds, which keep reporting package.json. When set, every surface —
+ * desktop About, web client, mobile detail row, version-skew check — sees one
+ * number for the release.
+ */
+declare const __T3CODE_FORK_VERSION__: string | undefined;
+
+const resolveServerVersion = (): string => {
+  const forkVersion =
+    typeof __T3CODE_FORK_VERSION__ === "undefined" ? "" : (__T3CODE_FORK_VERSION__ ?? "");
+  return forkVersion.trim() || packageJson.version;
+};
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import { resolveServerInstallation } from "../cli/invocation.ts";
 import { readAgentActivityPublishingActive } from "../cloud/config.ts";
@@ -213,7 +228,7 @@ export const make = Effect.gen(function* () {
       arch: platformArch(hostArchitecture),
       ...(machine === null ? {} : { machine }),
     },
-    serverVersion: packageJson.version,
+    serverVersion: resolveServerVersion(),
     orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
     capabilities: {
       repositoryIdentity: true,

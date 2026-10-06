@@ -26,6 +26,13 @@ const cliBuildChannel = /^[^-+]+-(?:nightly|preview)\./.test(packageJson.version
   ? "nightly"
   : "latest";
 
+// Fork release version for fork-deploy builds. The bundled server is built
+// inside the desktop artifact's scrubbed env, which carries T3CODE_FORK_VERSION
+// (and APP_VERSION as a fallback); upstream and dev builds leave it undefined
+// and ServerEnvironment keeps reporting package.json.
+const forkVersionDefine =
+  process.env.T3CODE_FORK_VERSION?.trim() || process.env.APP_VERSION?.trim() || undefined;
+
 // `build:exe` wraps the same bundle in a Node single-executable. tsdown's exe
 // step refuses multi-chunk output and counts the sourcemap as a chunk, and the
 // executable needs a host Node that supports `--build-sea` (25.7+), so this is
@@ -112,6 +119,7 @@ export default mergeConfig(
       },
       define: {
         __T3CODE_BUILD_CHANNEL__: JSON.stringify(cliBuildChannel),
+        __T3CODE_FORK_VERSION__: JSON.stringify(forkVersionDefine ?? ""),
         __T3CODE_BUILD_RELAY_URL__: JSON.stringify(repoEnv.T3CODE_RELAY_URL?.trim() ?? ""),
         __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
           repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
