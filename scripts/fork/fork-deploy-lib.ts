@@ -366,10 +366,11 @@ export function deployFailureMessage(
     : `deploy of ${sha} stopped before the swap`;
 }
 
+/** Unknown generations cannot prove that automatic recovery preserves V2 history and auth. */
 export function automaticRollbackAllowed(
-  _candidateUsesV2: boolean | null,
-  _previousUsesV2: boolean | null,
-  _acceptDataLoss: boolean,
+  candidateUsesV2: boolean | null,
+  previousUsesV2: boolean | null,
+  acceptDataLoss: boolean,
 ): boolean {
-  return true;
+  return acceptDataLoss || candidateUsesV2 === false || previousUsesV2 === true;
 }

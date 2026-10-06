@@ -4,7 +4,7 @@
  * Gated deploy of a packaged build to a single launchd-managed production instance.
  *
  *   node scripts/fork/fork-deploy.ts build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <t>] [--why <t>]
- *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [same version flags]
+ *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [--accept-data-loss] [same version flags]
  *   node scripts/fork/fork-deploy.ts rollback [--to <sha>] [--accept-data-loss]
  *   node scripts/fork/fork-deploy.ts status
  *   node scripts/fork/fork-deploy.ts version <ref> [--bump ...] [--version ...]
@@ -13,7 +13,7 @@
  * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
  * answers, so that one deploy probes for --first-boot-budget-seconds (default 240) and,
  * if it rolls back, moves only a proven fresh copy aside. Existing migrated V2 history is retained.
- * Explicit rollback from V2 to v1 hides everything written since cutover and needs --accept-data-loss.
+ * V2-to-V1 recovery hides new history/auth and requires --accept-data-loss; fix forward by default.
  * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
  * the next version (bump level, default patch); a rebuild reuses the recorded
  * one. Minting requires --summary (what ships) and --why (why this level), so
@@ -32,6 +32,7 @@ import * as NodeUtil from "node:util";
 
 import {
   atomicSwap,
+  automaticRollbackAllowed,
   classifyV2Copy,
   deployFailureMessage,
   COMPLETE_MARKER,
@@ -477,6 +478,19 @@ async function deploy(ref: string): Promise<number> {
       );
       return 3;
     }
+    if (
+      !automaticRollbackAllowed(
+        releaseUsesV2State(config.root, sha),
+        releaseUsesV2State(config.root, previous),
+        values["accept-data-loss"],
+      )
+    ) {
+      report(
+        `MANUAL ACTION: ${sha} failed health check; automatic rollback to ${previous} refused`,
+        `current=${sha}; statev2.sqlite is preserved. Fix forward by default: rollback to V1 or an unknown generation can hide new V2 history and authentication sessions. Use rollback --to ${previous} --accept-data-loss only after explicitly accepting that loss.`,
+      );
+      return 3;
+    }
     atomicSwap(config.root, previous, { rollback: true });
     const recovered = await restartAndProbe(
       launchdPid(config.label, uid),
@@ -676,7 +690,7 @@ const exitCode = await (async () => {
       return plist();
   }
   console.error(
-    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] | rollback [--accept-data-loss] | status | version <ref> | plist>",
+    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] [--accept-data-loss] | rollback [--accept-data-loss] | status | version <ref> | plist>",
   );
   return 64;
 })();
