@@ -26,12 +26,16 @@ else:
     shutil.copyfile(path, path + ".bak")
 command = shlex.quote(sys.argv[2] + "/t3code-fork-posture.sh")
 entries = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
-if not any(h.get("command") == command for e in entries for h in e.get("hooks", [])):
-    entries.append({"hooks": [{"type": "command", "command": command}]})
+def remove_previous(entries, filename):
+    for entry in entries:
+        entry["hooks"] = [h for h in entry.get("hooks", []) if filename not in h.get("command", "")]
+    entries[:] = [e for e in entries if e.get("hooks")]
+remove_previous(entries, "t3code-fork-posture.sh")
+entries.append({"hooks": [{"type": "command", "command": command}]})
 guard = 'python3 ' + shlex.quote(sys.argv[2] + "/t3code-fork-guard.py") + ' pre-tool'
 entries = settings.setdefault("hooks", {}).setdefault("PreToolUse", [])
-if not any(h.get("command") == guard for e in entries for h in e.get("hooks", [])):
-    entries.append({"matcher": "Bash", "hooks": [{"type": "command", "command": guard}]})
+remove_previous(entries, "t3code-fork-guard.py")
+entries.append({"matcher": "Bash", "hooks": [{"type": "command", "command": guard}]})
 json.dump(settings, open(path, "w"), indent=2, ensure_ascii=False)
 open(path, "a").write("\n")
 PY
