@@ -212,4 +212,94 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
         assert.deepEqual(yield* counts, before);
       }).pipe(Effect.provide(testLayer)),
   );
+  for (const scenario of [
+    "selected",
+    "replay-after-stop",
+    "newer-stop",
+    "archive",
+    "pending-interrupt",
+    "wrong-purpose",
+    "wrong-run",
+  ] as const)
+    it.effect(`explicit continuation Resume ${scenario}`, () =>
+      Effect.gen(function* () {
+        const service = yield* setup;
+        yield* rawDispatch(message("resume-initial"));
+        const initial = yield* service.getThreadSnapshot(threadId);
+        const stopped = initial.projection.runs[0];
+        assert.ok(stopped);
+        yield* rawDispatch({ ...message("other-held"), dispatchMode: { type: "defer_start" } });
+        yield* service.dispatch({
+          type: "run.interrupt",
+          commandId: CommandId.make("resume-stop"),
+          threadId,
+          runId: stopped.id,
+          holdQueue: true,
+        });
+        const action = yield* service.getThreadSnapshot(threadId);
+        const command = {
+          ...message("selected-resume"),
+          automaticAuthority: {
+            purpose: scenario === "wrong-purpose" ? "checklist" : "continuation",
+            expectedThreadSequence: action.snapshotSequence,
+            resumeAfterRunId: scenario === "wrong-run" ? "not-the-stopped-run" : stopped.id,
+          },
+        };
+        if (scenario === "newer-stop")
+          yield* service.dispatch({
+            type: "run.interrupt",
+            commandId: CommandId.make("newer-same-run-stop"),
+            threadId,
+            runId: stopped.id,
+            holdQueue: true,
+          });
+        if (scenario === "archive")
+          yield* service.dispatch({
+            type: "thread.archive",
+            commandId: CommandId.make("resume-archive"),
+            threadId,
+          });
+        if (scenario === "pending-interrupt") {
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`DELETE FROM orchestration_v2_projection_turn_items WHERE thread_id=${threadId} AND type='run_interrupt_result'`;
+        }
+        const before = yield* counts;
+        const result = yield* Effect.exit(rawDispatch(command));
+        if (scenario !== "selected" && scenario !== "replay-after-stop") {
+          assert.equal(result._tag, "Failure");
+          assert.deepEqual(yield* counts, before);
+          assert.equal((yield* Effect.exit(rawDispatch(command)))._tag, "Failure");
+          assert.deepEqual(yield* counts, before);
+          return;
+        }
+        assert.equal(result._tag, "Success");
+        const after = yield* service.getThreadSnapshot(threadId);
+        const other = after.projection.runs.find(
+          (run) => run.userMessageId === MessageId.make("other-held"),
+        );
+        assert.ok(other);
+        assert.equal(other.status, "queued");
+        assert.equal(other.queueHeld, true);
+        assert.equal((yield* counts).runs, before.runs + 1);
+        if (scenario === "replay-after-stop") {
+          const resumed = after.projection.runs.find(
+            (run) => run.userMessageId === MessageId.make("selected-resume"),
+          );
+          assert.ok(resumed);
+          yield* service.dispatch({
+            type: "run.interrupt",
+            commandId: CommandId.make("stop-resumed"),
+            threadId,
+            runId: resumed.id,
+            holdQueue: true,
+          });
+          const revokedCounts = yield* counts;
+          const replay = yield* rawDispatch(command);
+          if (result._tag === "Success") assert.equal(replay.sequence, result.value.sequence);
+          assert.deepEqual(yield* counts, revokedCounts);
+          const final = yield* service.getThreadSnapshot(threadId);
+          assert.equal(final.projection.runs.find((run) => run.id === other.id)?.queueHeld, true);
+        }
+      }).pipe(Effect.provide(testLayer)),
+    );
 });
