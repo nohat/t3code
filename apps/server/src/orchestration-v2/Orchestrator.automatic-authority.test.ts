@@ -44,7 +44,8 @@ const message = (key: string, sequence?: number) => ({
   messageId: MessageId.make(key),
   text: "synthetic automatic observation",
   attachments: [],
-  dispatchMode: { type: "defer_start" },
+  dispatchMode: { type: "start_immediately" },
+  deliveryIntent: "auto",
   createdBy: "user",
   creationSource: "server",
   ...(sequence === undefined
