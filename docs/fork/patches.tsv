@@ -19,3 +19,6 @@ design-system	feat/design-system-clean	cd scripts && vp test run --config ../vit
 feed-scroll-jump	fix/feed-scroll-jump	cd apps/mobile && vp test run --config ../../vite.config.ts src/lib/keyboardControllerPatch.test.ts
 sync-gates	feat/sync-gates	cd scripts && vp test run --config ../vite.config.ts fork/delta-check.test.ts
 fork-docs-agent-config	fork/prod	-
+fork-agent-guards	feat/fork-agent-guards	python3 -m unittest discover -s scripts/fork/agent-config -p "*_test.py"
+fork-versioning	fork/prod	cd scripts && vp test run --config ../vite.config.ts fork/fork-versions.test.ts fork/fork-mobile-version.test.ts build-desktop-artifact.test.ts -t "fork|semver|registry|release|ledger"
+upstream-sync	sync/upstream-20261005	cd scripts && vp test run --config ../vite.config.ts fork/upstream-sync.test.ts

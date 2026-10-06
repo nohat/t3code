@@ -1,6 +1,6 @@
 # Upstream sync automation
 
-Status: **ratified 2026-10-05** ("i like the sync automation plan, let's ratify it", plus the weekly cadence review below). Tracked in nohat/t3code#6; the first sync, a one-off port, is #36. Background and rejected alternatives are in [maintenance.md](./maintenance.md). Built so far: the facts it rests on (`upstream` has `no_push`, `rerere` is on), and the two gates below, `docs/fork/patches.tsv` and `scripts/fork/delta-check.ts` (2026-10-05, `feat/sync-gates`). The job itself is not built.
+Status: **ratified 2026-10-05**. Tracked in nohat/t3code#6; the first sync is #36. Guard hooks are installed and release versioning is committed on `fork/prod`. The gates and sync runner, including weekly cadence review, are built on `sync/upstream-20261005`. The hourly launchd job is prepared but remains disabled until V2 cutover. Background and rejected alternatives are in [maintenance.md](./maintenance.md).
 
 ## What it does
 
@@ -38,3 +38,11 @@ State lives in the deploy root, machine-local and out of git, next to `fork-vers
 ## Assumptions (change by saying so)
 
 Daily start cadence; `sync/upstream-<date>` branches pushed to `origin`; no auto-land; the visual diff in the README waits for the design-system gate; cadence bounds 6 to 168 hours; a change of at most 2x per review.
+
+## Running it
+
+Machine settings live outside Git in `upstream-sync-config.json`: absolute `root` (deploy root), `repo` (primary checkout), `githubRepo` (`nohat/t3code`), `node` (absolute executable), `path` (toolchain PATH), and `enabled` (false until cutover). `notify` optionally supplies the existing notifier command prefix; `cadenceCommand` optionally replaces `claude -p --tools ""`, accepting the prompt on stdin and returning the decision JSON on stdout. Keep the config private.
+
+Use `node scripts/fork/upstream-sync.ts trial --config <file>` for a local trial with no fetch, pushes, issue writes, or cadence-agent call. `--upstream`, `--fork`, and `--old-main` can pin its revisions. `run` is the scheduled path; `cadence` explicitly performs the weekly review. `plist --config <file>` emits the hourly `local.t3code.upstream-sync` job. Validate it with `plutil` before installing in `~/Library/LaunchAgents`. Enable and bootstrap it only after #36 lands.
+
+The job never lands a candidate. A repeat trial reuses an existing candidate with the same tree and parents; distinct candidates use a revision suffix when that day's name is occupied. Guard stdout stays in private `sync-logs/` directories. Public sync issues contain only revision ids, paths, counts, status, and guard ids. Unexpected dirty trials are preserved for inspection and cannot become clean candidates. A lock left after a crash requires inspecting its recorded pid and trial before removing it.
