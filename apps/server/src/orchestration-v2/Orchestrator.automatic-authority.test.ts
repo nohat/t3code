@@ -83,7 +83,8 @@ const counts = Effect.gen(function* () {
   const rows = yield* sql<{
     runs: number;
     starts: number;
-  }>`SELECT (SELECT count(*) FROM orchestration_v2_projection_runs WHERE thread_id=${threadId}) AS runs, (SELECT count(*) FROM orchestration_v2_effect_outbox WHERE thread_id=${threadId} AND effect_type='provider-turn.start') AS starts`;
+    messages: number;
+  }>`SELECT (SELECT count(*) FROM orchestration_v2_projection_runs WHERE thread_id=${threadId}) AS runs, (SELECT count(*) FROM orchestration_v2_effect_outbox WHERE thread_id=${threadId} AND effect_type='provider-turn.start') AS starts, (SELECT count(*) FROM orchestration_v2_projection_messages WHERE thread_id=${threadId}) AS messages`;
   return rows[0];
 });
 describe("atomic automatic authority at ordinary RPC mutation", () => {
@@ -113,15 +114,11 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
           assert.deepEqual(yield* counts, before);
         }).pipe(Effect.provide(testLayer)),
     );
-  it.effect(
-    "refuses automatic dispatch after interrupt commits; manual user recovery remains allowed",
-    () =>
+  for (const choice of ["stale", "fresh", "manual", "pending-interrupt"] as const)
+    it.effect(`interrupt authority ${choice} is exercised independently`, () =>
       Effect.gen(function* () {
         const service = yield* setup;
-        yield* rawDispatch({
-          ...message("initial-user"),
-          dispatchMode: { type: "start_immediately" },
-        });
+        yield* rawDispatch(message("initial-user"));
         const observed = yield* service.getThreadSnapshot(threadId);
         const run = observed.projection.runs[0];
         assert.ok(run);
@@ -132,23 +129,29 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
           runId: run.id,
           holdQueue: true,
         });
+        if (choice === "pending-interrupt") {
+          // Replay the projection boundary while a provider interrupt is pending:
+          // request exists, result absent, executing state not yet settled.
+          const sql = yield* SqlClient.SqlClient;
+          yield* sql`DELETE FROM orchestration_v2_projection_turn_items WHERE thread_id=${threadId} AND type='run_interrupt_result'`;
+          yield* sql`UPDATE orchestration_v2_projection_runs SET status='running', payload_json=json_set(payload_json, '$.status', 'running') WHERE thread_id=${threadId} AND run_id=${run.id}`;
+        }
+        const current = yield* service.getThreadSnapshot(threadId);
         const before = yield* counts;
-        assert.equal(
-          (yield* Effect.exit(rawDispatch(message("stale-after-stop", observed.snapshotSequence))))
-            ._tag,
-          "Failure",
-        );
-        assert.deepEqual(yield* counts, before);
-        const stopped = yield* service.getThreadSnapshot(threadId);
-        assert.equal(
-          (yield* Effect.exit(rawDispatch(message("fresh-after-stop", stopped.snapshotSequence))))
-            ._tag,
-          "Failure",
-        );
-        yield* rawDispatch(message("explicit-user-recovery"));
-        assert.equal((yield* counts).runs, before.runs + 1);
+        if (choice === "manual") {
+          yield* rawDispatch(message("explicit-user-recovery"));
+          assert.equal((yield* counts).runs, before.runs + 1);
+        } else {
+          const sequence =
+            choice === "stale" ? observed.snapshotSequence : current.snapshotSequence;
+          assert.equal(
+            (yield* Effect.exit(rawDispatch(message("automatic-after-stop", sequence))))._tag,
+            "Failure",
+          );
+          assert.deepEqual(yield* counts, before);
+        }
       }).pipe(Effect.provide(testLayer)),
-  );
+    );
   for (const initialMode of ["defer_start", "start_immediately"] as const)
     it.effect(`accepts unchanged authority with ${initialMode} work`, () =>
       Effect.gen(function* () {
