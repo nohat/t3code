@@ -9457,7 +9457,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         return yield* reject(
           "Automatic authority changed; retain queued content and review the thread.",
         );
-      const projection = yield* loadProjectionForCommand(command, ["runs"]);
+      const projection = yield* loadProjectionForCommand(command, ["runs", "turnItems"], {
+        turnItemTypes: ["run_interrupt_request", "run_interrupt_result"],
+      });
       const latest = projection.runs.at(-1);
       if (
         projection.thread.archivedAt !== null ||
@@ -9467,25 +9469,17 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         projection.runs.some((run) => run.status === "queued" && run.queueHeld)
       )
         return yield* reject("Automatic work is suppressed by thread Stop, archive or deletion.");
-      for (const run of projection.runs.filter(
-        (run) =>
-          run === latest ||
-          run.status === "preparing" ||
-          run.status === "starting" ||
-          run.status === "running" ||
-          run.status === "waiting",
-      )) {
-        const pending = yield* projectionStore
-          .hasUnpairedRunInterruptRequest(
-            command.threadId,
-            idAllocator.derive.runSignalTurnItem({ runId: run.id, signal: "interrupt-request" }),
-            idAllocator.derive.runSignalTurnItem({ runId: run.id, signal: "interrupt-result" }),
-          )
-          .pipe(
-            Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })),
-          );
-        if (pending) return yield* reject("Automatic work is suppressed by a pending interrupt.");
-      }
+      const answered = new Set(
+        projection.turnItems
+          .filter((item) => item.type === "run_interrupt_result")
+          .map((item) => item.parentItemId),
+      );
+      if (
+        projection.turnItems.some(
+          (item) => item.type === "run_interrupt_request" && !answered.has(item.id),
+        )
+      )
+        return yield* reject("Automatic work is suppressed by a pending interrupt.");
     }
 
     const events = yield* Ref.make<Array<OrchestrationV2DomainEvent>>([]);
