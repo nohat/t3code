@@ -1,0 +1,2 @@
+set -eu
+python3 scripts/fork/agent-config/fork_guard.py pre-push
