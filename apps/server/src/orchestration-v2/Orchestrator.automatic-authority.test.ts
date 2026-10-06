@@ -156,7 +156,10 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
         yield* rawDispatch({ ...message("existing"), dispatchMode: { type: initialMode } });
         const observed = yield* service.getThreadSnapshot(threadId);
         const before = yield* counts;
-        yield* rawDispatch(message("protected-followup", observed.snapshotSequence));
+        yield* rawDispatch({
+          ...message("protected-followup", observed.snapshotSequence),
+          dispatchMode: { type: "defer_start" },
+        });
         assert.equal((yield* counts).runs, before.runs + 1);
       }).pipe(Effect.provide(testLayer)),
     );
