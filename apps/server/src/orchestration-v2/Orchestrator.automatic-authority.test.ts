@@ -112,14 +112,27 @@ describe("atomic automatic authority at ordinary RPC mutation", () => {
           );
           assert.equal(outcome._tag, "Failure");
           assert.deepEqual(yield* counts, before);
+          if (mutation !== "archive-unarchive") {
+            const current = yield* service.getThreadSnapshot(threadId);
+            const fresh = message("fresh-inactive", current.snapshotSequence);
+            assert.equal((yield* Effect.exit(rawDispatch(fresh)))._tag, "Failure");
+            assert.deepEqual(yield* counts, before);
+            assert.equal((yield* Effect.exit(rawDispatch(fresh)))._tag, "Failure");
+            assert.deepEqual(yield* counts, before);
+          }
         }).pipe(Effect.provide(testLayer)),
     );
-  for (const choice of ["stale", "fresh", "manual", "pending-interrupt"] as const)
+  for (const choice of ["stale", "fresh", "manual", "pending-interrupt", "held-queue"] as const)
     it.effect(`interrupt authority ${choice} is exercised independently`, () =>
       Effect.gen(function* () {
         const service = yield* setup;
         yield* rawDispatch(message("initial-user"));
         const observed = yield* service.getThreadSnapshot(threadId);
+        if (choice === "held-queue")
+          yield* rawDispatch({
+            ...message("queued-before-stop"),
+            dispatchMode: { type: "defer_start" },
+          });
         const run = observed.projection.runs[0];
         assert.ok(run);
         yield* service.dispatch({
