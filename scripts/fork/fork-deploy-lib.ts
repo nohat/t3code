@@ -374,3 +374,11 @@ export function automaticRollbackAllowed(
 ): boolean {
   return acceptDataLoss || candidateUsesV2 === false || previousUsesV2 === true;
 }
+
+export function releaseTransitionAllowed(
+  _currentUsesV2: boolean | null,
+  _targetUsesV2: boolean | null,
+  _acceptDataLoss: boolean,
+): boolean {
+  return true;
+}

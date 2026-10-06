@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   atomicSwap,
+  releaseTransitionAllowed,
   automaticRollbackAllowed,
   classifyV2Copy,
   deployFailureMessage,
@@ -315,5 +316,26 @@ describe("automatic rollback loss policy", () => {
     expect(automaticRollbackAllowed(false, false, false)).toBe(true);
     expect(automaticRollbackAllowed(null, false, false)).toBe(false);
     expect(automaticRollbackAllowed(null, true, false)).toBe(true);
+  });
+});
+
+describe("shared release transition loss policy", () => {
+  it("blocks ordinary deployment of an old V1 artifact over current V2", () => {
+    expect(releaseTransitionAllowed(true, false, false)).toBe(false);
+    expect(releaseTransitionAllowed(true, false, true)).toBe(true);
+  });
+  it("blocks manual rollback from an unknown current generation to V1", () => {
+    expect(releaseTransitionAllowed(null, false, false)).toBe(false);
+    expect(releaseTransitionAllowed(null, false, true)).toBe(true);
+  });
+  it("blocks an unknown target when current history may be V2", () => {
+    expect(releaseTransitionAllowed(true, null, false)).toBe(false);
+    expect(releaseTransitionAllowed(null, null, false)).toBe(false);
+  });
+  it("preserves known V2 forward recovery and V1 transitions", () => {
+    expect(releaseTransitionAllowed(true, true, false)).toBe(true);
+    expect(releaseTransitionAllowed(null, true, false)).toBe(true);
+    expect(releaseTransitionAllowed(false, false, false)).toBe(true);
+    expect(releaseTransitionAllowed(false, true, false)).toBe(true);
   });
 });
