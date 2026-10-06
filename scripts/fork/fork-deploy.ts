@@ -12,8 +12,8 @@
  *
  * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
  * answers, so that one deploy probes for --first-boot-budget-seconds (default 240) and,
- * if it rolls back, moves the copy aside so the next attempt copies again. Rolling back from V2
- * to v1 hides everything written since the cutover, so it needs --accept-data-loss.
+ * if it rolls back, moves only a proven fresh copy aside. Existing migrated V2 history is retained.
+ * Explicit rollback from V2 to v1 hides everything written since cutover and needs --accept-data-loss.
  * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
  * the next version (bump level, default patch); a rebuild reuses the recorded
  * one. Minting requires --summary (what ships) and --why (why this level), so

@@ -9,7 +9,9 @@ import * as NodePath from "node:path";
  *   releases/<sha>/            immutable unpacked app, marked by .release-complete
  *   current -> releases/<sha>  what launchd runs
  *   .previous                  sha that was live before the last swap (rollback target)
+ *   .pinned-releases           operator-owned release IDs retained across later swaps
  */
+export const COMPLETE_MARKER = ".release-complete";
 /** Operator-owned newline-separated release IDs; pruning never rewrites this file. */
 export const PINNED_RELEASES_FILE = ".pinned-releases";
 
@@ -40,8 +42,6 @@ export function classifyV2Copy(userdataDir: string): "fresh" | "retained" {
     return "retained";
   }
 }
-
-export const COMPLETE_MARKER = ".release-complete";
 
 export const releaseDir = (root: string, sha: string) => NodePath.join(root, "releases", sha);
 
