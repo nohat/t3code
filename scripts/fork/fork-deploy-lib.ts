@@ -365,3 +365,11 @@ export function deployFailureMessage(
     ? `MANUAL ACTION: deploy of ${sha} failed after the swap; current=${current ?? "unknown"}`
     : `deploy of ${sha} stopped before the swap`;
 }
+
+export function automaticRollbackAllowed(
+  _candidateUsesV2: boolean | null,
+  _previousUsesV2: boolean | null,
+  _acceptDataLoss: boolean,
+): boolean {
+  return true;
+}

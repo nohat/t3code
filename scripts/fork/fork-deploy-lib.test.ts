@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   atomicSwap,
+  automaticRollbackAllowed,
   classifyV2Copy,
   deployFailureMessage,
   PINNED_RELEASES_FILE,
@@ -296,5 +297,23 @@ describe("deployment failure reporting", () => {
     expect(deployFailureMessage("candidate", false, "previous")).toBe(
       "deploy of candidate stopped before the swap",
     );
+  });
+});
+
+describe("automatic rollback loss policy", () => {
+  it.each([false, null])(
+    "requires explicit loss acceptance for V2 recovery to %s",
+    (previousUsesV2) => {
+      expect(automaticRollbackAllowed(true, previousUsesV2, false)).toBe(false);
+      expect(automaticRollbackAllowed(true, previousUsesV2, true)).toBe(true);
+    },
+  );
+  it("allows recovery to a known V2 release without loss acceptance", () => {
+    expect(automaticRollbackAllowed(true, true, false)).toBe(true);
+  });
+  it("keeps V1 recovery working and treats unknown candidates conservatively", () => {
+    expect(automaticRollbackAllowed(false, false, false)).toBe(true);
+    expect(automaticRollbackAllowed(null, false, false)).toBe(false);
+    expect(automaticRollbackAllowed(null, true, false)).toBe(true);
   });
 });
