@@ -28,10 +28,13 @@ const adapter = {
   openSession: () => Effect.die("Provider execution is forbidden in authority tests"),
 } as ProviderAdapterV2Shape;
 const database = SqlitePersistenceMemory;
-const testLayer = makeOrchestratorV2ReplayLayerWithRegistry(
-  { name: "automatic-authority" },
-  ProviderAdapterRegistry.makeLayer([adapter]),
-  { databaseLayer: database, runEffectWorker: false },
+const testLayer = Layer.merge(
+  database,
+  makeOrchestratorV2ReplayLayerWithRegistry(
+    { name: "automatic-authority" },
+    ProviderAdapterRegistry.makeLayer([adapter]),
+    { databaseLayer: database, runEffectWorker: false },
+  ),
 );
 const threadId = ThreadId.make("thread:automatic-authority");
 const message = (key: string, sequence?: number) => ({
