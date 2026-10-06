@@ -20,6 +20,12 @@ import { basename, join } from "node:path";
  *   current -> releases/<sha>  what launchd runs
  *   .previous                  sha that was live before the last swap (rollback target)
  */
+export const PINNED_RELEASES_FILE = ".pinned-releases";
+
+export function classifyV2Copy(_userdataDir: string): "fresh" | "retained" {
+  return "fresh";
+}
+
 export const COMPLETE_MARKER = ".release-complete";
 
 export const releaseDir = (root: string, sha: string) => join(root, "releases", sha);

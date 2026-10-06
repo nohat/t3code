@@ -15,6 +15,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   atomicSwap,
+  classifyV2Copy,
+  PINNED_RELEASES_FILE,
   COMPLETE_MARKER,
   countRunningSessions,
   countV2OnlyRows,
@@ -249,5 +251,39 @@ describe("V2 cutover helpers", () => {
     v2.close();
     expect(countV2OnlyRows(userdata)).toEqual({ threads: 1, messages: 2 });
     expect(countV2OnlyRows(join(makeUserdata(["state.sqlite"]), "userdata"))).toBeNull();
+  });
+});
+
+describe("cutover ownership and durable pins", () => {
+  it("keeps an explicitly pinned V1 after multiple V2 swaps", () => {
+    const root = makeRoot(["v1", "v2a", "v2b", "v2c"]);
+    writeFileSync(join(root, PINNED_RELEASES_FILE), "v1\n");
+    atomicSwap(root, "v1");
+    atomicSwap(root, "v2a");
+    atomicSwap(root, "v2b");
+    atomicSwap(root, "v2c");
+    expect(pruneReleases(root, 1)).toEqual(["v2a"]);
+    expect(existsSync(releaseDir(root, "v1"))).toBe(true);
+  });
+
+  it("owns absent and pre-prepared V1 copies, but retains migrated V2 on re-entry", () => {
+    const userdata = mkdtempSync(join(tmpdir(), "copy-classification-"));
+    expect(classifyV2Copy(userdata)).toBe("fresh");
+    const db = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    db.exec(
+      "create table projection_threads(thread_id text); create table effect_sql_migrations(migration_id integer, name text); insert into effect_sql_migrations values (54, 'Old');",
+    );
+    db.close();
+    expect(classifyV2Copy(userdata)).toBe("fresh");
+    const migrated = new DatabaseSync(join(userdata, "statev2.sqlite"));
+    migrated.exec("create table orchestration_v2_projection_threads(thread_id text);");
+    migrated.close();
+    expect(classifyV2Copy(userdata)).toBe("retained");
+  });
+
+  it("retains unreadable or unrecognized copies rather than claiming them", () => {
+    const userdata = mkdtempSync(join(tmpdir(), "copy-unknown-"));
+    writeFileSync(join(userdata, "statev2.sqlite"), "not sqlite");
+    expect(classifyV2Copy(userdata)).toBe("retained");
   });
 });
