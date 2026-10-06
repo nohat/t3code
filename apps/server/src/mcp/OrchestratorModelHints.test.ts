@@ -27,6 +27,7 @@ import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import * as OrchestratorModelHints from "./OrchestratorModelHints.ts";
 
 const NOW = "2026-10-05T12:00:00.000Z";
+const encodePayloadJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const rate = (input: number, output: number): ModelRate => ({
   inputCostPerToken: input / 1_000_000,
@@ -55,7 +56,7 @@ const insertRun = (input: {
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const payloadJson = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+    const payloadJson = yield* encodePayloadJson({
       modelSelection: { instanceId: input.instanceId, model: input.model },
     });
     yield* sql`
