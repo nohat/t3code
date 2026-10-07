@@ -50,3 +50,21 @@ test("malformed date/variant/copyright refuses before mutating native metadata",
     assert.deepEqual(strings, { resources: { string: [] } });
   }
 });
+
+test("manifest references retain native About resources through Android shrinking", () => {
+  const { applyManifest } = require("./withNativeAboutMetadata.cjs");
+  const application = {
+    "meta-data": [{ $: { "android:name": "existing", "android:value": "keep" } }],
+  };
+  applyManifest(application, config);
+  applyManifest(application, config);
+  assert.equal(application["meta-data"].length, 4);
+  for (const name of ["built_at_utc", "variant", "copyright"]) {
+    assert.equal(
+      application["meta-data"].find((s) => s.$["android:name"] === `t3.about.${name}`).$[
+        "android:value"
+      ],
+      `@string/t3_about_${name}`,
+    );
+  }
+});
