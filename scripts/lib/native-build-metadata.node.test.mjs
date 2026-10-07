@@ -8,7 +8,15 @@ test("immutable UTC build metadata preserves upstream copyright", () => {
     t3codeBuiltAtUTC: "2026-10-06T12:34:56.000Z",
     t3codeCopyright: "Copyright (c) 2026 T3 Tools Inc.",
   });
-  for (const value of ["invalid", "2026-10-06T12:34:56+03:00", ""])
+  for (const value of [
+    "invalid",
+    "2026-10-06T12:34:56+03:00",
+    "",
+    "2026-02-30T12:34:56.000Z",
+    "2026-13-01T12:34:56.000Z",
+    "2026-10-06T24:00:00.000Z",
+    "2026-10-06T12:34:56Z",
+  ])
     assert.throws(() => createNativeBuildMetadata(value));
 });
 test("packaged about identifies artifact rather than development override", () => {

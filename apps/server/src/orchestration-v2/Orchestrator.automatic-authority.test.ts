@@ -85,7 +85,9 @@ const counts = Effect.gen(function* () {
     starts: number;
     messages: number;
   }>`SELECT (SELECT count(*) FROM orchestration_v2_projection_runs WHERE thread_id=${threadId}) AS runs, (SELECT count(*) FROM orchestration_v2_effect_outbox WHERE thread_id=${threadId} AND effect_type='provider-turn.start') AS starts, (SELECT count(*) FROM orchestration_v2_projection_messages WHERE thread_id=${threadId}) AS messages`;
-  return rows[0];
+  const row = rows[0];
+  assert.isDefined(row, "the SQL aggregate must return exactly one row");
+  return row;
 });
 describe("atomic automatic authority at ordinary RPC mutation", () => {
   for (const mutation of ["thread.archive", "thread.delete", "archive-unarchive"] as const)
