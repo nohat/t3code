@@ -130,6 +130,7 @@ The target is the native app on iPad and iPhone, built from this fork and update
 
 - This page: vision, branch model, deploy model, priorities.
 - [maintenance.md](./maintenance.md): syncing with upstream, guards, and how the posture reaches agents.
+- [cloud-coordination.md](./cloud-coordination.md): how cloud threads take bounded jobs from HQ and report evidence.
 - [posture.md](./posture.md): how much agents ask, trust, and verify; it overrides conflicting text here.
 - [defect-resolution.md](./defect-resolution.md): how defects are found, verified, fixed, and tracked.
 - Gitignored `.t3/LOCAL_SETUP.md`: volatile facts only (PIDs, ports); mostly replaced by `fork-deploy status` over time.
