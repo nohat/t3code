@@ -44,10 +44,32 @@ function applyStrings(strings, config) {
   ];
   return strings;
 }
+function applyManifest(application, config) {
+  metadata(config);
+  const names = ["built_at_utc", "variant", "copyright"];
+  application["meta-data"] = [
+    ...(application["meta-data"] ?? []).filter(
+      (item) => !names.some((name) => item.$?.["android:name"] === `t3.about.${name}`),
+    ),
+    ...names.map((name) => ({
+      $: { "android:name": `t3.about.${name}`, "android:value": `@string/t3_about_${name}` },
+    })),
+  ];
+  return application;
+}
 module.exports = function withNativeAboutMetadata(config) {
-  const { withInfoPlist, withStringsXml } = require("expo/config-plugins");
+  const {
+    withInfoPlist,
+    withStringsXml,
+    withAndroidManifest,
+    AndroidConfig,
+  } = require("expo/config-plugins");
   config = withInfoPlist(config, (next) => {
     applyInfoPlist(next.modResults, next);
+    return next;
+  });
+  config = withAndroidManifest(config, (next) => {
+    applyManifest(AndroidConfig.Manifest.getMainApplicationOrThrow(next.modResults), next);
     return next;
   });
   return withStringsXml(config, (next) => {
@@ -57,3 +79,5 @@ module.exports = function withNativeAboutMetadata(config) {
 };
 module.exports.applyInfoPlist = applyInfoPlist;
 module.exports.applyStrings = applyStrings;
+
+module.exports.applyManifest = applyManifest;
