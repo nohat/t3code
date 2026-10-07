@@ -32,3 +32,18 @@ test("legacy metadata is visibly unavailable without invented launch date", () =
   assert.equal(fields.version, "unknown");
   assert.equal(fields.credits, "Build date unavailable");
 });
+
+test("mobile immutable identity is offline and missing date stays visible", async () => {
+  const { mobileAboutMetadata } =
+    await import("../../apps/mobile/src/features/settings/mobileAboutMetadata.ts");
+  assert.deepEqual(
+    mobileAboutMetadata("2026-10-06T12:34:56.000Z", "Copyright (c) 2026 T3 Tools Inc.", "42"),
+    {
+      date: "2026-10-06T12:34:56.000Z",
+      copyright: "Copyright (c) 2026 T3 Tools Inc.",
+      build: "42",
+    },
+  );
+  assert.equal(mobileAboutMetadata(undefined, undefined, null).date, "Build date unavailable");
+  assert.equal(mobileAboutMetadata("invalid", undefined, 1).date, "Build date unavailable");
+});
