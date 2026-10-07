@@ -287,28 +287,31 @@ extension UIWindow {
       let original = class_getInstanceMethod(UIWindow.self, originalSelector),
       let swizzled = class_getInstanceMethod(UIWindow.self, swizzledSelector)
     else { return }
+    // The original is called by IMP under its own selector, never renamed:
+    // UIKit's inherited `motionEnded` is a forwarding trampoline keyed on the
+    // selector it is invoked with, so calling it as `t3MotionEnded` forwards
+    // an unrecognized selector up the responder chain and aborts.
+    t3OriginalMotionEnded = method_getImplementation(original)
     // `motionEnded` is inherited from UIResponder, so add it to UIWindow first;
     // exchanging implementations would otherwise patch every responder.
-    if class_addMethod(
+    if !class_addMethod(
       UIWindow.self,
       originalSelector,
       method_getImplementation(swizzled),
       method_getTypeEncoding(swizzled)
     ) {
-      class_replaceMethod(
-        UIWindow.self,
-        swizzledSelector,
-        method_getImplementation(original),
-        method_getTypeEncoding(original)
-      )
-    } else {
       method_exchangeImplementations(original, swizzled)
     }
   }
 
   @objc dynamic fileprivate func t3MotionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-    // After the exchange this calls the original implementation.
-    t3MotionEnded(motion, with: event)
+    if let original = t3OriginalMotionEnded {
+      typealias MotionEndedIMP = @convention(c) (AnyObject, Selector, Int, UIEvent?) -> Void
+      let callOriginal = unsafeBitCast(original, to: MotionEndedIMP.self)
+      callOriginal(self, #selector(UIWindow.motionEnded(_:with:)), motion.rawValue, event)
+    }
     if motion == .motionShake { T3PapercutStore.shared.handleShake() }
   }
 }
+
+private var t3OriginalMotionEnded: IMP?
