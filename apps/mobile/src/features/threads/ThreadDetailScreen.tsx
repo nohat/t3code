@@ -35,7 +35,10 @@ import {
   type CodexArtifactTemplate,
 } from "@t3tools/client-runtime/codex-artifact-templates";
 import type { ThreadUserInputQuestion } from "@t3tools/client-runtime/state/thread-requests";
-import { presentPendingBackgroundWork } from "@t3tools/client-runtime/state/thread-execution";
+import {
+  presentPendingBackgroundWork,
+  presentProviderGoal,
+} from "@t3tools/client-runtime/state/thread-execution";
 import { resolveSubagentPillSegment } from "@t3tools/client-runtime/state/thread-subagents";
 import {
   formatModelSelectionEffort,
@@ -96,6 +99,8 @@ import { editPendingThreadMessage } from "../../state/edit-pending-thread-messag
 import { deviceEnvironment } from "../../state/device";
 import { useEnvironmentQuery } from "../../state/query";
 import { threadDevicePreviews } from "../devices/threadDevicePreviews";
+import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
+import { useThreadServerBrowserTabs } from "../../state/preview";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import {
@@ -152,6 +157,7 @@ import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 export interface ThreadDetailScreenProps {
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
   readonly setupWorkingStartedAt?: string | null;
+  readonly canOperateThread: boolean;
   readonly selectedThread: EnvironmentThreadShell;
   readonly contentPresentation: ThreadContentPresentation;
   readonly screenTone: StatusTone;
@@ -344,6 +350,22 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
       threadId: props.selectedThread.id,
     });
   }, [navigation, props.environmentId, props.selectedThread.id]);
+  const browserTabs = useThreadServerBrowserTabs({
+    environmentId: props.environmentId,
+    threadId: props.selectedThread.id,
+    enabled: props.serverConfig?.environment.capabilities.serverBrowser === true,
+  });
+  const openBrowserPreview = useCallback(
+    (tabId?: string) => {
+      Keyboard.dismiss();
+      navigation.navigate("ThreadBrowserPreview", {
+        environmentId: props.environmentId,
+        threadId: props.selectedThread.id,
+        ...(tabId === undefined ? {} : { tabId }),
+      });
+    },
+    [navigation, props.environmentId, props.selectedThread.id],
+  );
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
   const liveKeyboardHeight = useKeyboardState((state) => state.height);
@@ -520,6 +542,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
         waiting: pendingBackgroundWork.waiting,
       };
     }
+    if (props.selectedThread.goal !== null && contentPresentationKind === "ready") {
+      const goal = presentProviderGoal(props.selectedThread.goal, false);
+      return {
+        kind: "goal",
+        label: goal.title,
+        accessibilityLabel: `${goal.title}: ${goal.objective}`,
+      };
+    }
     return null;
   })();
   const showWorkingControl = floatingStatus !== null;
@@ -530,6 +560,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     queuedCount > 0 ||
     agentsSegment !== null ||
     devicePreviews.length > 0 ||
+    browserTabs.tabs.length > 0 ||
     props.connectionStateLabel !== "connected" ||
     props.queuedMessages.length > 0 ||
     props.selectedThreadFeed.some(
@@ -1147,6 +1178,18 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
         <View className="flex-1" />
       )}
 
+      {showContent ? (
+        <ThreadBrowserFloat
+          key={selectedThreadKey}
+          environmentId={props.environmentId}
+          threadId={props.selectedThread.id}
+          tabs={browserTabs.tabs}
+          loaded={browserTabs.loaded}
+          top={navigationHeaderHeight + 8}
+          onOpen={openBrowserPreview}
+        />
+      ) : null}
+
       {/* Floating composer — sticks to keyboard via KeyboardStickyView */}
       {showContent ? (
         <KeyboardStickyView
@@ -1177,6 +1220,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 devicePreview={
                   devicePreviews.length > 0
                     ? { count: devicePreviews.length, onPress: openDevicePreview }
+                    : null
+                }
+                browserPreview={
+                  browserTabs.tabs.length > 0
+                    ? { count: browserTabs.tabs.length, onPress: () => openBrowserPreview() }
                     : null
                 }
                 showScrollToEnd={showScrollToEndButton}
@@ -1279,6 +1327,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   >
                     {props.activePendingApproval ? (
                       <PendingApprovalCard
+                        canOperateThread={props.canOperateThread}
                         approval={props.activePendingApproval}
                         respondingApprovalId={props.respondingApprovalId}
                         onRespond={props.onRespondToApproval}
@@ -1286,6 +1335,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                     ) : null}
                     {props.activePendingUserInput ? (
                       <PendingUserInputCard
+                        canOperateThread={props.canOperateThread}
                         pendingUserInput={props.activePendingUserInput}
                         maxHeight={pendingUserInputMaxHeight}
                         collapsed={userInputCollapsed}
@@ -1353,6 +1403,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 ) : (
                   <>
                     <ThreadComposer
+                      canOperateThread={props.canOperateThread}
                       reportedModelSelection={reportedModelSelection}
                       editorRef={composerEditorRef}
                       draftMessage={props.draftMessage}
