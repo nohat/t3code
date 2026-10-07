@@ -41,3 +41,9 @@ test("malformed native stamp stays unavailable and unknown variant stays unknown
   assert.equal(value.date, "Build date unavailable");
   assert.equal(value.variant, "unknown");
 });
+test("missing native copyright preserves the declared upstream notice", () => {
+  assert.equal(
+    nativeAboutIdentity({ ...native, copyright: "" }).copyright,
+    "Copyright (c) 2026 T3 Tools Inc.",
+  );
+});
