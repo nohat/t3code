@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createNativeBuildMetadata } from "./lib/native-build-metadata.ts";
+import { NATIVE_COPYRIGHT, createNativeBuildMetadata } from "./lib/native-build-metadata.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 
 import * as NodeFSP from "node:fs/promises";
@@ -2679,6 +2679,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
+    copyright: NATIVE_COPYRIGHT,
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",

@@ -9,6 +9,10 @@ function isExactUtcTimestamp(value: string) {
   );
 }
 
+/** Upstream notice preserved, with the fork's own line added. */
+export const NATIVE_COPYRIGHT =
+  "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.";
+
 /** Capture once while packaging; never regenerate this value when opening About. */
 export function createNativeBuildMetadata(builtAtUTC: string) {
   if (!isExactUtcTimestamp(builtAtUTC)) {
@@ -16,8 +20,7 @@ export function createNativeBuildMetadata(builtAtUTC: string) {
   }
   return {
     t3codeBuiltAtUTC: builtAtUTC,
-    t3codeCopyright:
-      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
+    t3codeCopyright: NATIVE_COPYRIGHT,
   };
 }
 
