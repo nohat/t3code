@@ -1,5 +1,6 @@
 import type { ExpoConfig } from "expo/config";
 
+import { createNativeBuildMetadata } from "../../scripts/lib/native-build-metadata.ts";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
@@ -466,6 +467,9 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    ...(process.env.T3CODE_BUILD_DATE_UTC
+      ? createNativeBuildMetadata(process.env.T3CODE_BUILD_DATE_UTC)
+      : {}),
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

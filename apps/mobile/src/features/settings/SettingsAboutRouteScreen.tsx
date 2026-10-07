@@ -1,3 +1,4 @@
+import { mobileAboutMetadata } from "./mobileAboutMetadata.ts";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import Constants from "expo-constants";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -45,6 +46,17 @@ function AppSettingsSection() {
   const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
   const variantLabel = variant === "production" ? "" : capitalize(variant);
   const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
+  const about = mobileAboutMetadata(
+    Constants.expoConfig?.extra?.t3codeBuiltAtUTC,
+    Constants.expoConfig?.extra?.t3codeCopyright,
+    Constants.platform?.ios?.buildNumber ?? Constants.platform?.android?.versionCode,
+  );
+  const icon =
+    variant === "development"
+      ? require("../../../../../assets/dev/blueprint-ios-1024.png")
+      : variant === "preview"
+        ? require("../../../../../assets/nightly/nightly-ios-1024.png")
+        : require("../../../../../assets/prod/black-ios-1024.png");
   const updateCheckAvailable = isAppUpdateCheckAvailable();
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
@@ -120,6 +132,19 @@ function AppSettingsSection() {
 
   return (
     <SettingsSection title="App">
+      <View className="items-center gap-2 p-4">
+        <Image
+          source={icon}
+          style={{ width: 80, height: 80 }}
+          accessibilityLabel="T3 Code app icon"
+        />
+        <Text className="text-lg text-foreground">T3 Code</Text>
+        <Text className="text-foreground-muted">
+          {versionLabel} · Build {about.build}
+        </Text>
+        <Text className="text-foreground-muted">{about.date}</Text>
+        <Text className="text-foreground-muted">{about.copyright}</Text>
+      </View>
       <SettingsRow icon="internaldrive" label="Client Storage" target="SettingsClientStorage" />
       <SettingsRow icon="stethoscope" label="Diagnostics" target="SettingsDiagnostics" />
       <SettingsRow
