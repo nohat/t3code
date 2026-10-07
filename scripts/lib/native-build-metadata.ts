@@ -8,3 +8,10 @@ export function createNativeBuildMetadata(builtAtUTC: string) {
   }
   return { t3codeBuiltAtUTC: builtAtUTC, t3codeCopyright: "Copyright (c) 2026 T3 Tools Inc." };
 }
+
+export function nativeBuildEnvironment(
+  environment: Readonly<Record<string, string | undefined>>,
+  builtAtUTC: string,
+) {
+  return environment;
+}

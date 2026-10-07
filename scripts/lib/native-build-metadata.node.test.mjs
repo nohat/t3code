@@ -47,3 +47,13 @@ test("mobile immutable identity is offline and missing date stays visible", asyn
   assert.equal(mobileAboutMetadata(undefined, undefined, null).date, "Build date unavailable");
   assert.equal(mobileAboutMetadata("invalid", undefined, 1).date, "Build date unavailable");
 });
+
+test("one build timestamp reaches all native packaging commands without mutating parent", async () => {
+  const { nativeBuildEnvironment } = await import("./native-build-metadata.ts");
+  const parent = { APP_VARIANT: "preview", T3CODE_BUILD_DATE_UTC: "old" };
+  const result = nativeBuildEnvironment(parent, "2026-10-06T12:34:56.000Z");
+  assert.equal(result.T3CODE_BUILD_DATE_UTC, "2026-10-06T12:34:56.000Z");
+  assert.equal(result.APP_VARIANT, "preview");
+  assert.equal(parent.T3CODE_BUILD_DATE_UTC, "old");
+  assert.throws(() => nativeBuildEnvironment(parent, "invalid"));
+});
