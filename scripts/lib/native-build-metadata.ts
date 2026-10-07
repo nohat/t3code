@@ -13,5 +13,8 @@ export function nativeBuildEnvironment(
   environment: Readonly<Record<string, string | undefined>>,
   builtAtUTC: string,
 ) {
-  return environment;
+  return {
+    ...environment,
+    T3CODE_BUILD_DATE_UTC: createNativeBuildMetadata(builtAtUTC).t3codeBuiltAtUTC,
+  };
 }
