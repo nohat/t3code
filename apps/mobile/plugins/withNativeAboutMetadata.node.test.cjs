@@ -5,7 +5,8 @@ const config = {
   extra: {
     appVariant: "preview",
     t3codeBuiltAtUTC: "2026-10-06T12:00:00.000Z",
-    t3codeCopyright: "Copyright (c) 2026 T3 Tools Inc.",
+    t3codeCopyright:
+      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
   },
 };
 test("stamps native plist without modifying standard bundle identity", () => {

@@ -1,4 +1,5 @@
-const COPYRIGHT = "Copyright (c) 2026 T3 Tools Inc.";
+const COPYRIGHT =
+  "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.";
 function metadata(config) {
   const extra = config.extra ?? {};
   const date = extra.t3codeBuiltAtUTC ?? "";

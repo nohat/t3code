@@ -6,7 +6,8 @@ test("immutable UTC build metadata preserves upstream copyright", () => {
   const info = createNativeBuildMetadata("2026-10-06T12:34:56.000Z");
   assert.deepEqual(info, {
     t3codeBuiltAtUTC: "2026-10-06T12:34:56.000Z",
-    t3codeCopyright: "Copyright (c) 2026 T3 Tools Inc.",
+    t3codeCopyright:
+      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
   });
   for (const value of [
     "invalid",
@@ -33,7 +34,10 @@ test("packaged about identifies artifact rather than development override", () =
   assert.equal(fields.applicationVersion, "1.0.0");
   assert.equal(fields.version, "0123456789ab");
   assert.equal(fields.credits, "Built (UTC): 2026-10-06T12:34:56.000Z");
-  assert.equal(fields.copyright, "Copyright (c) 2026 T3 Tools Inc.");
+  assert.equal(
+    fields.copyright,
+    "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
+  );
 });
 test("legacy metadata is visibly unavailable without invented launch date", () => {
   const fields = aboutMetadata({ packaged: true, version: "1.0.0", commitOverride: "abcdef0" });
@@ -45,10 +49,15 @@ test("mobile immutable identity is offline and missing date stays visible", asyn
   const { mobileAboutMetadata } =
     await import("../../apps/mobile/src/features/settings/mobileAboutMetadata.ts");
   assert.deepEqual(
-    mobileAboutMetadata("2026-10-06T12:34:56.000Z", "Copyright (c) 2026 T3 Tools Inc.", "42"),
+    mobileAboutMetadata(
+      "2026-10-06T12:34:56.000Z",
+      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
+      "42",
+    ),
     {
       date: "2026-10-06T12:34:56.000Z",
-      copyright: "Copyright (c) 2026 T3 Tools Inc.",
+      copyright:
+        "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
       build: "42",
     },
   );

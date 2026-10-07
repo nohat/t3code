@@ -14,7 +14,11 @@ export function createNativeBuildMetadata(builtAtUTC: string) {
   if (!isExactUtcTimestamp(builtAtUTC)) {
     throw new Error("Native build metadata requires an exact UTC timestamp");
   }
-  return { t3codeBuiltAtUTC: builtAtUTC, t3codeCopyright: "Copyright (c) 2026 T3 Tools Inc." };
+  return {
+    t3codeBuiltAtUTC: builtAtUTC,
+    t3codeCopyright:
+      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
+  };
 }
 
 export function nativeBuildEnvironment(

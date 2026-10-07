@@ -5,7 +5,8 @@ const native = {
   version: "1.0.0",
   build: "42",
   builtAtUTC: "2026-10-06T12:00:00.000Z",
-  copyright: "Copyright (c) 2026 T3 Tools Inc.",
+  copyright:
+    "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
   variant: "preview",
 };
 test("About identity is derived exclusively from native bundle metadata", () => {
@@ -44,6 +45,6 @@ test("malformed native stamp stays unavailable and unknown variant stays unknown
 test("missing native copyright preserves the declared upstream notice", () => {
   assert.equal(
     nativeAboutIdentity({ ...native, copyright: "" }).copyright,
-    "Copyright (c) 2026 T3 Tools Inc.",
+    "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
   );
 });

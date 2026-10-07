@@ -10,7 +10,9 @@ export function mobileAboutMetadata(
     new Date(builtAtUTC).toISOString() === builtAtUTC;
   return {
     date: validDate ? builtAtUTC : "Build date unavailable",
-    copyright: copyright ?? "Copyright (c) 2026 T3 Tools Inc.",
+    copyright:
+      copyright ??
+      "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
     build: build == null ? "unknown" : String(build),
   };
 }
