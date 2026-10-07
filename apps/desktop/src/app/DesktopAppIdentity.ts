@@ -4,19 +4,19 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import * as DesktopUserData from "./DesktopUserData.ts";
-
-const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
-const COMMIT_HASH_DISPLAY_LENGTH = 12;
+import { aboutMetadata } from "./aboutMetadata.ts";
 
 const AppPackageMetadata = Schema.Struct({
   t3codeCommitHash: Schema.optional(Schema.String),
+  version: Schema.optional(Schema.String),
+  t3codeBuiltAtUTC: Schema.optional(Schema.String),
+  t3codeCopyright: Schema.optional(Schema.String),
 });
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
 
@@ -31,13 +31,6 @@ export class DesktopAppIdentity extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopAppIdentity") {}
 
-const normalizeCommitHash = (value: string): Option.Option<string> => {
-  const trimmed = value.trim();
-  return COMMIT_HASH_PATTERN.test(trimmed)
-    ? Option.some(trimmed.slice(0, COMMIT_HASH_DISPLAY_LENGTH).toLowerCase())
-    : Option.none();
-};
-
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const assets = yield* DesktopAssets.DesktopAssets;
@@ -45,57 +38,30 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const userDataContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
-  const commitHashCache = yield* Ref.make<Option.Option<Option.Option<string>>>(Option.none());
-
-  const resolveEmbeddedCommitHash = Effect.gen(function* () {
-    const packageJsonPath = environment.path.join(environment.appRoot, "package.json");
-    const raw = yield* fileSystem.readFileString(packageJsonPath).pipe(Effect.option);
-    return yield* Option.match(raw, {
-      onNone: () => Effect.succeed(Option.none<string>()),
-      onSome: (value) =>
-        decodeAppPackageMetadata(value).pipe(
-          Effect.map((parsed) =>
-            Option.fromNullishOr(parsed.t3codeCommitHash).pipe(Option.flatMap(normalizeCommitHash)),
-          ),
-          Effect.orElseSucceed(() => Option.none<string>()),
-        ),
-    });
-  });
-
-  const resolveAboutCommitHash = Effect.gen(function* () {
-    const cached = yield* Ref.get(commitHashCache);
-    if (Option.isSome(cached)) {
-      return cached.value;
-    }
-
-    const override = Option.flatMap(environment.commitHashOverride, normalizeCommitHash);
-    if (Option.isSome(override)) {
-      yield* Ref.set(commitHashCache, Option.some(override));
-      return override;
-    }
-
-    if (!environment.isPackaged) {
-      const empty = Option.none<string>();
-      yield* Ref.set(commitHashCache, Option.some(empty));
-      return empty;
-    }
-
-    const commitHash = yield* resolveEmbeddedCommitHash;
-    yield* Ref.set(commitHashCache, Option.some(commitHash));
-    return commitHash;
-  });
-
   const userDataPath = DesktopUserData.resolveUserDataPath(environment).pipe(
     Effect.provide(userDataContext),
   );
 
   const configure = Effect.gen(function* () {
-    const commitHash = yield* resolveAboutCommitHash;
+    const embedded = environment.isPackaged
+      ? yield* fileSystem
+          .readFileString(environment.path.join(environment.appRoot, "package.json"))
+          .pipe(
+            Effect.flatMap(decodeAppPackageMetadata),
+            Effect.orElseSucceed(() => undefined),
+          )
+      : undefined;
+    const iconPaths = yield* assets.iconPaths;
     yield* electronApp.setName(environment.displayName);
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,
-      applicationVersion: environment.appVersion,
-      version: Option.getOrElse(commitHash, () => "unknown"),
+      ...aboutMetadata({
+        packaged: environment.isPackaged,
+        version: environment.appVersion,
+        commitOverride: Option.getOrUndefined(environment.commitHashOverride),
+        embedded,
+      }),
+      ...(Option.isSome(iconPaths.png) ? { iconPath: iconPaths.png.value } : {}),
     });
 
     if (environment.platform === "win32") {
@@ -106,7 +72,6 @@ export const make = Effect.gen(function* () {
     // Info.plist, so setting the dock tile again changes nothing except to
     // overwrite a custom icon the user attached to the app themselves.
     if (environment.platform === "darwin" && !environment.isPackaged) {
-      const iconPaths = yield* assets.iconPaths;
       yield* Option.match(iconPaths.png, {
         onNone: () => Effect.void,
         onSome: electronApp.setDockIcon,

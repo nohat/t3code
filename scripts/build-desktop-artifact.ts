@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createNativeBuildMetadata } from "./lib/native-build-metadata.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 
 import * as NodeFSP from "node:fs/promises";
@@ -926,6 +927,8 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
+  readonly t3codeBuiltAtUTC: string;
+  readonly t3codeCopyright: string;
   readonly private: true;
   readonly packageManager: string;
   readonly description: string;
@@ -3712,6 +3715,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
+    ...createNativeBuildMetadata(new Date().toISOString()),
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "T3 Code desktop build",
