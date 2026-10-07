@@ -113,7 +113,7 @@ const runDrainRequest = Effect.fn("runDrainRequest")(function* (
     yield* Console.log(formatDrainStatus(status, flags.json));
   }).pipe(
     Effect.provide(
-      EnvironmentAuth.runtimeLayer.pipe(
+      EnvironmentAuth.layerRuntime.pipe(
         Layer.provideMerge(FetchHttpClient.layer),
         Layer.provide(ServerConfig.layer(config)),
         Layer.provide(Layer.succeed(References.MinimumLogLevel, minimumLogLevel)),

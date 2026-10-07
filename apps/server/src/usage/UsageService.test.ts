@@ -1297,7 +1297,7 @@ describe("UsageService", () => {
       let ratesFetches = 0;
       const service = yield* UsageService.make.pipe(
         Effect.provide(
-          serviceLayers({
+          layerService({
             prefix: "usage-service-model-rates-test",
             home,
             settings: {
@@ -1344,7 +1344,7 @@ describe("UsageService", () => {
       const { settings, home } = yield* setup;
       const service = yield* UsageService.make.pipe(
         Effect.provide(
-          serviceLayers({ prefix: "usage-service-model-rates-empty-test", home, settings }),
+          layerService({ prefix: "usage-service-model-rates-empty-test", home, settings }),
         ),
       );
 

@@ -17,7 +17,7 @@ import * as Layer from "effect/Layer";
 import { TestClock } from "effect/testing";
 
 import * as ServerConfig from "../config.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ServerDrainState from "./ServerDrainState.ts";
 import * as ThreadLaunch from "./ThreadLaunchService.ts";
@@ -54,7 +54,7 @@ const makeHarness = () => {
             ),
         }),
       ),
-      Layer.provide(SqlitePersistenceMemory),
+      Layer.provide(SqlitePersistence.layerMemory),
     ),
     Layer.mock(ThreadManagement.ThreadManagementService)({
       dispatch: (command) => {

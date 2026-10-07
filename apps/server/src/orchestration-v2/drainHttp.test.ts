@@ -17,13 +17,13 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
-import { environmentAuthenticatedAuthLayer } from "../auth/http.ts";
+import { layerAuthenticatedAuth } from "../auth/http.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
-import * as OrchestrationEventStore from "../persistence/Services/OrchestrationEventStore.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
+import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
 import * as ProjectEnrichmentService from "../project/ProjectEnrichmentService.ts";
-import { orchestrationHttpApiLayer } from "./http.ts";
+import * as OrchestrationHttp from "./http.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as ServerDrainState from "./ServerDrainState.ts";
@@ -40,14 +40,14 @@ const servicesLayer = Layer.mergeAll(
   ServerDrainState.layer.pipe(Layer.provide(ProjectionStore.layer)),
   EnvironmentAuth.layer.pipe(
     Layer.provide(ServerSecretStore.layer),
-    Layer.provide(ServerEnvironment.identityLayer),
+    Layer.provide(ServerEnvironment.layerIdentity),
   ),
   Layer.mock(ThreadManagementService.ThreadManagementService)({}),
   Layer.mock(OrchestrationEventStore.OrchestrationEventStore)({}),
   Layer.mock(ProjectStore.ProjectStoreV2)({}),
   Layer.mock(ProjectEnrichmentService.ProjectEnrichmentService)({}),
 ).pipe(
-  Layer.provideMerge(SqlitePersistenceMemory),
+  Layer.provideMerge(SqlitePersistence.layerMemory),
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-drain-http-test-" })),
 );
@@ -59,8 +59,8 @@ const makeFixture = Effect.gen(function* () {
   const scope = yield* Scope.Scope;
   const services = yield* Layer.build(servicesLayer);
   const routesLayer = HttpApiBuilder.layer(DrainTestApi).pipe(
-    Layer.provide(orchestrationHttpApiLayer),
-    Layer.provide(environmentAuthenticatedAuthLayer),
+    Layer.provide(OrchestrationHttp.layer),
+    Layer.provide(layerAuthenticatedAuth),
     Layer.provideMerge(
       HttpPlatform.layer.pipe(
         Layer.provideMerge(NodeServices.layer),

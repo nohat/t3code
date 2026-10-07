@@ -16,9 +16,10 @@ import * as TestClock from "effect/testing/TestClock";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
-import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectService from "../project/ProjectService.ts";
-import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
+import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import type { ModelRate } from "../usage/usagePricing.ts";
 import * as UsageService from "../usage/UsageService.ts";
@@ -134,7 +135,7 @@ it.effect("counts distinct recent threads per model in one grouped read", () =>
   }).pipe(
     Effect.provide(
       OrchestratorModelHints.layer.pipe(
-        Layer.provideMerge(Layer.mergeAll(SqlitePersistenceMemory, usageLayer)),
+        Layer.provideMerge(Layer.mergeAll(SqlitePersistence.layerMemory, usageLayer)),
       ),
     ),
   ),
@@ -185,6 +186,7 @@ it.effect("adds pricing and recent use to orchestrator_capabilities models", () 
       ),
       Layer.mock(ProjectService.ProjectService)({}),
       Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      Layer.mock(SecretRequests.SecretRequests)({}),
       Layer.succeed(
         OrchestratorModelHints.OrchestratorModelHints,
         OrchestratorModelHints.OrchestratorModelHints.of({ read: Effect.succeed(hints) }),
