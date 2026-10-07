@@ -9,7 +9,11 @@ export interface NativeAboutIdentity {
 }
 export function nativeAboutIdentity(native: NativeAboutIdentity | null) {
   return {
-    ...mobileAboutMetadata(native?.builtAtUTC, native?.copyright, native?.build || null),
+    ...mobileAboutMetadata(
+      native?.builtAtUTC,
+      native?.copyright || undefined,
+      native?.build || null,
+    ),
     version: native?.version || "unknown",
     variant:
       native !== null && ["production", "preview", "development"].includes(native.variant)
