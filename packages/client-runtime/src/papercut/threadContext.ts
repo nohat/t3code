@@ -1,4 +1,5 @@
 import type {
+  OrchestrationV2Run,
   OrchestrationV2ThreadProjection,
   PapercutClientState,
   PapercutMessage,
@@ -34,7 +35,11 @@ export interface PapercutThreadContext {
 export function papercutThreadContext(input: PapercutThreadContextInput): PapercutThreadContext {
   const { thread } = input;
   // The newest run stands in for the turn: it is the active one while a turn runs.
-  const turnId = thread?.runs.toSorted((left, right) => right.ordinal - left.ordinal)[0]?.id;
+  // A reduce, not `toSorted`: this runs on Hermes, which has no ES2023 array copies.
+  const turnId = thread?.runs.reduce<OrchestrationV2Run | undefined>(
+    (newest, candidate) => (newest && newest.ordinal >= candidate.ordinal ? newest : candidate),
+    undefined,
+  )?.id;
   const pending = thread ? derivePendingThreadRequests(thread) : undefined;
 
   return {
