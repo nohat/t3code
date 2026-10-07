@@ -41,6 +41,7 @@ import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -3710,12 +3711,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
+  const builtAtUTC = DateTime.formatIso(yield* DateTime.now);
   const stagePackageJson: StagePackageJson = {
     name: "t3code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
-    ...createNativeBuildMetadata(new Date().toISOString()),
+    ...createNativeBuildMetadata(builtAtUTC),
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "T3 Code desktop build",

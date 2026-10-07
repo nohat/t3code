@@ -10,6 +10,7 @@ import {
 import { isCommandAvailable, resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as Console from "effect/Console";
 import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -328,7 +329,7 @@ const main = Command.make(
         ),
       ),
       build: Effect.gen(function* () {
-        const builtAtUTC = new Date().toISOString();
+        const builtAtUTC = DateTime.formatIso(yield* DateTime.now);
         yield* Console.error(
           "Native client is missing, stale, or unverified. Building and installing a development client...",
         );
