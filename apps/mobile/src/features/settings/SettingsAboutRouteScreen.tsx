@@ -2,7 +2,7 @@ import { mobileAboutMetadata } from "./mobileAboutMetadata.ts";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
 import Constants from "expo-constants";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, Image, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
