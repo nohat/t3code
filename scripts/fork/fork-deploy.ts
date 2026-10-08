@@ -4,16 +4,16 @@
  * Gated deploy of a packaged build to a single launchd-managed production instance.
  *
  *   node scripts/fork/fork-deploy.ts build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <t>] [--why <t>]
- *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [same version flags]
+ *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [--accept-data-loss] [same version flags]
  *   node scripts/fork/fork-deploy.ts rollback [--to <sha>] [--accept-data-loss]
  *   node scripts/fork/fork-deploy.ts status
  *   node scripts/fork/fork-deploy.ts version <ref> [--bump ...] [--version ...]
  *   node scripts/fork/fork-deploy.ts plist
  *
  * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
- * answers, so that one deploy probes for --first-boot-budget-seconds (default 90; use 240) and,
- * if it rolls back, moves the copy aside so the next attempt copies again. Rolling back from V2
- * to v1 hides everything written since the cutover, so it needs --accept-data-loss.
+ * answers, so that one deploy probes for --first-boot-budget-seconds (default 240) and,
+ * if it rolls back, moves only a proven fresh copy aside. Existing migrated V2 history is retained.
+ * V2-to-V1 recovery hides new history/auth and requires --accept-data-loss; fix forward by default.
  * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
  * the next version (bump level, default patch); a rebuild reuses the recorded
  * one. Minting requires --summary (what ships) and --why (why this level), so
@@ -24,14 +24,17 @@
  * --config or FORK_DEPLOY_CONFIG. Only failures, holds, and rollbacks are reported; silence
  * means the deploy succeeded.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { parseArgs } from "node:util";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeUtil from "node:util";
 
 import {
   atomicSwap,
+  releaseTransitionAllowed,
+  classifyV2Copy,
+  deployFailureMessage,
   COMPLETE_MARKER,
   countRunningSessions,
   countV2OnlyRows,
@@ -52,6 +55,8 @@ import {
   resolveStateDb,
   serverCliCommand,
 } from "./fork-deploy-lib.ts";
+import { restartStoppedJob } from "./fork-deploy-restart.ts";
+import { FIRST_V2_BOOT_BUDGET_SECONDS, runGovernedCommand } from "./fork-deploy-command.ts";
 import {
   appendBumpDecision,
   FORK_INITIAL_VERSION,
@@ -87,14 +92,14 @@ interface Config {
   readonly keepReleases?: number;
 }
 
-const { positionals, values } = parseArgs({
+const { positionals, values } = NodeUtil.parseArgs({
   allowPositionals: true,
   options: {
     config: { type: "string" },
     force: { type: "boolean", default: false },
     "drain-timeout": { type: "string", default: "600" },
     to: { type: "string" },
-    "first-boot-budget-seconds": { type: "string", default: "90" },
+    "first-boot-budget-seconds": { type: "string", default: String(FIRST_V2_BOOT_BUDGET_SECONDS) },
     "accept-data-loss": { type: "boolean", default: false },
     // Which segment to bump when a build mints a fresh version. Rebuilds of an
     // already-released sha reuse its version and ignore this.
@@ -109,10 +114,15 @@ const { positionals, values } = parseArgs({
 });
 
 const configPath = values.config ?? process.env.FORK_DEPLOY_CONFIG ?? ".t3/fork-deploy.json";
-const config: Config = JSON.parse(readFileSync(configPath, "utf8"));
+const config: Config = JSON.parse(NodeFS.readFileSync(configPath, "utf8"));
 const uid = process.getuid?.() ?? 501;
-const agentPath = join(homedir(), "Library", "LaunchAgents", `${config.label}.plist`);
-const userdataDir = join(config.home, "userdata");
+const agentPath = NodePath.join(
+  NodeOS.homedir(),
+  "Library",
+  "LaunchAgents",
+  `${config.label}.plist`,
+);
+const userdataDir = NodePath.join(config.home, "userdata");
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const log = (message: string) => console.log(`fork-deploy: ${message}`);
@@ -122,10 +132,14 @@ function report(summary: string, body: string): void {
   if (!config.notify?.length) return;
   const [command, ...args] = config.notify;
   // A hung notifier (it once sat on a network call for hours) must not hold up the deploy.
-  spawnSync(command!, [...args, "--summary", summary.slice(0, 200), "--message", body], {
-    stdio: "ignore",
-    timeout: 30_000,
-  });
+  NodeChildProcess.spawnSync(
+    command!,
+    [...args, "--summary", summary.slice(0, 200), "--message", body],
+    {
+      stdio: "ignore",
+      timeout: 30_000,
+    },
+  );
 }
 
 /** Runs a command with extra env vars, still scrubbed of the dev shell. */
@@ -134,19 +148,14 @@ function runWithEnv(
   cwd: string,
   extraEnv: Readonly<Record<string, string>>,
 ): void {
-  const [file, ...args] = command;
-  const result = spawnSync(file!, args, {
+  runGovernedCommand({
+    command,
     cwd,
-    stdio: "inherit",
-    env: {
-      HOME: homedir(),
-      PATH: config.buildPath,
-      TMPDIR: process.env.TMPDIR ?? "/tmp",
-      LANG: "en_US.UTF-8",
-      ...extraEnv,
-    },
+    home: NodeOS.homedir(),
+    buildPath: config.buildPath,
+    callerEnv: process.env,
+    extraEnv,
   });
-  if (result.status !== 0) throw new Error(`${command.join(" ")} exited ${result.status}`);
 }
 
 /** Runs a command with only PATH and HOME, so nothing from an agent or dev shell leaks in. */
@@ -155,7 +164,9 @@ function run(command: readonly string[], cwd: string): void {
 }
 
 function git(...args: string[]): string {
-  const result = spawnSync("git", ["-C", config.buildTree, ...args], { encoding: "utf8" });
+  const result = NodeChildProcess.spawnSync("git", ["-C", config.buildTree, ...args], {
+    encoding: "utf8",
+  });
   if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
   return result.stdout.trim();
 }
@@ -232,10 +243,10 @@ function buildRelease(sha: string, version: string): void {
   for (const command of config.gate) run(command, config.buildTree);
   run(["vp", "i"], config.buildTree);
 
-  const out = join(config.root, `.build-${sha}`);
+  const out = NodePath.join(config.root, `.build-${sha}`);
   const partial = `${releaseDir(config.root, sha)}.partial`;
-  rmSync(out, { recursive: true, force: true });
-  rmSync(partial, { recursive: true, force: true });
+  NodeFS.rmSync(out, { recursive: true, force: true });
+  NodeFS.rmSync(partial, { recursive: true, force: true });
   // One version for every surface: the artifact, the bundled server, the web
   // client, and the mobile build when it runs through this path all read
   // T3CODE_FORK_VERSION.
@@ -258,16 +269,18 @@ function buildRelease(sha: string, version: string): void {
     config.buildTree,
     versionEnv,
   );
-  const zip = spawnSync("sh", ["-c", `ls "${out}"/*.zip`], { encoding: "utf8" }).stdout.trim();
+  const zip = NodeChildProcess.spawnSync("sh", ["-c", `ls "${out}"/*.zip`], {
+    encoding: "utf8",
+  }).stdout.trim();
   if (!zip) throw new Error("build produced no zip");
-  mkdirSync(partial, { recursive: true });
+  NodeFS.mkdirSync(partial, { recursive: true });
   run(["ditto", "-x", "-k", zip, partial], config.buildTree);
-  writeFileSync(join(partial, COMPLETE_MARKER), `${sha}\n`);
+  NodeFS.writeFileSync(NodePath.join(partial, COMPLETE_MARKER), `${sha}\n`);
   writeReleaseVersion(config.root, `${sha}.partial`, version);
   // The release dir name is the destination: rename moves the version marker
   // with it, so the marker must be written to the partial path first.
-  renameSync(partial, releaseDir(config.root, sha));
-  rmSync(out, { recursive: true, force: true });
+  NodeFS.renameSync(partial, releaseDir(config.root, sha));
+  NodeFS.rmSync(out, { recursive: true, force: true });
 }
 
 /**
@@ -278,27 +291,37 @@ function buildRelease(sha: string, version: string): void {
 function restartJob(whileStopped?: () => void): void {
   const target = `gui/${uid}/${config.label}`;
   const options = { stdio: "inherit", timeout: 20_000 } as const;
-  if (!existsSync(agentPath)) {
-    log(`no ${agentPath}; restarting with kickstart, which skips graceful shutdown`);
-    spawnSync("launchctl", ["kickstart", "-k", target], options);
-    return;
-  }
-  spawnSync("launchctl", ["bootout", target], { ...options, timeout: 120_000 });
-  // bootout finishes asynchronously, and bootstrap fails with an I/O error until it has.
-  for (let waited = 0; waited < 90 && launchdPid(config.label, uid) !== null; waited += 2) {
-    spawnSync("sleep", ["2"]);
-  }
-  try {
-    whileStopped?.();
-  } catch (error) {
-    // The job must come back regardless; the caller's report covers the rest.
-    log(`while stopped: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    spawnSync("sleep", ["2"]);
-    if (spawnSync("launchctl", ["bootstrap", `gui/${uid}`, agentPath], options).status === 0)
-      return;
-  }
+  const originalPid = launchdPid(config.label, uid);
+  restartStoppedJob(
+    {
+      plistExists: () => NodeFS.existsSync(agentPath),
+      bootout: () =>
+        NodeChildProcess.spawnSync("launchctl", ["bootout", target], {
+          ...options,
+          timeout: 120_000,
+        }).status,
+      pid: () => {
+        // launchd can forget the job before its process exits. Check the recorded PID too.
+        if (originalPid !== null) {
+          try {
+            process.kill(originalPid, 0);
+            return originalPid;
+          } catch (error) {
+            if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) throw error;
+          }
+        }
+        return launchdPid(config.label, uid);
+      },
+      bootstrap: () =>
+        NodeChildProcess.spawnSync("launchctl", ["bootstrap", `gui/${uid}`, agentPath], options)
+          .status,
+      now: () => Date.now(),
+      wait: () => {
+        NodeChildProcess.spawnSync("sleep", ["2"]);
+      },
+    },
+    whileStopped,
+  );
 }
 
 async function restartAndProbe(
@@ -328,13 +351,13 @@ function drainCommand(args: readonly string[]) {
   const command = release ? serverCliCommand(config.root, release) : null;
   if (!command) return null;
   const [file, ...prefix] = command;
-  const result = spawnSync(
+  const result = NodeChildProcess.spawnSync(
     file!,
     [...prefix, "drain", ...args, "--json", "--base-dir", config.home],
     {
       encoding: "utf8",
       timeout: 30_000,
-      env: { HOME: homedir(), PATH: config.buildPath, ELECTRON_RUN_AS_NODE: "1" },
+      env: { HOME: NodeOS.homedir(), PATH: config.buildPath, ELECTRON_RUN_AS_NODE: "1" },
     },
   );
   return result.status === 0 ? parseDrainStatus(result.stdout) : null;
@@ -365,10 +388,10 @@ async function deploy(ref: string): Promise<number> {
     return (log(`${sha} is already live${live ? ` as fork ${live}` : ""}`), 0);
   }
 
-  ensureDir(join(config.root, "releases"));
-  const lock = join(config.root, ".deploy.lock");
+  ensureDir(NodePath.join(config.root, "releases"));
+  const lock = NodePath.join(config.root, ".deploy.lock");
   try {
-    mkdirSync(lock);
+    NodeFS.mkdirSync(lock);
   } catch {
     report("deploy refused: another deploy holds the lock", `lock: ${lock}`);
     return 1;
@@ -386,12 +409,23 @@ async function deploy(ref: string): Promise<number> {
       );
     }
 
-    // A first V2 boot copies the v1 database before it answers, so it gets the longer budget,
-    // and a failed one leaves a copy that must not be reused (see moveStateV2Aside).
-    const firstV2Boot =
-      before !== null &&
-      releaseUsesV2State(config.root, sha) === true &&
-      releaseUsesV2State(config.root, before) === false;
+    const currentUsesV2 = before ? releaseUsesV2State(config.root, before) : null;
+    const targetUsesV2 = releaseUsesV2State(config.root, sha);
+    if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, false)) {
+      const warning =
+        "This transition can hide new V2 history and authentication sessions. statev2.sqlite is preserved; fix forward by default.";
+      console.error(`fork-deploy: ${warning}`);
+      if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, values["accept-data-loss"])) {
+        report(
+          `deploy of ${sha} refused: V2 history/auth loss was not accepted`,
+          `current=${before ?? "unknown"}; ${warning} Use --accept-data-loss only after explicitly accepting that loss.`,
+        );
+        return 1;
+      }
+    }
+
+    // A binary V1-to-V2 transition needs the longer probe budget. Copy ownership is separate.
+    const firstV2Boot = before !== null && targetUsesV2 === true && currentUsesV2 === false;
     const bootBudget = firstV2Boot
       ? parseSeconds(values["first-boot-budget-seconds"], "--first-boot-budget-seconds")
       : 90;
@@ -403,9 +437,12 @@ async function deploy(ref: string): Promise<number> {
     draining = !values.force && startDrain(drainSeconds + 600);
     // The serving release's own count first; then the database it uses. Unreadable means no
     // server holds the database; if one is answering, assume it is busy.
+    const servingUsesV2 = currentUsesV2;
     const countRunning = async () =>
       drainCommand(["status"])?.runningTurns ??
-      countRunningSessions(resolveStateDb(config.home)) ??
+      (servingUsesV2 === null
+        ? null
+        : countRunningSessions(resolveStateDb(config.home, servingUsesV2))) ??
       ((await probeHealth(config.port)) ? 1 : 0);
     // Drained, a single zero is not proof: a command that cleared the guard just before it came
     // on can still start a turn, so require several in a row.
@@ -428,7 +465,18 @@ async function deploy(ref: string): Promise<number> {
     atomicSwap(config.root, sha);
     swapped = true; // the restart clears drain mode, so it is only switched off when no swap happened
     log(`swapped current ${before ?? "(none)"} -> ${sha} (fork ${version})`);
-    if (await restartAndProbe(oldPid, bootBudget)) {
+    let ownsFreshV2Copy = false;
+    if (
+      await restartAndProbe(
+        oldPid,
+        bootBudget,
+        firstV2Boot
+          ? () => {
+              ownsFreshV2Copy = classifyV2Copy(userdataDir) === "fresh";
+            }
+          : undefined,
+      )
+    ) {
       pruneReleases(config.root, config.keepReleases ?? 3);
       log(`${sha} (fork ${version}) is live and healthy on port ${config.port}`);
       return 0;
@@ -442,11 +490,24 @@ async function deploy(ref: string): Promise<number> {
       );
       return 3;
     }
+    if (
+      !releaseTransitionAllowed(
+        releaseUsesV2State(config.root, sha),
+        releaseUsesV2State(config.root, previous),
+        values["accept-data-loss"],
+      )
+    ) {
+      report(
+        `MANUAL ACTION: ${sha} failed health check; automatic rollback to ${previous} refused`,
+        `current=${sha}; statev2.sqlite is preserved. Fix forward by default: rollback to V1 or an unknown generation can hide new V2 history and authentication sessions. Use rollback --to ${previous} --accept-data-loss only after explicitly accepting that loss.`,
+      );
+      return 3;
+    }
     atomicSwap(config.root, previous, { rollback: true });
     const recovered = await restartAndProbe(
       launchdPid(config.label, uid),
       90,
-      firstV2Boot
+      ownsFreshV2Copy
         ? () =>
             log(
               `moved the failed V2 copy aside (${moveStateV2Aside(userdataDir, new Date()).join(", ")}); ` +
@@ -454,6 +515,10 @@ async function deploy(ref: string): Promise<number> {
             )
         : undefined,
     );
+    if (firstV2Boot && !ownsFreshV2Copy)
+      log(
+        "retained existing statev2.sqlite; preserve V2 history on the next attempt, do not recopy V1",
+      );
     report(
       recovered
         ? `deploy of ${sha} failed health check; rolled back to ${previous}`
@@ -463,13 +528,13 @@ async function deploy(ref: string): Promise<number> {
     return recovered ? 4 : 3;
   } catch (error) {
     report(
-      `deploy of ${sha} stopped before the swap`,
+      deployFailureMessage(sha, swapped, readCurrent(config.root)),
       String(error instanceof Error ? error.message : error),
     );
     return 1;
   } finally {
     if (draining && !swapped) stopDrain();
-    rmSync(lock, { recursive: true, force: true });
+    NodeFS.rmSync(lock, { recursive: true, force: true });
   }
 }
 
@@ -482,10 +547,10 @@ async function build(ref: string): Promise<number> {
     if (!existing) throw new Error("cached artifact is unversioned; build a new revision instead");
     return (log(`${sha} is already built${existing ? ` as fork ${existing}` : ""}`), 0);
   }
-  ensureDir(join(config.root, "releases"));
-  const lock = join(config.root, ".deploy.lock");
+  ensureDir(NodePath.join(config.root, "releases"));
+  const lock = NodePath.join(config.root, ".deploy.lock");
   try {
-    mkdirSync(lock);
+    NodeFS.mkdirSync(lock);
   } catch {
     report("build refused: another deploy holds the lock", `lock: ${lock}`);
     return 1;
@@ -499,7 +564,7 @@ async function build(ref: string): Promise<number> {
     report(`build of ${sha} failed`, String(error instanceof Error ? error.message : error));
     return 1;
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    NodeFS.rmSync(lock, { recursive: true, force: true });
   }
 }
 
@@ -510,20 +575,18 @@ async function rollback(to?: string): Promise<number> {
     return 1;
   }
   const current = readCurrent(config.root);
-  if (
-    current !== null &&
-    releaseUsesV2State(config.root, current) === true &&
-    releaseUsesV2State(config.root, target) !== true
-  ) {
+  const currentUsesV2 = current ? releaseUsesV2State(config.root, current) : null;
+  const targetUsesV2 = releaseUsesV2State(config.root, target);
+  if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, false)) {
     const hidden = countV2OnlyRows(userdataDir);
     const counts = hidden
       ? `${hidden.threads} thread(s) and ${hidden.messages} message(s)`
       : "an unknown number of threads and messages";
     console.error(
-      `fork-deploy: ${target} reads state.sqlite as of the V2 cutover; ${counts} created on V2 ` +
-        "will be hidden (statev2.sqlite is kept), and sessions paired since must pair again.",
+      `fork-deploy: ${target} may read state.sqlite as of the V2 cutover; ${counts} created on V2 ` +
+        "may be hidden (statev2.sqlite is kept), and authentication sessions paired since may need pairing again. Fix forward by default.",
     );
-    if (!values["accept-data-loss"]) {
+    if (!releaseTransitionAllowed(currentUsesV2, targetUsesV2, values["accept-data-loss"])) {
       console.error("fork-deploy: re-run with --accept-data-loss to roll back anyway");
       return 1;
     }
@@ -558,9 +621,10 @@ async function status(): Promise<number> {
   log(
     `launchd pid=${launchdPid(config.label, uid) ?? "(not running)"} healthy=${await probeHealth(config.port)}`,
   );
-  const stateDb = resolveStateDb(config.home);
+  const servingUsesV2 = current ? releaseUsesV2State(config.root, current) : null;
+  const stateDb = servingUsesV2 === null ? null : resolveStateDb(config.home, servingUsesV2);
   log(
-    `running turns: ${drainCommand(["status"])?.runningTurns ?? (existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb})`,
+    `running turns: ${drainCommand(["status"])?.runningTurns ?? (stateDb === null ? "(unknown serving generation)" : NodeFS.existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb ?? "unknown"})`,
   );
   return 0;
 }
@@ -590,14 +654,18 @@ function version(ref: string): number {
 }
 
 function plist(): number {
-  const logDir = join(config.root, "logs");
+  const logDir = NodePath.join(config.root, "logs");
   ensureDir(logDir);
-  const app = join(config.root, "current");
-  const executable = spawnSync("sh", ["-c", `ls -d "${app}"/*.app/Contents/MacOS/*`], {
-    encoding: "utf8",
-  }).stdout.trim();
+  const app = NodePath.join(config.root, "current");
+  const executable = NodeChildProcess.spawnSync(
+    "sh",
+    ["-c", `ls -d "${app}"/*.app/Contents/MacOS/*`],
+    {
+      encoding: "utf8",
+    },
+  ).stdout.trim();
   if (!executable) throw new Error("no app under current; deploy a release first");
-  writeFileSync(
+  NodeFS.writeFileSync(
     agentPath,
     renderLaunchAgent({
       label: config.label,
@@ -632,7 +700,7 @@ const exitCode = await (async () => {
       return plist();
   }
   console.error(
-    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] | rollback [--accept-data-loss] | status | version <ref> | plist>",
+    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] [--accept-data-loss] | rollback [--accept-data-loss] | status | version <ref> | plist>",
   );
   return 64;
 })();

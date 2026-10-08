@@ -1,3 +1,5 @@
+import { nativeBuildEnvironment } from "./lib/native-build-metadata.ts";
+
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
@@ -8,6 +10,7 @@ import {
 import { isCommandAvailable, resolveSpawnCommand } from "@t3tools/shared/shell";
 import * as Console from "effect/Console";
 import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -174,6 +177,7 @@ const command = Effect.fn("nativeClient.command")(function* (
   args: string[],
   inherit = false,
   cwd?: string,
+  builtAtUTC?: string,
 ) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const environment = yield* HostProcessEnvironment;
@@ -183,7 +187,9 @@ const command = Effect.fn("nativeClient.command")(function* (
       shell: spawn.shell,
       cwd: cwd ?? (yield* roots).mobile,
       env: {
-        ...environment,
+        ...(builtAtUTC === undefined
+          ? environment
+          : nativeBuildEnvironment(environment, builtAtUTC)),
         APP_VARIANT: "development",
         MOBILE_VERSION_POLICY: "appVersion",
         T3CODE_IOS_PERSONAL_TEAM: "0",
@@ -323,6 +329,7 @@ const main = Command.make(
         ),
       ),
       build: Effect.gen(function* () {
+        const builtAtUTC = DateTime.formatIso(yield* DateTime.now);
         yield* Console.error(
           "Native client is missing, stale, or unverified. Building and installing a development client...",
         );
@@ -341,6 +348,8 @@ const main = Command.make(
           "vp",
           ["exec", "expo", "prebuild", "--clean", "--platform", platform, "--no-install"],
           true,
+          undefined,
+          builtAtUTC,
         );
         if (platform === "ios") {
           const output = yield* fs.makeTempDirectoryScoped({ prefix: "t3-native-client-" });
@@ -364,6 +373,8 @@ const main = Command.make(
               "build",
             ],
             true,
+            undefined,
+            builtAtUTC,
           );
           yield* command(
             "xcrun",
@@ -374,6 +385,8 @@ const main = Command.make(
               path.join(output, "Build/Products/Debug-iphonesimulator/T3CodeDev.app"),
             ],
             true,
+            undefined,
+            builtAtUTC,
           );
         } else {
           yield* command(
@@ -389,6 +402,8 @@ const main = Command.make(
               "debug",
             ],
             true,
+            undefined,
+            builtAtUTC,
           );
         }
       }).pipe(Effect.scoped),

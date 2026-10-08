@@ -10116,6 +10116,62 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "orchestration_v2.thread_id": commandThreadId(command),
     });
 
+    if (command.type === "message.dispatch" && command.automaticAuthority !== undefined) {
+      // Receipt replay has already happened. All checks and planning share the
+      // thread mutation lock; a remote read is never itself admission.
+      const reject = (cause: string) =>
+        new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause,
+        });
+      const sequence = yield* eventSink
+        .latestSequence({ threadId: command.threadId })
+        .pipe(Effect.mapError((cause) => reject(String(cause))));
+      if (sequence !== command.automaticAuthority.expectedThreadSequence)
+        return yield* reject(
+          "Automatic authority changed; retain queued content and review the thread.",
+        );
+      const projection = yield* loadProjectionForCommand(command, ["runs", "turnItems"], {
+        turnItemTypes: ["run_interrupt_request", "run_interrupt_result"],
+      });
+      const latest = projection.runs.findLast((run) => run.status !== "queued");
+      const resumeRunId = command.automaticAuthority.resumeAfterRunId;
+      const stopped = latest?.status === "interrupted" || latest?.status === "cancelled";
+      if (
+        resumeRunId !== undefined &&
+        (command.automaticAuthority.purpose !== "continuation" ||
+          latest?.id !== resumeRunId ||
+          !stopped ||
+          projection.runs.some(
+            (run) =>
+              run.status === "preparing" ||
+              run.status === "starting" ||
+              run.status === "running" ||
+              run.status === "waiting",
+          ))
+      )
+        return yield* reject("Explicit Resume does not match the selected stopped run.");
+      if (
+        projection.thread.archivedAt !== null ||
+        projection.thread.deletedAt !== null ||
+        (resumeRunId === undefined &&
+          (stopped || projection.runs.some((run) => run.status === "queued" && run.queueHeld)))
+      )
+        return yield* reject("Automatic work is suppressed by thread Stop, archive or deletion.");
+      const answered = new Set(
+        projection.turnItems
+          .filter((item) => item.type === "run_interrupt_result")
+          .map((item) => item.parentItemId),
+      );
+      if (
+        projection.turnItems.some(
+          (item) => item.type === "run_interrupt_request" && !answered.has(item.id),
+        )
+      )
+        return yield* reject("Automatic work is suppressed by a pending interrupt.");
+    }
+
     const events = yield* Ref.make<Array<OrchestrationV2DomainEvent>>([]);
     const effects = yield* Ref.make<Array<PendingOrchestrationEffectV2>>([]);
     let cancelUnsettledEffects:

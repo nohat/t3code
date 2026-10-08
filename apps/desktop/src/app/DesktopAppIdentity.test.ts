@@ -205,7 +205,7 @@ describe("DesktopAppIdentity", () => {
     );
   });
 
-  it.effect("configures app identity from the environment commit override", () => {
+  it.effect("uses packaged commit instead of an environment override", () => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],
       setDockIcon: [],
@@ -220,7 +220,13 @@ describe("DesktopAppIdentity", () => {
         assert.deepEqual(calls.setName, ["T3 Code (Alpha)"]);
         assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Code (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
-        assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
+        assert.equal(calls.setAboutPanelOptions[0]?.version, "abcdef123456");
+        assert.equal(calls.setAboutPanelOptions[0]?.credits, "Build date unavailable");
+        assert.equal(
+          calls.setAboutPanelOptions[0]?.copyright,
+          "Copyright (c) 2026 T3 Tools Inc. Fork modifications copyright (c) 2026 David Friedland.",
+        );
+        assert.equal(calls.setAboutPanelOptions[0]?.iconPath, "/icon.png");
         // Packaged: the bundle's own icon stands, so a custom one the user
         // attached survives.
         assert.deepEqual(calls.setDockIcon, []);

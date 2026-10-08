@@ -16,6 +16,23 @@ class T3NativeControlsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("T3NativeControls")
 
+    // Package resources and PackageInfo belong to the installed APK, not an OTA manifest.
+    Function("getAboutMetadata") {
+      val context = appContext.reactContext ?: error("The app is not active.")
+      val info = context.packageManager.getPackageInfo(context.packageName, 0)
+      fun resource(name: String): String {
+        val id = context.resources.getIdentifier(name, "string", context.packageName)
+        return if (id == 0) "" else context.getString(id)
+      }
+      mapOf(
+        "version" to (info.versionName ?: ""),
+        "build" to androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info).toString(),
+        "builtAtUTC" to resource("t3_about_built_at_utc"),
+        "copyright" to resource("t3_about_copyright"),
+        "variant" to resource("t3_about_variant")
+      )
+    }
+
     Function("is24HourFormat") {
       val context = appContext.reactContext ?: error("The app is not active.")
       DateFormat.is24HourFormat(context)

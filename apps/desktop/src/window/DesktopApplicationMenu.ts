@@ -260,6 +260,9 @@ export const make = Effect.gen(function* () {
       {
         role: "help",
         submenu: [
+          ...(environment.platform === "darwin"
+            ? []
+            : [{ role: "about" as const, label: `About ${appName}` }]),
           {
             label: "Check for Updates...",
             click: checkForUpdatesClick,

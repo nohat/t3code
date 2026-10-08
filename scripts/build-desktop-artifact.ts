@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { NATIVE_COPYRIGHT, createNativeBuildMetadata } from "./lib/native-build-metadata.ts";
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 
 import * as NodeFSP from "node:fs/promises";
@@ -40,6 +41,7 @@ import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -926,6 +928,8 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
+  readonly t3codeBuiltAtUTC: string;
+  readonly t3codeCopyright: string;
   readonly private: true;
   readonly packageManager: string;
   readonly description: string;
@@ -2676,6 +2680,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
+    copyright: NATIVE_COPYRIGHT,
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
@@ -3720,11 +3725,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform === "win"
       ? path.join(stageAppDir, WINDOWS_SERVER_RESOURCE_SOURCE_DIR, WINDOWS_SERVER_ASAR_RESOURCE)
       : undefined;
+  const builtAtUTC = DateTime.formatIso(yield* DateTime.now);
   const stagePackageJson: StagePackageJson = {
     name: "t3code",
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
+    ...createNativeBuildMetadata(builtAtUTC),
     private: true,
     packageManager: rootPackageJson.packageManager,
     description:

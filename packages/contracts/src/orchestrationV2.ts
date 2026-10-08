@@ -2833,6 +2833,15 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("message.dispatch"),
+    /** Automatic work is admitted only against the exact observed thread authority. */
+    automaticAuthority: Schema.optional(
+      Schema.Struct({
+        purpose: Schema.Literals(["checklist", "continuation"]),
+        expectedThreadSequence: NonNegativeInt,
+        /** Explicit user Resume cutoff; never releases other held runs. */
+        resumeAfterRunId: Schema.optional(RunId),
+      }),
+    ),
     notification: Schema.optional(OrchestrationV2Notification),
     ...OrchestrationV2CreationFields,
     scheduledTaskId: Schema.optional(ScheduledTaskId),

@@ -11,6 +11,18 @@ public final class T3NativeControlsModule: Module {
   private var filePresentation: T3NativeFilePresentation?
 
   public func definition() -> ModuleDefinition {
+    // Bundle.main is the installed native artifact, independent of Expo dev/OTA manifests.
+    Function("getAboutMetadata") { () -> [String: String] in
+      let info = Bundle.main.infoDictionary ?? [:]
+      return [
+        "version": info["CFBundleShortVersionString"] as? String ?? "",
+        "build": info["CFBundleVersion"] as? String ?? "",
+        "builtAtUTC": info["T3AboutBuiltAtUTC"] as? String ?? "",
+        "copyright": info["T3AboutCopyright"] as? String ?? "",
+        "variant": info["T3AboutVariant"] as? String ?? ""
+      ]
+    }
+
     AsyncFunction("presentVideo") { (url: URL, title: String, sourceIdentifier: String, identifier: String, promise: Promise) in
       try self.presentVideo(
         url: url,

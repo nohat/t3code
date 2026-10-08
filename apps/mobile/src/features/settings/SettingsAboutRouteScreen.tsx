@@ -1,7 +1,8 @@
+import { nativeAboutIdentity, type NativeAboutIdentity } from "./nativeAboutIdentity.ts";
+import { requireOptionalNativeModule } from "expo";
 import { ScreenScrollView as ScrollView } from "../../components/ScreenScrollView";
-import Constants from "expo-constants";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, Image, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/AppText";
@@ -39,12 +40,19 @@ function AppSettingsSection() {
   const updateInFlight = useRef(false);
   const hiddenUpdateTapCount = useRef(0);
 
-  const version = Constants.expoConfig?.version ?? "0.0.0";
-  // Fall back to "production" to match resolveAppVariant in app.config.ts, so a
-  // missing variant never mislabels a production build as development.
-  const variant = (Constants.expoConfig?.extra?.appVariant as string | undefined) ?? "production";
+  const native = requireOptionalNativeModule<{
+    getAboutMetadata?: () => NativeAboutIdentity;
+  }>("T3NativeControls");
+  const about = nativeAboutIdentity(native?.getAboutMetadata?.() ?? null);
+  const variant = about.variant;
   const variantLabel = variant === "production" ? "" : capitalize(variant);
-  const versionLabel = variantLabel ? `${version} · ${variantLabel}` : version;
+  const versionLabel = variantLabel ? `${about.version} · ${variantLabel}` : about.version;
+  const icon =
+    variant === "development"
+      ? require("../../../../../assets/dev/blueprint-ios-1024.png")
+      : variant === "preview"
+        ? require("../../../../../assets/nightly/nightly-ios-1024.png")
+        : require("../../../../../assets/prod/black-ios-1024.png");
   const updateCheckAvailable = isAppUpdateCheckAvailable();
   const busy =
     updateState === "checking" || updateState === "downloading" || updateState === "restarting";
@@ -120,6 +128,19 @@ function AppSettingsSection() {
 
   return (
     <SettingsSection title="App">
+      <View className="items-center gap-2 p-4">
+        <Image
+          source={icon}
+          style={{ width: 80, height: 80 }}
+          accessibilityLabel="T3 Code app icon"
+        />
+        <Text className="text-lg text-foreground">T3 Code</Text>
+        <Text className="text-foreground-muted">
+          {versionLabel} · Build {about.build}
+        </Text>
+        <Text className="text-foreground-muted">{about.date}</Text>
+        <Text className="text-foreground-muted">{about.copyright}</Text>
+      </View>
       <SettingsRow icon="internaldrive" label="Client Storage" target="SettingsClientStorage" />
       <SettingsRow icon="stethoscope" label="Diagnostics" target="SettingsDiagnostics" />
       <SettingsRow
