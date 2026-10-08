@@ -12,6 +12,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Kbd } from "../ui/kbd";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { TruncatedText } from "../ui/truncated-text";
 import { cn } from "~/lib/utils";
 import { modelPickerModelKey } from "./modelPickerKeys";
 import { PricingBadge } from "./PricingBadge";
@@ -65,14 +66,17 @@ export const ModelListRow = memo(function ModelListRow(props: {
     >
       <div className="min-w-0 flex-1 text-left">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 truncate text-xs font-medium leading-snug">
-            {props.useTriggerLabel
-              ? getTriggerDisplayModelLabel(props.model)
-              : getDisplayModelName(
-                  props.model,
-                  props.preferShortName ? { preferShortName: true } : undefined,
-                )}
-          </div>
+          <TruncatedText
+            value={
+              props.useTriggerLabel
+                ? getTriggerDisplayModelLabel(props.model)
+                : getDisplayModelName(
+                    props.model,
+                    props.preferShortName ? { preferShortName: true } : undefined,
+                  )
+            }
+            className="text-xs font-medium leading-snug"
+          />
           {props.showNewBadge ? (
             <span
               className="shrink-0 rounded border border-update/35 bg-update/15 px-0.5 py-px text-3xs font-bold uppercase leading-none tracking-wide text-update-foreground"
@@ -102,14 +106,10 @@ export const ModelListRow = memo(function ModelListRow(props: {
               className="size-3"
               iconClassName="size-3"
             />
-            <span
-              className={cn(
-                "truncate text-xs font-normal leading-snug text-muted-foreground/70",
-                splitPricing && "min-w-0 flex-1",
-              )}
-            >
-              {providerLabel}
-            </span>
+            <TruncatedText
+              value={providerLabel}
+              className="flex-1 text-xs font-normal leading-snug text-muted-foreground/70"
+            />
             {splitPricing && props.model.pricing ? (
               <PricingBadge pricing={props.model.pricing} display="both" part="base" />
             ) : null}
