@@ -324,6 +324,12 @@ export default defineConfig({
                   pattern: "^CollapsibleTrigger$",
                   allow: ["layout", "color", "typography", "spacing", "shape", "effects", "motion"],
                 },
+                {
+                  // TruncatedText is a bare span that inherits the look of the line it sits
+                  // in, so font and color are the caller's; it owns only the clipping.
+                  pattern: "^TruncatedText$",
+                  allow: ["layout", "color", "typography"],
+                },
               ],
             },
           ],
