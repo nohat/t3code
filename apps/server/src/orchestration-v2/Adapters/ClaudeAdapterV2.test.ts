@@ -3583,7 +3583,11 @@ describe("ClaudeAdapterV2 background wake turns", () => {
 
         assert.deepEqual(harness.permissionModeChanges, ["bypassPermissions"]);
         assert.lengthOf(harness.offeredMessages, 2);
-      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
     ),
   );
 
@@ -3629,7 +3633,11 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         assert.equal(closes, 1);
         yield* awaitUntil(() => harness.terminalEvents().length === 1, "interrupted terminal");
         assert.equal(harness.terminalEvents()[0]?.status, "interrupted");
-      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+        ),
+      ),
     ),
   );
 
