@@ -108,6 +108,7 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
     "new-thread-on-branch",
     "project-settings",
     "mark-unread",
+    "reload-thread",
     "copy",
     "copy-path",
     "copy-branch",

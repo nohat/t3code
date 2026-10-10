@@ -1,3 +1,4 @@
 # Exceptions are specific to the current sync baseline, not prior V2 ports.
 # Regenerating the upstream lockfile replaces dependency-resolution line counts.
 pnpm-lock.yaml # upstream lockfile regenerated with fork workspace requirements
+docs/fork/delta-allow.txt # retired V2 catch-up exemptions; current-baseline feature losses are checked again

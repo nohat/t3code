@@ -86,6 +86,7 @@ describe("buildThreadActionMenuItems", () => {
       "mark-unread",
       "copy",
       "project-settings",
+      "reload-thread",
     ]);
     const allowed = buildThreadActionMenuItems({ ...baseState, canOperate: true });
     expect(allowed.every((item) => !item.disabled)).toBe(true);
