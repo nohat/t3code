@@ -42,6 +42,7 @@ import * as OrchestrationHttp from "./http.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import * as ServerDrainState from "./ServerDrainState.ts";
 
 const decodeBounded = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.toCodecJson(OrchestrationV2ThreadBoundedSnapshot)),
@@ -226,6 +227,7 @@ const seed = Effect.gen(function* () {
 // thread routes never touch projects.
 const TestLayer = Layer.mergeAll(
   management,
+  ServerDrainState.layer,
   Layer.effectDiscard(seed),
   Layer.mock(OrchestrationEventStore.OrchestrationEventStore)({}),
   Layer.mock(ProjectStore.ProjectStoreV2)({}),
