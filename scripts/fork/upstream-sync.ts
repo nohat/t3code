@@ -140,6 +140,29 @@ export function trial(
       return record;
     }
     for (const patch of patches) {
+      const localTip = run(
+        ["git", "rev-parse", "--verify", `${patch.branch}^{commit}`],
+        config.repo,
+        env,
+      );
+      const tip =
+        localTip.code === 0
+          ? localTip
+          : run(
+              ["git", "rev-parse", "--verify", `origin/${patch.branch}^{commit}`],
+              config.repo,
+              env,
+            );
+      const ancestry =
+        tip.code === 0 ? workGit("merge-base", "--is-ancestor", tip.stdout.trim(), "HEAD") : tip;
+      if (ancestry.code) {
+        record.guards.push({ name: patch.name, code: ancestry.code });
+        NodeFS.writeFileSync(
+          NodePath.join(logs, `${patch.name}.log`),
+          "Accepted patch ancestry failed.\n" + ancestry.stderr,
+        );
+        continue;
+      }
       if (patch.guard === "-") continue;
       const result = run(["/bin/sh", "-c", patch.guard], scratch, env, undefined, 600_000);
       record.guards.push({ name: patch.name, code: result.code });

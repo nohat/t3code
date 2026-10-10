@@ -14,7 +14,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
-import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
+import type { ProviderAdapterV2 } from "@t3tools/provider-core/server/ProviderAdapter";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectService from "../project/ProjectService.ts";
@@ -181,7 +181,7 @@ it.effect("adds pricing and recent use to orchestrator_capabilities models", () 
         ProviderAdapterRegistry.ProviderAdapterRegistryV2.of({
           list: () => Effect.succeed([codexInstanceId]),
           get: (instanceId: ProviderInstanceId) =>
-            Effect.succeed({ instanceId } as unknown as ProviderAdapterV2Shape),
+            Effect.succeed({ instanceId } as unknown as ProviderAdapterV2["Service"]),
         } as unknown as ProviderAdapterRegistry.ProviderAdapterRegistryV2["Service"]),
       ),
       Layer.mock(ProjectService.ProjectService)({}),

@@ -175,6 +175,31 @@ describe("scratch trial merges", () => {
     expect(f.git("worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(1);
   });
 
+  it("rejects an unincorporated accepted patch even when its guard would pass", () => {
+    const f = fixture();
+    NodeFS.writeFileSync(NodePath.join(f.repo, "unincorporated.txt"), "accepted patch\n");
+    f.git("add", "unincorporated.txt");
+    f.git("commit", "-m", "accepted patch");
+    f.git("branch", "feat/unincorporated");
+    f.git("checkout", "fork/prod");
+    NodeFS.writeFileSync(
+      NodePath.join(f.repo, "docs/fork/patches.tsv"),
+      "name\tbranch\tguard\nfeature\tfeat/unincorporated\texit 0\n",
+    );
+    f.git("add", "docs/fork/patches.tsv");
+    f.git("commit", "-m", "register accepted patch");
+    f.git("checkout", "upstream");
+    // Keep upstream independent of the accepted branch.
+    f.git("reset", "--hard", f.base);
+    NodeFS.writeFileSync(NodePath.join(f.repo, "upstream.txt"), "upstream\n");
+    f.git("add", "upstream.txt");
+    f.git("commit", "-m", "upstream change");
+    const record = trial(f.config, "upstream", "fork/prod");
+    expect(record.status).toBe("guard-failed");
+    expect(record.guards).toEqual([{ name: "feature", code: 1 }]);
+    expect(record.candidateSha).toBeUndefined();
+  });
+
   it("refuses a candidate when a feature guard fails", () => {
     const f = fixture("exit 7");
     NodeFS.writeFileSync(NodePath.join(f.repo, "upstream.txt"), "upstream\n");

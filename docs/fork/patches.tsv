@@ -1,13 +1,13 @@
 name	branch	guard
-opencode-scoped-agents	fix/opencode-scoped-agents	(cd apps/server && vp test run src/provider/Layers/OpenCodeProvider.test.ts src/provider/opencodeRuntime.inventory.test.ts) && (cd packages/client-runtime && vp test run src/providerSkills.test.ts)
-model-cost-display	local/t3-work	(cd apps/server && vp test run src/provider/modelPricing.test.ts src/usage/UsageService.test.ts src/mcp/OrchestratorModelHints.test.ts) && (cd apps/web && vp test run --project unit src/components/chat/PricingBadge.test.tsx)
+opencode-scoped-agents	fix/opencode-scoped-agents	(cd packages/provider-opencode && vp test run --config ../../vite.config.ts src/server/status.test.ts src/server/OpenCodeRuntime.inventory.test.ts) && (cd packages/client-runtime && vp test run src/providerSkills.test.ts)
+model-cost-display	031c71c95e	(cd apps/server && vp test run src/provider/modelPricing.test.ts src/usage/UsageService.test.ts src/mcp/OrchestratorModelHints.test.ts) && (cd apps/web && vp test run --project unit src/components/chat/PricingBadge.test.tsx)
 mobile-model-pricing	feat/mobile-model-pricing	cd apps/mobile && vp test run --config ../../vite.config.ts src/lib/modelPricing.test.ts src/lib/modelOptions.test.ts
 send-blocked-reason	fix/send-blocked-reason	cd apps/web && vp test run --project unit src/components/chat/sendBlockedReason.test.ts
 send-never-settles	fix/send-never-settles	(cd packages/client-runtime && vp test run src/state/threadCommands.test.ts) && (cd apps/web && vp test run --project unit src/components/ChatView.logic.test.ts)
 thread-resync	feat/thread-resync	(cd packages/client-runtime && vp test run src/state/threads-sync.test.ts) && (cd apps/web && vp test run --project unit src/components/threadActionMenu.logic.test.ts)
 mobile-thread-sync-stall	fix/mobile-thread-sync-stall	cd apps/mobile && vp test run --config ../../vite.config.ts src/features/threads/floating-working-status.test.ts src/connection/environment-cache-store.test.ts
 claude-control-bounds	sync/upstream-20261005	cd apps/server && vp test run src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts -t "gets no reply"
-opencode-start-retry	sync/upstream-20261005	cd apps/server && vp test run src/provider/opencodeServerStartRetry.test.ts
+opencode-start-retry	sync/upstream-20261005	cd packages/provider-opencode && vp test run --config ../../vite.config.ts src/server/opencodeServerStartRetry.test.ts
 server-drain-mode	feat/server-drain-mode	(cd apps/server && vp test run src/orchestration-v2/ServerDrainState.test.ts src/orchestration-v2/drainHttp.test.ts src/cli/drain.test.ts) && (cd apps/mobile && vp test run --config ../../vite.config.ts src/state/thread-outbox.test.ts)
 fork-deploy	feat/fork-deploy-drain	cd scripts && vp test run --config ../vite.config.ts fork/fork-deploy-lib.test.ts fork/v2-cutover-prepare.test.ts
 papercuts	feat/papercuts-stage1	(cd packages/contracts && vp test run --config ../../vite.config.ts src/papercut.test.ts) && (cd packages/client-runtime && vp test run src/papercut/papercut.test.ts) && (cd apps/server && vp test run src/papercuts/Papercuts.test.ts src/cli/papercuts.test.ts) && (cd apps/web && vp test run --project unit src/papercuts/readSendButtonState.test.ts)
@@ -22,3 +22,7 @@ fork-docs-agent-config	fork/prod	-
 fork-agent-guards	feat/fork-agent-guards	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/fork/agent-config -p "*_test.py"
 fork-versioning	fork/prod	cd scripts && vp test run --config ../vite.config.ts fork/fork-versions.test.ts fork/fork-mobile-version.test.ts build-desktop-artifact.test.ts -t "fork|semver|registry|release|ledger"
 upstream-sync	sync/upstream-20261005	cd scripts && vp test run --config ../vite.config.ts fork/upstream-sync.test.ts
+fork-icon	feat/fork-icon	-
+truncated-text-reveal	feat/truncated-text-reveal	-
+papercut-shake-selector	fix/shake-motion-ended-selector	-
+papercut-hermes-thread-context	fix/papercut-thread-context-hermes	cd packages/shared && vp test run --config ../../vite.config.ts src/hermesArrayMethods.test.ts
