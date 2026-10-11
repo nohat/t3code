@@ -113,7 +113,15 @@ final class T3PapercutStore {
       // The system's "Undo Typing" sheet would otherwise take the gesture
       // whenever a text field has edits.
       UIApplication.shared.applicationSupportsShakeToEdit = false
-      UIWindow.t3InstallShakeHook()
+      // The app delegate posts this from its `motionEnded` override, which a
+      // config plugin adds (plugins/withIosShakeNotification.cjs). The shake
+      // arrives there through the ordinary responder chain, so no UIKit method
+      // is replaced at runtime.
+      NotificationCenter.default.addObserver(
+        forName: t3PapercutShakeNotification,
+        object: nil,
+        queue: .main
+      ) { _ in T3PapercutStore.shared.handleShake() }
       // Timers do not run while the app is in the background, so the age
       // after a long absence is meaningless until JavaScript ticks again.
       NotificationCenter.default.addObserver(
@@ -277,41 +285,5 @@ final class T3PapercutStore {
   }
 }
 
-extension UIWindow {
-  /// Adds a shake observer to `UIWindow.motionEnded` without disturbing the
-  /// original behavior, the same hook React Native's dev menu uses.
-  fileprivate static func t3InstallShakeHook() {
-    let originalSelector = #selector(UIWindow.motionEnded(_:with:))
-    let swizzledSelector = #selector(UIWindow.t3MotionEnded(_:with:))
-    guard
-      let original = class_getInstanceMethod(UIWindow.self, originalSelector),
-      let swizzled = class_getInstanceMethod(UIWindow.self, swizzledSelector)
-    else { return }
-    // The original is called by IMP under its own selector, never renamed:
-    // UIKit's inherited `motionEnded` is a forwarding trampoline keyed on the
-    // selector it is invoked with, so calling it as `t3MotionEnded` forwards
-    // an unrecognized selector up the responder chain and aborts.
-    t3OriginalMotionEnded = method_getImplementation(original)
-    // `motionEnded` is inherited from UIResponder, so add it to UIWindow first;
-    // exchanging implementations would otherwise patch every responder.
-    if !class_addMethod(
-      UIWindow.self,
-      originalSelector,
-      method_getImplementation(swizzled),
-      method_getTypeEncoding(swizzled)
-    ) {
-      method_exchangeImplementations(original, swizzled)
-    }
-  }
-
-  @objc dynamic fileprivate func t3MotionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
-    if let original = t3OriginalMotionEnded {
-      typealias MotionEndedIMP = @convention(c) (AnyObject, Selector, Int, UIEvent?) -> Void
-      let callOriginal = unsafeBitCast(original, to: MotionEndedIMP.self)
-      callOriginal(self, #selector(UIWindow.motionEnded(_:with:)), motion.rawValue, event)
-    }
-    if motion == .motionShake { T3PapercutStore.shared.handleShake() }
-  }
-}
-
-private var t3OriginalMotionEnded: IMP?
+/// Posted by the app delegate when the device is shaken.
+let t3PapercutShakeNotification = Notification.Name("T3PapercutShake")

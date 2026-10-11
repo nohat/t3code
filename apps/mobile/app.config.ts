@@ -454,6 +454,8 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/withIosCocoaPodsUuidCache.cjs",
+    // Posts the papercut shake from AppDelegate.motionEnded (no UIKit swizzle).
+    "./plugins/withIosShakeNotification.cjs",
     // Only the accelerometer is used (device viewer shake). Compile out the
     // pedometer so iOS needs no motion purpose string.
     ["expo-sensors", { motionPermission: false }],
