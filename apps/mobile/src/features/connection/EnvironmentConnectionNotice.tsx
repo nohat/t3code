@@ -1,3 +1,4 @@
+import { AppActivityIndicator } from "../../components/AppActivityIndicator";
 import { ConnectionTraceId } from "./ConnectionTraceId";
 import {
   connectionFailureGuidance,
@@ -5,7 +6,7 @@ import {
   type EnvironmentConnectionPresentation,
 } from "@t3tools/client-runtime/connection";
 import { SymbolView } from "../../components/AppSymbol";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 
@@ -74,7 +75,7 @@ export function EnvironmentConnectionNotice(props: {
     <View className="flex-1 items-center justify-center px-8">
       <View className="max-w-[320px] items-center gap-3">
         {isRetrying ? (
-          <ActivityIndicator size="small" colorClassName={"accent-icon-muted"} />
+          <AppActivityIndicator size="small" colorClassName={"accent-icon-muted"} />
         ) : (
           <SymbolView
             name={props.connection.phase === "offline" ? "wifi.slash" : "bolt.horizontal.circle"}

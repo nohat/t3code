@@ -261,7 +261,7 @@ export const make = Effect.gen(function* () {
   const create: Papercuts["Service"]["create"] = Effect.fn("Papercuts.create")(function* (input) {
     const now = yield* DateTime.now;
     const nowIso = DateTime.formatIso(now);
-    const uuid = yield* crypto.randomUUIDv4.pipe(Effect.mapError(storeError("generate an id")));
+    const uuid = yield* crypto.randomUUIDv4().pipe(Effect.mapError(storeError("generate an id")));
     // Sortable by creation time, and safe as a file name.
     const id = `${nowIso.replace(/[-:.]/g, "")}-${uuid.slice(0, 8)}`;
 

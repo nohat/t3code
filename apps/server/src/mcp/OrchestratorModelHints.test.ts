@@ -21,6 +21,9 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import type { ModelRate } from "../usage/usagePricing.ts";
 import * as UsageService from "../usage/UsageService.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
@@ -186,6 +189,9 @@ it.effect("adds pricing and recent use to orchestrator_capabilities models", () 
       ),
       Layer.mock(ProjectService.ProjectService)({}),
       Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+      Layer.mock(ThreadLaunchService.ThreadLaunchService)({}),
+      Layer.mock(GitVcsDriver.GitVcsDriver)({}),
+      ServerSettings.layerTest(),
       Layer.mock(SecretRequests.SecretRequests)({}),
       Layer.succeed(
         OrchestratorModelHints.OrchestratorModelHints,

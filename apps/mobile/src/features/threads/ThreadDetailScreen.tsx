@@ -9,6 +9,7 @@ import {
   type EnvironmentConnectionPhase,
 } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import type {
   CodexFeedbackSubmission,
   EnvironmentThreadStatus,
@@ -172,6 +173,7 @@ export interface ThreadDetailScreenProps {
   readonly feedbackSubmissions: ReadonlyArray<CodexFeedbackSubmission>;
   readonly onDismissFeedback: (id: MessageId) => void;
   readonly selectedThreadFeed: ReadonlyArray<ThreadFeedEntry>;
+  readonly pendingHandoff?: HandoffEndpoints | null;
   readonly activityRun: ThreadFeedLatestRun | null;
   readonly activeWorkStartedAt: string | null;
   /** The live work is a provider-native subagent's runless root turn. */
@@ -183,9 +185,15 @@ export interface ThreadDetailScreenProps {
    * The server has not created this thread yet. "preparing" runs while the
    * queued creation is delivered (a worktree may be checking out); "failed"
    * is a rejected creation whose content went back to the project draft.
+   * `serverOwned` marks a thread the server already created that is still
+   * setting up its worktree; follow-ups queue on the server behind that setup.
    */
   readonly creationState:
-    | { readonly kind: "preparing"; readonly preparingWorktree: boolean }
+    | {
+        readonly kind: "preparing";
+        readonly preparingWorktree: boolean;
+        readonly serverOwned: boolean;
+      }
     | { readonly kind: "failed"; readonly reason: string; readonly onEditTask: () => void }
     | null;
   readonly activePendingApproval: PendingApproval | null;
@@ -1182,6 +1190,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               threadId={props.selectedThread.id}
               workspaceRoot={props.threadCwd}
               feed={props.selectedThreadFeed}
+              pendingHandoff={props.pendingHandoff}
               worktreeSetup={props.worktreeSetup}
               setupWorkingStartedAt={props.setupWorkingStartedAt}
               queuedMessages={props.queuedMessages}
@@ -1468,11 +1477,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         canStopThread={props.canStopThread}
                         environmentId={props.environmentId}
                         projectCwd={props.threadCwd ?? props.projectWorkspaceRoot}
-                        // Follow-ups typed during setup wait in the draft: queueing
-                        // them against a thread id the server may still reject
-                        // would strand them in the outbox.
+                        // Follow-ups typed before the server creates the thread wait in
+                        // the draft: queueing them against a thread id the server may
+                        // still reject would strand them in the outbox.
                         sendBlockedReason={
-                          props.creationState?.kind === "preparing" ? "Starting the task…" : null
+                          props.creationState?.kind === "preparing" &&
+                          !props.creationState.serverOwned
+                            ? "Starting the task…"
+                            : null
                         }
                         draftKey={props.composerDraftKey ?? undefined}
                         followUpBehavior={props.followUpBehavior}
