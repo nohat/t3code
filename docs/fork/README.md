@@ -144,7 +144,7 @@ The sync validates both: `t3.upstream-sync` compares the upstream default and th
 
 ### 9. Upstream issues and the PR escape hatch
 
-Not upstream-driven, but not hostile to it. When a fork fix also resolves an upstream issue, record the issue beside the fix and keep the fix isolatable (one concern, its own branch off `main`, a test that fails if a merge drops it). Opening a PR is an opt-in side effect, only when I ask. Detection, the tracker, and the search procedure are in [upstream-issues.md](./upstream-issues.md).
+Not upstream-driven, but upstreaming is now active work (2026-10-14): every fork change upstream accepts is a conflict the sync never sees again. Contributions are rebuilt clean from `upstream/main`, placed in the existing upstream conversation, routed by upstream's eligibility rules, and posted only after I approve the exact text. Venue rules, the ledger, and the cadence are in [upstream-issues.md](./upstream-issues.md).
 
 ## What other forks teach
 
@@ -215,9 +215,18 @@ Decided 2026-10-02 (deploys must not lose work):
 - A **papercuts** capture is planned: see [papercuts.md](./papercuts.md).
 - **Notifications** (2026-10-04): one alert on the surface I'm using, server-confirmed "seen", nothing disappears unseen. Reviewed phased proposal, gaps, and practice audit in [notifications.md](./notifications.md), with a [UX specification](./notifications-ux.md), [visual specification and mockup gallery](./notifications-visual.md), and [upstream strategy](./notifications-upstream.md) (2026-10-05); tracked in nohat/t3code#12 and #13.
 
+Decided 2026-10-14 (fork review after the `bf8ffe81a6` sync; my answers in quotes):
+
+- **Model preferences follow upstream** ("yes"). Upstream keeps favorites and hidden models in environment settings (#16816). The fork drops its cross-provider starred group in favor of upstream's favorites, keeps the commit-on-dismiss picker fix, and moves its price-display setting out of the shared settings contract so it stops conflicting every sync.
+- **Drain mode goes** ("no", it is not worth about 1k lines). Upstream continues interrupted threads after a restart by default and caps the continuations. `fork-deploy` waits a bounded time for running turns and then relies on that continuation, as `--force` already does. This retires defense (2) of 2026-10-02 and makes nohat/t3code#38 moot.
+- **Papercuts: build triage** ("triage"), stage 3 in [papercuts.md](./papercuts.md), not a freeze at capture.
+- **OpenCode follows upstream to 2.x** ("go to 2.x"). The 1.x-specific fixes (start retry, scoped agents) are re-checked on 2.x and dropped where 2.x no longer has the bug.
+- **Upstream contributions run as a campaign**, modeled on the Smooth dimming one: [upstream-issues.md](./upstream-issues.md).
+- **Direct APNs push is dropped** ("let's drop it"). Push stays with Telegram through `agent_inbox`; `feat/direct-apns-push*` is tagged `superseded/` and nohat/t3code#15 closes.
+
 Still open:
 
 - Where the shared cross-thread plans directory lives.
-- How to replace push notifications without Connect (mobile.md lists three options; Telegram through `agent_inbox` first).
+- OTA for the fork's iPad app (nohat/t3code#48): "not sure" on 2026-10-14. See the recommendation in that issue.
 - Which exact app I use on the iPad today (the App Store release, assumed here) and whether I rely on Live Activities, widgets, or the share extension.
 - What the server should accept while a thread is not ready (the basis for an outbox instead of a disabled Send).
