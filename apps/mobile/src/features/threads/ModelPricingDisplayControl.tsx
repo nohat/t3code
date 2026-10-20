@@ -1,6 +1,6 @@
 import type { ModelCostDisplay } from "@t3tools/contracts/settings";
 import { Pressable, View } from "react-native";
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { cn } from "../../lib/cn";
 
 const OPTIONS = [

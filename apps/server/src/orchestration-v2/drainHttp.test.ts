@@ -37,6 +37,7 @@ class DrainTestApi extends HttpApi.make("environment").add(
 // writes, so a run inserted here is what the status route counts. The snapshot
 // routes share the group but are not exercised, so their services are empty.
 const servicesLayer = Layer.mergeAll(
+  ServerEnvironment.layerIdentity,
   ServerDrainState.layer.pipe(Layer.provide(ProjectionStore.layer)),
   EnvironmentAuth.layer.pipe(
     Layer.provide(ServerSecretStore.layer),

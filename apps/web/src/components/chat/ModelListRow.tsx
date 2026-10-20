@@ -6,7 +6,6 @@ import {
   getDisplayModelName,
   getProviderRowLabel,
   getTriggerDisplayModelLabel,
-  type ModelEsque,
 } from "./providerIconUtils";
 import { ComboboxItem } from "../ui/combobox";
 import { Button } from "../ui/button";
@@ -17,20 +16,21 @@ import { TruncatedText } from "../ui/truncated-text";
 import { cn } from "~/lib/utils";
 import { modelPickerModelKey } from "./modelPickerKeys";
 import { PricingBadge } from "./PricingBadge";
+import type { ModelPricing } from "./providerIconUtils";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 
+// Rows take the model's fields rather than the picker's item object, and one shared toggle
+// handler, because the picker rebuilds its items on every search keystroke; that keeps memo
+// effective for rows whose content did not change.
 export const ModelListRow = memo(function ModelListRow(props: {
   index: number;
-  model: ModelEsque;
-  /** Instance the model belongs to — the routing key used in combobox values. */
+  slug: string;
+  name: string;
+  shortName?: string | undefined;
+  subProvider?: string | undefined;
+  pricing?: ModelPricing | undefined;
   instanceId: ProviderInstanceId;
-  /** Driver kind of the instance — used for the provider icon glyph. */
   driverKind: ProviderDriverKind;
-  /**
-   * Display name to show in the secondary line (provider footer). Usually
-   * the instance's configured `displayName` so custom instances like
-   * "Codex Personal" render with their user-authored label.
-   */
   providerDisplayName: string;
   providerAccentColor?: string | undefined;
   acpRegistryAgentId?: string | undefined;
@@ -46,16 +46,22 @@ export const ModelListRow = memo(function ModelListRow(props: {
   jumpLabel?: string | null;
   disabledReason?: string | null;
   pricingDisplay?: ModelCostDisplay;
-  onToggleFavorite: () => void;
+  onToggleFavorite: (instanceId: ProviderInstanceId, slug: string) => void;
 }) {
-  const providerLabel = getProviderRowLabel(props.providerDisplayName, props.model.subProvider);
-  const splitPricing = props.model.pricing !== undefined && props.pricingDisplay === "both";
+  const model = {
+    slug: props.slug,
+    name: props.name,
+    shortName: props.shortName,
+    subProvider: props.subProvider,
+  };
+  const providerLabel = getProviderRowLabel(props.providerDisplayName, props.subProvider);
+  const splitPricing = props.pricing !== undefined && props.pricingDisplay === "both";
 
   const row = (
     <ComboboxItem
       hideIndicator
       index={props.index}
-      value={modelPickerModelKey(props.instanceId, props.model.slug)}
+      value={modelPickerModelKey(props.instanceId, props.slug)}
       disabled={Boolean(props.disabledReason)}
       className={cn(
         "group relative w-full !min-w-0 max-w-full cursor-pointer",
@@ -68,9 +74,9 @@ export const ModelListRow = memo(function ModelListRow(props: {
           <TruncatedText
             value={
               props.useTriggerLabel
-                ? getTriggerDisplayModelLabel(props.model)
+                ? getTriggerDisplayModelLabel(model)
                 : getDisplayModelName(
-                    props.model,
+                    model,
                     props.preferShortName ? { preferShortName: true } : undefined,
                   )
             }
@@ -84,10 +90,10 @@ export const ModelListRow = memo(function ModelListRow(props: {
               New
             </span>
           ) : null}
-          {props.model.pricing && splitPricing ? (
-            <PricingBadge pricing={props.model.pricing} display="both" part="blended" />
-          ) : props.model.pricing ? (
-            <PricingBadge pricing={props.model.pricing} display={props.pricingDisplay} />
+          {props.pricing && splitPricing ? (
+            <PricingBadge pricing={props.pricing} display="both" part="blended" />
+          ) : props.pricing ? (
+            <PricingBadge pricing={props.pricing} display={props.pricingDisplay} />
           ) : null}
           {props.unavailable ? (
             <Badge variant="outline" size="sm">
@@ -109,8 +115,8 @@ export const ModelListRow = memo(function ModelListRow(props: {
               value={providerLabel}
               className="flex-1 text-xs font-normal leading-snug text-muted-foreground/70"
             />
-            {splitPricing && props.model.pricing ? (
-              <PricingBadge pricing={props.model.pricing} display="both" part="base" />
+            {splitPricing && props.pricing ? (
+              <PricingBadge pricing={props.pricing} display="both" part="base" />
             ) : null}
           </div>
         )}
@@ -130,7 +136,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
                 className="-mr-1 shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.onToggleFavorite();
+                  props.onToggleFavorite(props.instanceId, props.slug);
                 }}
                 onKeyDown={(event) => {
                   event.stopPropagation();

@@ -47,10 +47,17 @@ export interface ConnectionStatusOptions {
   readonly label?: string | null;
 }
 
+/**
+ * Provider statuses are pushed every few minutes with fresh `checkedAt` stamps, and every root
+ * coordinator reads environment presentations. Leaving them out keeps a presentation stable
+ * across those pushes; provider readers subscribe to the server's providers atom instead.
+ */
+export type EnvironmentServerConfig = Omit<ServerConfig, "providers">;
+
 export interface EnvironmentPresentation {
   readonly entry: ConnectionCatalogEntry;
   readonly connection: EnvironmentConnectionPresentation;
-  readonly serverConfig: ServerConfig | null;
+  readonly serverConfig: EnvironmentServerConfig | null;
 }
 
 function failureKindFromError(error: ConnectionAttemptError | null): ConnectionFailureKind | null {
@@ -78,6 +85,9 @@ function failureKindFromError(error: ConnectionAttemptError | null): ConnectionF
     case "relay-unavailable":
     case "remote-unavailable":
       return "unreachable";
+    // The cloud sign-in is still loading; nothing for the user to act on yet.
+    case "session-pending":
+      return null;
   }
 }
 
@@ -231,11 +241,8 @@ export function presentEnvironmentConnection(
 }
 
 /**
- * The address an agent outside T3 (Claude Code, Codex) uses to reach this
- * environment's MCP server: the route this device is connected over, since an
- * agent beside this client can reach it too, else the first route in
- * preference order that has an address. SSH connections ride a local forward
- * that disappears with the client, so they have no stable address.
+ * SSH connections ride a local forward that disappears with the client, so they have no stable
+ * address.
  */
 export function environmentMcpUrl(input: {
   readonly entry: ConnectionCatalogEntry;
