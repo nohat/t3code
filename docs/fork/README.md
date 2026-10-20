@@ -65,7 +65,7 @@ Facts verified on the machine:
 
 ### 1. Production is a build with its own lifecycle
 
-Production runs a packaged build of `fork/prod` from an immutable release directory (`~/code/t3code-deploy/releases/<sha>`, with `current` as a symlink), supervised by launchd. Nothing an agent does in a checkout can restart it. This is the fix for pain 1 and the foundation for everything else.
+Production runs a packaged build of `fork/prod` from an immutable release directory (`~/code/t3code-deploy/releases/<sha>`, installed into `/Applications` by `fork-deploy install <ref>`). **Update 2026-10-20:** there is no launchd job; the app is launched and quit like any macOS app, and the backend runs only while it is open. `install` quits the app, copies the release in, bakes `T3CODE_PORT`, `T3CODE_HOME`, and `T3CODE_TELEMETRY_ENABLED` into the bundle's `LSEnvironment`, and re-signs it ad hoc. `deploy`, `rollback`, and `plist` are disabled; sections 4 and 5 below describe the retired launchd flow. Nothing an agent does in a checkout can restart it. This is the fix for pain 1 and the foundation for everything else.
 
 Instances never share a data home:
 

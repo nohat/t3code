@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 // @effect-diagnostics nodeBuiltinImport:off globalConsole:off globalDate:off globalTimers:off globalFetch:off
 /**
- * Gated deploy of a packaged build to a single launchd-managed production instance.
+ * Builds the fork's packaged macOS app and installs it into /Applications, to be launched and
+ * quit like any other app. Nothing keeps it running: no launchd job, no supervisor.
  *
  *   node scripts/fork/fork-deploy.ts build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <t>] [--why <t>]
- *   node scripts/fork/fork-deploy.ts deploy <ref> [--force] [--drain-timeout <seconds>] [--first-boot-budget-seconds <seconds>] [same version flags]
- *   node scripts/fork/fork-deploy.ts rollback [--to <sha>] [--accept-data-loss]
+ *   node scripts/fork/fork-deploy.ts install <ref> [same version flags]
  *   node scripts/fork/fork-deploy.ts status
  *   node scripts/fork/fork-deploy.ts version <ref> [--bump ...] [--version ...]
- *   node scripts/fork/fork-deploy.ts plist
  *
- * The first boot of an orchestration V2 build copies state.sqlite into statev2.sqlite before it
- * answers, so that one deploy probes for --first-boot-budget-seconds (default 90; use 240) and,
- * if it rolls back, moves the copy aside so the next attempt copies again. Rolling back from V2
- * to v1 hides everything written since the cutover, so it needs --accept-data-loss.
+ * `install` builds the ref if it has no release yet, quits the running app (it refuses to go on
+ * while the app or the server port is still up, so one writer holds the database), copies the app
+ * in, writes the port, data home, and telemetry setting into its Info.plist as LSEnvironment
+ * (Finder launches carry no shell environment), and re-signs the bundle ad hoc. `deploy`,
+ * `rollback`, and `plist` are gone with the launch agent.
+ *
  * Versions: the fork ships its own semver line from 1.0.0. A fresh sha mints
  * the next version (bump level, default patch); a rebuild reuses the recorded
  * one. Minting requires --summary (what ships) and --why (why this level), so
@@ -25,30 +26,28 @@
  * means the deploy succeeded.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import {
-  atomicSwap,
   COMPLETE_MARKER,
   countRunningSessions,
-  countV2OnlyRows,
   ensureDir,
   isComplete,
-  isQuiet,
-  launchdPid,
-  moveStateV2Aside,
-  parseDrainStatus,
-  parseSeconds,
   probeHealth,
   pruneReleases,
   readCurrent,
-  readPrevious,
   releaseDir,
-  releaseUsesV2State,
-  renderLaunchAgent,
   resolveStateDb,
   serverCliCommand,
 } from "./fork-deploy-lib.ts";
@@ -75,9 +74,8 @@ interface Config {
   /** T3CODE_HOME of the production instance. */
   readonly home: string;
   readonly port: number;
-  readonly label: string;
-  /** Electron userData directory, so desktop settings carry over. */
-  readonly userDataDir: string;
+  /** Where the app is installed; defaults to /Applications. */
+  readonly appsDir?: string;
   /** Command prefix that delivers a message; `--summary <text> --message <body>` is appended. */
   readonly notify?: readonly string[];
   /** PATH for the scrubbed build environment (toolchains the build needs). */
@@ -91,11 +89,6 @@ const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     config: { type: "string" },
-    force: { type: "boolean", default: false },
-    "drain-timeout": { type: "string", default: "600" },
-    to: { type: "string" },
-    "first-boot-budget-seconds": { type: "string", default: "90" },
-    "accept-data-loss": { type: "boolean", default: false },
     // Which segment to bump when a build mints a fresh version. Rebuilds of an
     // already-released sha reuse its version and ignore this.
     bump: { type: "string", default: "patch" },
@@ -110,9 +103,8 @@ const { positionals, values } = parseArgs({
 
 const configPath = values.config ?? process.env.FORK_DEPLOY_CONFIG ?? ".t3/fork-deploy.json";
 const config: Config = JSON.parse(readFileSync(configPath, "utf8"));
-const uid = process.getuid?.() ?? 501;
-const agentPath = join(homedir(), "Library", "LaunchAgents", `${config.label}.plist`);
-const userdataDir = join(config.home, "userdata");
+const appsDir = config.appsDir ?? "/Applications";
+const BUNDLE_ID = "com.t3tools.t3code";
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const log = (message: string) => console.log(`fork-deploy: ${message}`);
@@ -270,247 +262,6 @@ function buildRelease(sha: string, version: string): void {
   rmSync(out, { recursive: true, force: true });
 }
 
-/**
- * Writes the launch agent for the app under `current`. The executable path contains the app's
- * product name, which upstream renamed (Alpha to Beta) between releases, so a plist written at
- * install time stops pointing at anything. Repointing it on every restart follows the rename, in
- * both directions, and a rollback restores the old path. An installed plist is edited in place,
- * because it carries settings the renderer does not (such as `T3CODE_TELEMETRY_ENABLED`).
- */
-function writeAgent(): string {
-  const release = readCurrent(config.root);
-  const executable = (release ? serverCliCommand(config.root, release) : null)?.[0];
-  if (!executable) throw new Error("no app under current; deploy a release first");
-  if (existsSync(agentPath)) {
-    const edited = spawnSync(
-      "plutil",
-      ["-replace", "ProgramArguments.0", "-string", executable, agentPath],
-      { encoding: "utf8" },
-    );
-    if (edited.status !== 0)
-      throw new Error(`plutil could not repoint ${agentPath}: ${edited.stderr}`);
-    return executable;
-  }
-  const logDir = join(config.root, "logs");
-  ensureDir(logDir);
-  writeFileSync(
-    agentPath,
-    renderLaunchAgent({
-      label: config.label,
-      executable,
-      userDataDir: config.userDataDir,
-      home: config.home,
-      port: config.port,
-      logDir,
-    }),
-  );
-  return executable;
-}
-
-/**
- * Stops the job with `bootout` (SIGTERM, then SIGKILL after the plist's ExitTimeOut) so a V2
- * server shuts down gracefully and records restart-continuation intent; `kickstart -k` kills it
- * outright. Reloading also picks up a rewritten plist. `whileStopped` runs once the job is gone.
- */
-function restartJob(whileStopped?: () => void): void {
-  const target = `gui/${uid}/${config.label}`;
-  const options = { stdio: "inherit", timeout: 20_000 } as const;
-  if (!existsSync(agentPath)) {
-    log(`no ${agentPath}; restarting with kickstart, which skips graceful shutdown`);
-    spawnSync("launchctl", ["kickstart", "-k", target], options);
-    return;
-  }
-  spawnSync("launchctl", ["bootout", target], { ...options, timeout: 120_000 });
-  // bootout finishes asynchronously, and bootstrap fails with an I/O error until it has.
-  for (let waited = 0; waited < 90 && launchdPid(config.label, uid) !== null; waited += 2) {
-    spawnSync("sleep", ["2"]);
-  }
-  try {
-    writeAgent();
-    whileStopped?.();
-  } catch (error) {
-    // The job must come back regardless; the caller's report covers the rest.
-    log(`while stopped: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    spawnSync("sleep", ["2"]);
-    if (spawnSync("launchctl", ["bootstrap", `gui/${uid}`, agentPath], options).status === 0)
-      return;
-  }
-}
-
-async function restartAndProbe(
-  previousPid: number | null,
-  budgetSeconds = 90,
-  whileStopped?: () => void,
-): Promise<boolean> {
-  restartJob(whileStopped);
-  for (let waited = 0; waited < budgetSeconds; waited += 3) {
-    await sleep(3000);
-    const pid = launchdPid(config.label, uid);
-    if (pid && pid !== previousPid && (await probeHealth(config.port))) {
-      await sleep(10_000); // a crash loop passes the first probe and fails the second
-      return launchdPid(config.label, uid) === pid && (await probeHealth(config.port));
-    }
-  }
-  return false;
-}
-
-/**
- * Runs `t3 drain <args>` from the release that is serving now, since drain mode lives in that
- * process's memory. Null when that release has no drain command (a server built before drain mode
- * existed), the server is not running, or the call fails.
- */
-function drainCommand(args: readonly string[]) {
-  const release = readCurrent(config.root);
-  const command = release ? serverCliCommand(config.root, release) : null;
-  if (!command) return null;
-  const [file, ...prefix] = command;
-  const result = spawnSync(
-    file!,
-    [...prefix, "drain", ...args, "--json", "--base-dir", config.home],
-    {
-      encoding: "utf8",
-      timeout: 30_000,
-      env: { HOME: homedir(), PATH: config.buildPath, ELECTRON_RUN_AS_NODE: "1" },
-    },
-  );
-  return result.status === 0 ? parseDrainStatus(result.stdout) : null;
-}
-
-/** Switches drain mode on, so new turns are refused while running ones finish. */
-function startDrain(ttlSeconds: number): boolean {
-  const status = drainCommand(["on", "--ttl", String(Math.min(ttlSeconds, 86_400))]);
-  if (status?.draining) return (log("drain mode on: new turns are refused until the swap"), true);
-  log("the running release has no drain mode; waiting for turns without it");
-  return false;
-}
-
-function stopDrain(): void {
-  const status = drainCommand(["off"]);
-  log(status && !status.draining ? "drain mode off" : "could not confirm drain mode is off");
-}
-
-/** Polls of the running-turn count that must all read zero before a drained swap. */
-const QUIET_POLLS = 3;
-
-async function deploy(ref: string): Promise<number> {
-  const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
-  const fullSha = git("rev-parse", `${ref}^{commit}`);
-  const before = readCurrent(config.root);
-  if (before === sha) {
-    const live = readReleaseVersion(config.root, sha);
-    return (log(`${sha} is already live${live ? ` as fork ${live}` : ""}`), 0);
-  }
-
-  ensureDir(join(config.root, "releases"));
-  const lock = join(config.root, ".deploy.lock");
-  try {
-    mkdirSync(lock);
-  } catch {
-    report("deploy refused: another deploy holds the lock", `lock: ${lock}`);
-    return 1;
-  }
-  let draining = false;
-  let swapped = false;
-  try {
-    const { version } = resolveBuildVersion(fullSha);
-    if (!isComplete(config.root, sha)) {
-      log(`building ${sha} as fork ${version}`);
-      buildRelease(sha, version);
-    } else if (readReleaseVersion(config.root, sha) !== version) {
-      throw new Error(
-        "cached artifact does not carry this fork version; build a new revision instead",
-      );
-    }
-
-    // A first V2 boot copies the v1 database before it answers, so it gets the longer budget,
-    // and a failed one leaves a copy that must not be reused (see moveStateV2Aside).
-    const firstV2Boot =
-      before !== null &&
-      releaseUsesV2State(config.root, sha) === true &&
-      releaseUsesV2State(config.root, before) === false;
-    const bootBudget = firstV2Boot
-      ? parseSeconds(values["first-boot-budget-seconds"], "--first-boot-budget-seconds")
-      : 90;
-    if (firstV2Boot) log(`first V2 boot: probing for up to ${bootBudget}s`);
-
-    const drainSeconds = Number(values["drain-timeout"]);
-    const deadline = Date.now() + drainSeconds * 1000;
-    // Drain first, so the count can only fall; --force interrupts instead and needs no drain.
-    draining = !values.force && startDrain(drainSeconds + 600);
-    // The serving release's own count first; then the database it uses. Unreadable means no
-    // server holds the database; if one is answering, assume it is busy.
-    const countRunning = async () =>
-      drainCommand(["status"])?.runningTurns ??
-      countRunningSessions(resolveStateDb(config.home)) ??
-      ((await probeHealth(config.port)) ? 1 : 0);
-    // Drained, a single zero is not proof: a command that cleared the guard just before it came
-    // on can still start a turn, so require several in a row.
-    const quietPolls = draining ? QUIET_POLLS : 1;
-    const polls = [await countRunning()];
-    while (!values.force && !isQuiet(polls, quietPolls) && Date.now() < deadline) {
-      log(`waiting for ${polls.at(-1)} running turn(s)`);
-      await sleep(draining ? 5_000 : 15_000);
-      polls.push(await countRunning());
-    }
-    if (!values.force && !isQuiet(polls, quietPolls)) {
-      report(
-        `deploy of ${sha} held: ${polls.at(-1)} turn(s) still running`,
-        "Re-run with --force to interrupt them.",
-      );
-      return 2;
-    }
-
-    const oldPid = launchdPid(config.label, uid);
-    atomicSwap(config.root, sha);
-    swapped = true; // the restart clears drain mode, so it is only switched off when no swap happened
-    log(`swapped current ${before ?? "(none)"} -> ${sha} (fork ${version})`);
-    if (await restartAndProbe(oldPid, bootBudget)) {
-      pruneReleases(config.root, config.keepReleases ?? 3);
-      log(`${sha} (fork ${version}) is live and healthy on port ${config.port}`);
-      return 0;
-    }
-
-    const previous = readPrevious(config.root);
-    if (!previous || !isComplete(config.root, previous)) {
-      report(
-        `MANUAL ACTION: ${sha} failed health check and there is no release to roll back to`,
-        `current=${sha}`,
-      );
-      return 3;
-    }
-    atomicSwap(config.root, previous, { rollback: true });
-    const recovered = await restartAndProbe(
-      launchdPid(config.label, uid),
-      90,
-      firstV2Boot
-        ? () =>
-            log(
-              `moved the failed V2 copy aside (${moveStateV2Aside(userdataDir, new Date()).join(", ")}); ` +
-                "run v2-cutover-prepare again before the next attempt",
-            )
-        : undefined,
-    );
-    report(
-      recovered
-        ? `deploy of ${sha} failed health check; rolled back to ${previous}`
-        : `MANUAL ACTION: ${sha} failed and rollback to ${previous} is also unhealthy`,
-      `label=${config.label} port=${config.port}`,
-    );
-    return recovered ? 4 : 3;
-  } catch (error) {
-    report(
-      `deploy of ${sha} stopped before the swap`,
-      String(error instanceof Error ? error.message : error),
-    );
-    return 1;
-  } finally {
-    if (draining && !swapped) stopDrain();
-    rmSync(lock, { recursive: true, force: true });
-  }
-}
-
 /** Builds a release without touching production, so the later deploy is only a swap. */
 async function build(ref: string): Promise<number> {
   const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
@@ -541,45 +292,21 @@ async function build(ref: string): Promise<number> {
   }
 }
 
-async function rollback(to?: string): Promise<number> {
-  const target = to ?? readPrevious(config.root);
-  if (!target || !isComplete(config.root, target)) {
-    report("rollback impossible: no complete target release", `target=${target ?? "(none)"}`);
-    return 1;
+const installedMarker = () => join(config.root, ".installed");
+
+function readInstalled(): string | null {
+  try {
+    return readFileSync(installedMarker(), "utf8").trim() || null;
+  } catch {
+    return null;
   }
-  const current = readCurrent(config.root);
-  if (
-    current !== null &&
-    releaseUsesV2State(config.root, current) === true &&
-    releaseUsesV2State(config.root, target) !== true
-  ) {
-    const hidden = countV2OnlyRows(userdataDir);
-    const counts = hidden
-      ? `${hidden.threads} thread(s) and ${hidden.messages} message(s)`
-      : "an unknown number of threads and messages";
-    console.error(
-      `fork-deploy: ${target} reads state.sqlite as of the V2 cutover; ${counts} created on V2 ` +
-        "will be hidden (statev2.sqlite is kept), and sessions paired since must pair again.",
-    );
-    if (!values["accept-data-loss"]) {
-      console.error("fork-deploy: re-run with --accept-data-loss to roll back anyway");
-      return 1;
-    }
-  }
-  const oldPid = launchdPid(config.label, uid);
-  atomicSwap(config.root, target, { rollback: true });
-  const healthy = await restartAndProbe(oldPid);
-  if (!healthy)
-    report(`MANUAL ACTION: rollback to ${target} is unhealthy`, `label=${config.label}`);
-  return healthy ? 0 : 3;
 }
 
 async function status(): Promise<number> {
-  const current = readCurrent(config.root);
-  const previous = readPrevious(config.root);
+  const installed = readInstalled();
   const versionOf = (sha: string | null) =>
     sha ? (readReleaseVersion(config.root, sha) ?? "(unversioned)") : "(none)";
-  log(`current=${current ?? "(none)"} fork=${versionOf(current)} previous=${previous ?? "(none)"}`);
+  log(`installed=${installed ?? "(none)"} fork=${versionOf(installed)} in ${appsDir}`);
   const releases = listVersionedReleases(config.root);
   log(
     `releases: ${
@@ -593,14 +320,98 @@ async function status(): Promise<number> {
     `fork line: latest=${latest ?? `(none; next build mints ${FORK_INITIAL_VERSION})`} ` +
       `registry=${Object.keys(registry).length} release(s)`,
   );
-  log(
-    `launchd pid=${launchdPid(config.label, uid) ?? "(not running)"} healthy=${await probeHealth(config.port)}`,
-  );
+  log(`app running=${appRunning()} server healthy=${await probeHealth(config.port)}`);
   const stateDb = resolveStateDb(config.home);
   log(
-    `running turns: ${drainCommand(["status"])?.runningTurns ?? (existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)")} (${stateDb})`,
+    `running turns: ${existsSync(stateDb) ? (countRunningSessions(stateDb) ?? "(unreadable)") : "(no database)"} (${stateDb})`,
   );
   return 0;
+}
+
+/** True while any process runs from an app bundle that carries this fork's bundle id. */
+function appRunning(): boolean {
+  const script = `tell application "System Events" to count (every process whose bundle identifier is "${BUNDLE_ID}")`;
+  const result = spawnSync("osascript", ["-e", script], { encoding: "utf8" });
+  return Number(result.stdout.trim()) > 0;
+}
+
+/** The `.app` inside a release; its name follows upstream's product name (Alpha, Beta, ...). */
+function releaseApp(sha: string): string {
+  const name = readdirSync(releaseDir(config.root, sha)).find((entry) => entry.endsWith(".app"));
+  if (!name) throw new Error(`release ${sha} contains no .app`);
+  return name;
+}
+
+/**
+ * Installs a release into the apps directory so it launches and quits like any macOS app. The
+ * environment a LaunchAgent used to supply goes into the bundle's Info.plist as LSEnvironment,
+ * which Launch Services applies to Finder, Dock, and `open` launches; editing the plist breaks
+ * the signature, so the bundle is re-signed ad hoc.
+ */
+async function install(ref: string): Promise<number> {
+  const sha = git("rev-parse", "--short=10", `${ref}^{commit}`);
+  const fullSha = git("rev-parse", `${ref}^{commit}`);
+  ensureDir(join(config.root, "releases"));
+  const lock = join(config.root, ".deploy.lock");
+  try {
+    mkdirSync(lock);
+  } catch {
+    report("install refused: another build or install holds the lock", `lock: ${lock}`);
+    return 1;
+  }
+  try {
+    const { version } = resolveBuildVersion(fullSha);
+    if (!isComplete(config.root, sha)) {
+      log(`building ${sha} as fork ${version}`);
+      buildRelease(sha, version);
+    } else if (readReleaseVersion(config.root, sha) !== version) {
+      throw new Error(
+        "cached artifact does not carry this fork version; build a new revision instead",
+      );
+    }
+
+    if (appRunning()) {
+      log("quitting the running app");
+      spawnSync("osascript", ["-e", `tell application id "${BUNDLE_ID}" to quit`], {
+        stdio: "inherit",
+        timeout: 30_000,
+      });
+      // A quit that waits on a running turn or a shutdown flush gets minutes, not a kill.
+      for (let waited = 0; waited < 180 && appRunning(); waited += 2) await sleep(2000);
+    }
+    if (appRunning() || (await probeHealth(config.port))) {
+      throw new Error(
+        `the app or its server on port ${config.port} is still running; quit it and retry`,
+      );
+    }
+
+    const name = releaseApp(sha);
+    const destination = join(appsDir, name);
+    const staged = join(appsDir, `.${name}.installing`);
+    rmSync(staged, { recursive: true, force: true });
+    run(["ditto", join(releaseDir(config.root, sha), name), staged], config.buildTree);
+    const plistPath = join(staged, "Contents", "Info.plist");
+    for (const [key, value] of [
+      ["T3CODE_PORT", String(config.port)],
+      ["T3CODE_HOME", config.home],
+      ["T3CODE_TELEMETRY_ENABLED", "false"],
+    ] as const) {
+      run(["plutil", "-replace", `LSEnvironment.${key}`, "-string", value, plistPath], appsDir);
+    }
+    run(["xattr", "-cr", staged], appsDir);
+    run(["codesign", "--force", "--deep", "--sign", "-", staged], appsDir);
+    rmSync(destination, { recursive: true, force: true });
+    renameSync(staged, destination);
+    writeFileSync(installedMarker(), `${sha}\n`);
+    pruneReleases(config.root, config.keepReleases ?? 3);
+    log(`installed ${sha} (fork ${version}) as ${destination}; launch it from Finder`);
+    return 0;
+  } catch (error) {
+    report(`install of ${sha} failed`, String(error instanceof Error ? error.message : error));
+    return 1;
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
 }
 
 /** Prints the version a ref would ship as, without building. */
@@ -627,33 +438,30 @@ function version(ref: string): number {
   return 0;
 }
 
-function plist(): number {
-  writeAgent();
-  log(`wrote ${agentPath}; load with: launchctl bootstrap gui/${uid} ${agentPath}`);
-  return 0;
-}
-
 const [command, ref] = positionals;
 const exitCode = await (async () => {
   switch (command) {
     case "build":
       if (ref) return build(ref);
       break;
-    case "deploy":
-      if (ref) return deploy(ref);
+    case "install":
+      if (ref) return install(ref);
       break;
+    case "deploy":
     case "rollback":
-      return rollback(values.to);
+    case "plist":
+      console.error(
+        `fork-deploy: "${command}" is disabled: the fork no longer runs under launchd. Use "install <ref>".`,
+      );
+      return 64;
     case "status":
       return status();
     case "version":
       if (ref) return version(ref);
       break;
-    case "plist":
-      return plist();
   }
   console.error(
-    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | deploy <ref> [same version flags] [--force] [--first-boot-budget-seconds 240] | rollback [--accept-data-loss] | status | version <ref> | plist>",
+    "usage: fork-deploy <build <ref> [--bump <major|minor|patch>] [--version <x.y.z>] [--summary <text>] [--why <text>] | install <ref> [same version flags] | status | version <ref>>",
   );
   return 64;
 })();
