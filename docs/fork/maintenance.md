@@ -44,6 +44,38 @@ Installed with `scripts/fork/agent-config/install.sh`: a Claude `PreToolUse` mis
 
 Versions follow [versioning.md](./versioning.md): the fork ships its own semver line from 1.0.0, one number for macOS, server, and iOS together. `fork-deploy` resolves the version from the `fork-versions.json` registry in the deploy root (minting the next bump with a recorded `--summary`/`--why`), passes it as `--build-version` plus `T3CODE_FORK_VERSION` into `build-desktop-artifact.ts`, which feeds the artifact, the bundled server, the web client, and the mobile build. The desktop app id is a constant in `scripts/build-desktop-artifact.ts`; the update feed stays unset so there is no feed; the bundle id is patched on a scratch copy at build time; `package.json` versions are never edited. Tag `fork/prod` as `fork/<date>-<sha>`.
 
+## Installing and running the desktop build
+
+Production is a normal macOS app: `node scripts/fork/fork-deploy.ts --config <config> install <ref> --summary ... --why ...` builds a release, quits the running app, copies it to `/Applications/T3 Code (Beta).app`, bakes `T3CODE_PORT`, `T3CODE_HOME`, and `T3CODE_TELEMETRY_ENABLED=false` into `LSEnvironment`, and re-signs it ad hoc. There is no launch agent and no second launcher. `deploy`, `rollback`, and `plist` are disabled and exit 64. Launch it from Finder; quitting it stops the backend. The build tree is `~/code/t3code-deploy/build`; releases are kept three deep.
+
+Facts about the packaged app that cost time to find (2026-10-20):
+
+- On macOS the userData directory is always `~/Library/Application Support/t3code-v2`. `--user-data-dir` is ignored, and `t3code-prod` is empty. A second copy collides with the first one's single-instance lock, so exits with code 130 and no output.
+- To run a throwaway copy, give it a fake `HOME` (its own `Library/Application Support/t3code-v2`), plus `T3CODE_HOME` and `T3CODE_PORT` pointing elsewhere, started with `env -i`. A leaked `NODE_OPTIONS=--no-warnings` kills a packaged Electron app. A fake `HOME` triggers a "Keychain Not Found" dialog (Reset To Defaults is safe there) and has no provider logins, so sends fail with "Provider turn failed". That is the test copy, not the fix.
+- The Electron fuses on this build leave asar integrity validation off, so a bundle can be patched in place and re-signed ad hoc. The main process holds the old file, so a patched copy needs a full restart.
+- Never screenshot the full screen to debug a window. Capture one window.
+
+## Defects found in the 2026-10-20 sync
+
+**React #301 ("Too many re-renders" in `ChatView`) on every draft route.** React Compiler (`react({ compiler: true })` in `apps/web/vite.config.ts`) skips a whole component that contains `try`/`finally`, with no build error. Fork commit `a3cb18ecd9` put one in `ChatView`'s `onSend`, so `ChatView` ran uncompiled. Then `routeThreadRef = scopeThreadRef(...)` was a new object every render, and upstream's `useWorktreeSetup` (#20316, new in this sync) compares it by identity and calls `setHeldFor` during render, which loops. 1.2.2 predates that hook. Fix: `runGuardedSend`, a module-level helper that owns the `finally`. Confirm a compiled component with `const $ = (0, import_compiler_runtime.c)(N)` in the Vite output; the Babel harness gives misleading errors, so trust the real build. Still open: nothing fails when a component silently loses compilation. A build check for the memo cache would catch this class.
+
+**iOS launch crash (SIGABRT on both devices).** The device console shows ``Invariant Violation: `new NativeEventEmitter()` requires a non-null argument`` from `get PushNotificationIOS`. Metro's `import("react-native")` interop reads every export, and that lazy getter throws. The fork-only `startComposerDraftCrashSafety` (`4caaa9217b`) hit it first, then upstream's `app-updates.ts` (four sites) hit it. Both now read `AppState` with `require("react-native")`. Do not write `import("react-native")` for a value in `apps/mobile/src`; type-only `typeof import("react-native")` is fine. Crash logs from the USB device are in `.ips` files: `idevicecrashreport -u <udid> -e <dir>`, and the faulting frames only say "TurboModule void method threw". The real message comes from `xcrun devicectl device process launch --device <udid> --console --terminate-existing <bundle id>`.
+
+**Backend readiness timeouts after a restart (cause not confirmed).** The database is about 4.3 GB with about 289k `orchestration_events` rows. Upstream's background event-store compaction (`ProjectionMaintenance.compactEventStore`, #19435) deletes in pages of 50 and is the best guess for the slow startup and the 60 second readiness failures. The backend was healthy once it settled. Not yet filed upstream; if filed, label it `via-triage` and show the full text first.
+
+**Launch agent leftovers.** The retired agent had a stray `ProgramArguments[1]` (a stale Alpha path). Its backup is `~/code/t3code-deploy/launchagent-backup/`. `com.cognitivescaffold.agent.t3code-notify` is a Scaffold notifier (runs `t3code_attention.py notify` every 5 minutes), not a launcher, and stays. Unloaded plists remain in the deploy root (`local.t3code.deploy`, `local.t3code.cutover`, `local.t3code.upstream-sync`), and `fork-deploy-lib.ts` still has unused launchd helpers.
+
+## Building the iOS app for the devices
+
+Bundle id `com.nohat.t3code` and team come from `.env` (`T3CODE_IOS_BUNDLE_ID`, `T3CODE_IOS_TEAM_ID`). Run from `apps/mobile` in the `fork/prod` checkout, after `pnpm install --frozen-lockfile` there (a missing `react-native-pdf-jsi` fails prebuild):
+
+1. `APP_VARIANT=production EXPO_NO_GIT_STATUS=1 npx expo prebuild --clean --platform ios`
+2. In `ios/`: `NODE_ENV=production APP_VARIANT=production xcodebuild -workspace T3Code.xcworkspace -scheme T3Code -configuration Release -destination 'generic/platform=iOS' -derivedDataPath <dir> -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> build`. The team override is needed because the generated `expo-sharing-extension` target has none.
+3. `xcrun devicectl device install app --device <udid> <dir>/Build/Products/Release-iphoneos/T3Code.app`, once per device. A locked device fails with error 10003; unlock it and keep the screen on. `devicectl list devices` shows the UDIDs.
+4. Launch with `--console` and check for `Terminating app`.
+
+Native builds use a free-tier-style local sign; expect the 7 day expiry unless the paid account is in use.
+
 ## Keeping fixes upstreamable
 
 One concern per branch, cut from `main`. To prove isolation, apply the branch's commits to a scratch worktree from `upstream/main` with `git cherry-pick`. If they apply and the guard test passes, it can become an upstream PR whenever I ask. `git cherry upstream/main <branch>` shows whether upstream already landed an equivalent.
