@@ -5,7 +5,7 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 // Metro bundles the package's `src/` (its `react-native` field), so the guard reads those
-// files. patches/react-native-keyboard-controller@1.22.6.patch (upstream #14808) changes them;
+// files. patches/react-native-keyboard-controller@1.22.7.patch (upstream #14808) changes them;
 // a version bump that drops the hunks would bring the iPad feed jump (#17) back silently.
 function packageRoot() {
   const require = NodeModule.createRequire(import.meta.url);
@@ -21,7 +21,7 @@ describe("react-native-keyboard-controller patch", () => {
     const manifest = JSON.parse(
       NodeFS.readFileSync(NodePath.join(packageRoot(), "package.json"), "utf8"),
     ) as { readonly version: string };
-    expect(manifest.version).toBe("1.22.6");
+    expect(manifest.version).toBe("1.22.7");
   });
 
   // A reader at the end of a long thread was thrown back to its top on the next touch. The

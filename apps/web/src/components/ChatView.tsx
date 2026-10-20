@@ -7487,6 +7487,30 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  // Every path out of a send releases the in-flight guard, including a throw or an awaited step
+  // that never settles into a failure. The body bumps the send generation once when it claims the
+  // guard; matching it keeps an early return (which never claimed the guard) and a background
+  // fan-out (which releases it early, so a newer send may own it) from clearing someone else's.
+  const onSend = async (...args: Parameters<typeof sendComposerMessage>) => {
+    const generationBefore = composerSendGenerationRef.current;
+    const ownsSend = () => composerSendGenerationRef.current === generationBefore + 1;
+    const threadIdForSend = activeThread?.id ?? null;
+    try {
+      await sendComposerMessage(...args);
+    } catch (error) {
+      if (!ownsSend()) throw error;
+      resetLocalDispatch();
+      if (threadIdForSend !== null) {
+        setThreadError(
+          threadIdForSend,
+          error instanceof Error ? error.message : "Failed to send message.",
+        );
+      }
+    } finally {
+      if (ownsSend()) sendInFlightRef.current = false;
+    }
+  };
+
   async function onSubmitPlanFollowUp({
     text,
     context,

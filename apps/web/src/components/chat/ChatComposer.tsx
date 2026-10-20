@@ -4858,7 +4858,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           {
             id: "send-blocked",
             variant: "info",
-            compact: true,
             icon: <CircleAlertIcon />,
             title: `Can't send yet: ${sendBlockedNotice}`,
           },

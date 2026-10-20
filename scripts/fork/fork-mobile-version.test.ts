@@ -29,6 +29,8 @@ describe("fork mobile release config", () => {
       new URL("../../apps/mobile/app.config.ts", import.meta.url),
       "utf8",
     );
-    expect(config.match(/^ {2}version: "(\d+)\./m)?.[1]).toBeDefined();
+    expect(
+      config.match(/^ {2}version: (?:repoEnv\.T3CODE_MOBILE_VERSION \?\? )?"(\d+)\./m)?.[1],
+    ).toBeDefined();
   });
 });
