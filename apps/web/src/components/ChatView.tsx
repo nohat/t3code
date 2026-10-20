@@ -868,6 +868,28 @@ async function rewindToMessage(input: {
   }
 }
 
+/**
+ * The `finally` lives here, outside ChatView: React Compiler cannot compile a component that
+ * contains one, and an uncompiled ChatView builds a fresh `routeThreadRef` on every render, which
+ * `useWorktreeSetup` compares by identity while setting state, so the route loops until React
+ * throws "Too many re-renders".
+ */
+async function runGuardedSend(input: {
+  readonly send: () => Promise<unknown>;
+  readonly ownsSend: () => boolean;
+  readonly onFailure: (error: unknown) => void;
+  readonly release: () => void;
+}): Promise<void> {
+  try {
+    await input.send();
+  } catch (error) {
+    if (!input.ownsSend()) throw error;
+    input.onFailure(error);
+  } finally {
+    if (input.ownsSend()) input.release();
+  }
+}
+
 function formatOutgoingPrompt(params: {
   provider: ProviderDriverKind;
   model: string | null;
@@ -7495,20 +7517,22 @@ export default function ChatView(props: ChatViewProps) {
     const generationBefore = composerSendGenerationRef.current;
     const ownsSend = () => composerSendGenerationRef.current === generationBefore + 1;
     const threadIdForSend = activeThread?.id ?? null;
-    try {
-      await sendComposerMessage(...args);
-    } catch (error) {
-      if (!ownsSend()) throw error;
-      resetLocalDispatch();
-      if (threadIdForSend !== null) {
-        setThreadError(
-          threadIdForSend,
-          error instanceof Error ? error.message : "Failed to send message.",
-        );
-      }
-    } finally {
-      if (ownsSend()) sendInFlightRef.current = false;
-    }
+    await runGuardedSend({
+      send: () => sendComposerMessage(...args),
+      ownsSend,
+      onFailure: (error) => {
+        resetLocalDispatch();
+        if (threadIdForSend !== null) {
+          setThreadError(
+            threadIdForSend,
+            error instanceof Error ? error.message : "Failed to send message.",
+          );
+        }
+      },
+      release: () => {
+        sendInFlightRef.current = false;
+      },
+    });
   };
 
   async function onSubmitPlanFollowUp({
