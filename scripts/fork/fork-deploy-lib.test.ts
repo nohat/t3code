@@ -139,6 +139,20 @@ describe("drain helpers", () => {
     expect(command?.[0]).toBe(join(macOs, "T3 Code (Alpha)"));
     expect(command?.[1]).toMatch(/app\.asar\/apps\/server\/dist\/bin\.mjs$/);
   });
+
+  it("follows a product rename between releases, since the launch agent is repointed from it", () => {
+    const root = makeRoot([]);
+    for (const [sha, name] of [
+      ["old", "T3 Code (Alpha)"],
+      ["new", "T3 Code (Beta)"],
+    ] as const) {
+      const macOs = join(releaseDir(root, sha), `${name}.app`, "Contents", "MacOS");
+      mkdirSync(macOs, { recursive: true });
+      writeFileSync(join(macOs, name), "");
+    }
+    expect(serverCliCommand(root, "old")?.[0]).toMatch(/\(Alpha\)$/);
+    expect(serverCliCommand(root, "new")?.[0]).toMatch(/\(Beta\)$/);
+  });
 });
 
 describe("V2 cutover helpers", () => {

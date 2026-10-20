@@ -271,6 +271,43 @@ function buildRelease(sha: string, version: string): void {
 }
 
 /**
+ * Writes the launch agent for the app under `current`. The executable path contains the app's
+ * product name, which upstream renamed (Alpha to Beta) between releases, so a plist written at
+ * install time stops pointing at anything. Repointing it on every restart follows the rename, in
+ * both directions, and a rollback restores the old path. An installed plist is edited in place,
+ * because it carries settings the renderer does not (such as `T3CODE_TELEMETRY_ENABLED`).
+ */
+function writeAgent(): string {
+  const release = readCurrent(config.root);
+  const executable = (release ? serverCliCommand(config.root, release) : null)?.[0];
+  if (!executable) throw new Error("no app under current; deploy a release first");
+  if (existsSync(agentPath)) {
+    const edited = spawnSync(
+      "plutil",
+      ["-replace", "ProgramArguments.0", "-string", executable, agentPath],
+      { encoding: "utf8" },
+    );
+    if (edited.status !== 0)
+      throw new Error(`plutil could not repoint ${agentPath}: ${edited.stderr}`);
+    return executable;
+  }
+  const logDir = join(config.root, "logs");
+  ensureDir(logDir);
+  writeFileSync(
+    agentPath,
+    renderLaunchAgent({
+      label: config.label,
+      executable,
+      userDataDir: config.userDataDir,
+      home: config.home,
+      port: config.port,
+      logDir,
+    }),
+  );
+  return executable;
+}
+
+/**
  * Stops the job with `bootout` (SIGTERM, then SIGKILL after the plist's ExitTimeOut) so a V2
  * server shuts down gracefully and records restart-continuation intent; `kickstart -k` kills it
  * outright. Reloading also picks up a rewritten plist. `whileStopped` runs once the job is gone.
@@ -289,6 +326,7 @@ function restartJob(whileStopped?: () => void): void {
     spawnSync("sleep", ["2"]);
   }
   try {
+    writeAgent();
     whileStopped?.();
   } catch (error) {
     // The job must come back regardless; the caller's report covers the rest.
@@ -590,24 +628,7 @@ function version(ref: string): number {
 }
 
 function plist(): number {
-  const logDir = join(config.root, "logs");
-  ensureDir(logDir);
-  const app = join(config.root, "current");
-  const executable = spawnSync("sh", ["-c", `ls -d "${app}"/*.app/Contents/MacOS/*`], {
-    encoding: "utf8",
-  }).stdout.trim();
-  if (!executable) throw new Error("no app under current; deploy a release first");
-  writeFileSync(
-    agentPath,
-    renderLaunchAgent({
-      label: config.label,
-      executable,
-      userDataDir: config.userDataDir,
-      home: config.home,
-      port: config.port,
-      logDir,
-    }),
-  );
+  writeAgent();
   log(`wrote ${agentPath}; load with: launchctl bootstrap gui/${uid} ${agentPath}`);
   return 0;
 }
