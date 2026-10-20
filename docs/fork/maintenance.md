@@ -50,7 +50,7 @@ Production is a normal macOS app: `node scripts/fork/fork-deploy.ts --config <co
 
 Facts about the packaged app that cost time to find (2026-10-20):
 
-- On macOS the userData directory is always `~/Library/Application Support/t3code-v2`. `--user-data-dir` is ignored, and `t3code-prod` is empty. A second copy collides with the first one's single-instance lock, so exits with code 130 and no output.
+- On macOS the userData directory is always `~/Library/Application Support/t3code-v2`. `--user-data-dir` is ignored, and `t3code-prod` is empty. A second copy collides with the first one's single-instance lock, so it exits with code 130 and no output.
 - To run a throwaway copy, give it a fake `HOME` (its own `Library/Application Support/t3code-v2`), plus `T3CODE_HOME` and `T3CODE_PORT` pointing elsewhere, started with `env -i`. A leaked `NODE_OPTIONS=--no-warnings` kills a packaged Electron app. A fake `HOME` triggers a "Keychain Not Found" dialog (Reset To Defaults is safe there) and has no provider logins, so sends fail with "Provider turn failed". That is the test copy, not the fix.
 - The Electron fuses on this build leave asar integrity validation off, so a bundle can be patched in place and re-signed ad hoc. The main process holds the old file, so a patched copy needs a full restart.
 - Never screenshot the full screen to debug a window. Capture one window.
@@ -74,7 +74,7 @@ Bundle id `com.nohat.t3code` and team come from `.env` (`T3CODE_IOS_BUNDLE_ID`, 
 3. `xcrun devicectl device install app --device <udid> <dir>/Build/Products/Release-iphoneos/T3Code.app`, once per device. A locked device fails with error 10003; unlock it and keep the screen on. `devicectl list devices` shows the UDIDs.
 4. Launch with `--console` and check for `Terminating app`.
 
-Native builds use a free-tier-style local sign; expect the 7 day expiry unless the paid account is in use.
+Not checked: whether this team is a paid account. A free Personal Team build expires in 7 days (see [mobile.md](./mobile.md)).
 
 ## Keeping fixes upstreamable
 
