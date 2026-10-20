@@ -839,7 +839,9 @@ export function startComposerDraftCrashSafety(appState?: ComposerAppState): () =
   if (appState) {
     attach(appState);
   } else {
-    void import("react-native").then(({ AppState }) => attach(AppState));
+    // require, not import(): Metro's async-import interop enumerates every export of
+    // react-native, and its lazy PushNotificationIOS getter throws at startup.
+    attach((require("react-native") as typeof import("react-native")).AppState);
   }
   return stop;
 }
