@@ -415,15 +415,22 @@ async function defaultFlushPendingWrites(): Promise<void> {
   if (failed) throw failed.reason;
 }
 
+// require, not import(): Metro's async-import interop reads every react-native
+// export, and its lazy PushNotificationIOS getter throws at startup.
+function readAppState() {
+  return (require("react-native") as typeof import("react-native")).AppState;
+}
+
 async function defaultIsSafeToRestartInBackground(): Promise<boolean> {
   const { isForegroundHandoffActive } = await import("../../lib/foreground-handoff");
   if (isForegroundHandoffActive()) return false;
-  const { AppState } = await import("react-native");
+  const AppState = readAppState();
   return AppState.currentState === "background";
 }
 
 function defaultOnNextBackground(apply: () => void, includeCurrent: boolean): void {
-  void import("react-native").then(({ AppState }) => {
+  void Promise.resolve().then(() => {
+    const AppState = readAppState();
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "background") return;
       subscription.remove();
@@ -443,7 +450,8 @@ export const DEFERRED_INSTALL_PROMPT_AFTER_MS = 30 * 60 * 1000;
  * the timer running.
  */
 function defaultOnForegroundStay(apply: () => void): void {
-  void import("react-native").then(({ AppState }) => {
+  void Promise.resolve().then(() => {
+    const AppState = readAppState();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const arm = () => {
       timer ??= setTimeout(() => {
@@ -528,7 +536,8 @@ export function createAppUpdateForegroundRecheck(
   return () => {
     if (started || !isAppUpdateCheckAvailable(client)) return;
     started = true;
-    void import("react-native").then(({ AppState }) => {
+    void Promise.resolve().then(() => {
+      const AppState = readAppState();
       let backgroundedAtMs: number | null = null;
       AppState.addEventListener("change", (state) => {
         if (state === "background") {
