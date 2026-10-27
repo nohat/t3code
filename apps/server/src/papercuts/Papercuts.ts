@@ -160,17 +160,18 @@ export const make = Effect.gen(function* () {
   // run's status with the newest bound provider session's status, for
   // example "run=running session=running"; either half is left out when the
   // thread has no run or no provider session.
-  const readSessionSnapshot = (threadId: string) =>
-    Effect.gen(function* () {
-      const [run] = yield* sql<{ readonly status: string }>`
+  const readSessionSnapshot = Effect.fn("Papercuts.readSessionSnapshot")(function* (
+    threadId: string,
+  ) {
+    const [run] = yield* sql<{ readonly status: string }>`
         SELECT status
         FROM orchestration_v2_projection_runs
         WHERE thread_id = ${threadId}
         ORDER BY ordinal DESC
         LIMIT 1
       `;
-      // Matches the shell's activeRunId: `waiting` is post-turn background work.
-      const [activeRun] = yield* sql<{ readonly runId: string }>`
+    // Matches the shell's activeRunId: `waiting` is post-turn background work.
+    const [activeRun] = yield* sql<{ readonly runId: string }>`
         SELECT run_id AS "runId"
         FROM orchestration_v2_projection_runs
         WHERE thread_id = ${threadId}
@@ -178,7 +179,7 @@ export const make = Effect.gen(function* () {
         ORDER BY ordinal DESC
         LIMIT 1
       `;
-      const [session] = yield* sql<{ readonly status: string; readonly updatedAt: string }>`
+    const [session] = yield* sql<{ readonly status: string; readonly updatedAt: string }>`
         SELECT sessions.status AS "status", sessions.updated_at AS "updatedAt"
         FROM orchestration_v2_projection_provider_session_bindings AS bindings
         JOIN orchestration_v2_projection_provider_sessions AS sessions
@@ -187,26 +188,26 @@ export const make = Effect.gen(function* () {
         ORDER BY sessions.updated_at DESC
         LIMIT 1
       `;
-      // The last persisted event of any kind, user events included, so it is
-      // the thread's last event rather than strictly its last provider event.
-      const [event] = yield* sql<{ readonly occurredAt: string }>`
+    // The last persisted event of any kind, user events included, so it is
+    // the thread's last event rather than strictly its last provider event.
+    const [event] = yield* sql<{ readonly occurredAt: string }>`
         SELECT occurred_at AS "occurredAt"
         FROM orchestration_v2_events
         WHERE thread_id = ${threadId}
         ORDER BY sequence DESC
         LIMIT 1
       `;
-      const sessionStatus = [
-        ...(run ? [`run=${run.status}`] : []),
-        ...(session ? [`session=${session.status}`] : []),
-      ].join(" ");
-      return {
-        ...(sessionStatus === "" ? {} : { sessionStatus }),
-        ...(activeRun ? { activeTurnId: activeRun.runId } : {}),
-        ...(session ? { sessionUpdatedAt: session.updatedAt } : {}),
-        ...(event ? { lastProviderEventAt: event.occurredAt } : {}),
-      } satisfies PapercutServerSnapshot;
-    });
+    const sessionStatus = [
+      ...(run ? [`run=${run.status}`] : []),
+      ...(session ? [`session=${session.status}`] : []),
+    ].join(" ");
+    return {
+      ...(sessionStatus === "" ? {} : { sessionStatus }),
+      ...(activeRun ? { activeTurnId: activeRun.runId } : {}),
+      ...(session ? { sessionUpdatedAt: session.updatedAt } : {}),
+      ...(event ? { lastProviderEventAt: event.occurredAt } : {}),
+    } satisfies PapercutServerSnapshot;
+  });
 
   // Runs holding the provider now or about to: active runs plus queued runs
   // whose queue is not held. `waiting` runs are post-turn background work.
@@ -227,14 +228,16 @@ export const make = Effect.gen(function* () {
 
   // The live trace file and its newest backup cover the recent window; older
   // backups are skipped to keep the scan to about two files.
-  const readRecentFailedSpans = (threadId: string, nowMs: number) =>
-    Effect.gen(function* () {
-      const collector = makeFailedSpanCollector(threadId, nowMs - FAILED_SPAN_WINDOW_MS);
-      for (const tracePath of [config.serverTracePath, `${config.serverTracePath}.1`]) {
-        yield* streamTraceFileLines(fs, tracePath, collector.addLine);
-      }
-      return collector.finish();
-    });
+  const readRecentFailedSpans = Effect.fn("Papercuts.readRecentFailedSpans")(function* (
+    threadId: string,
+    nowMs: number,
+  ) {
+    const collector = makeFailedSpanCollector(threadId, nowMs - FAILED_SPAN_WINDOW_MS);
+    for (const tracePath of [config.serverTracePath, `${config.serverTracePath}.1`]) {
+      yield* streamTraceFileLines(fs, tracePath, collector.addLine);
+    }
+    return collector.finish();
+  });
 
   const readServerSnapshot = Effect.fn("Papercuts.readServerSnapshot")(function* (
     threadId: string | undefined,
@@ -328,5 +331,9 @@ export const layer = Layer.effect(Papercuts, make);
 /** Accepts reports without storing them, for suites that only need the RPC surface to resolve. */
 export const layerTest = Layer.succeed(
   Papercuts,
-  Papercuts.of({ create: () => Effect.succeed({ id: "test-papercut", status: "new" }) }),
+  Papercuts.of({
+    create: Effect.fn("Papercuts.create")(() =>
+      Effect.succeed({ id: "test-papercut", status: "new" }),
+    ),
+  }),
 );

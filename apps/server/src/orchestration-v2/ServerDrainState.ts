@@ -140,12 +140,11 @@ const make = Effect.gen(function* () {
 
   return ServerDrainState.of({
     status,
-    enable: (ttl = DEFAULT_DRAIN_TTL) =>
-      Effect.gen(function* () {
-        const now = yield* DateTime.now;
-        yield* Ref.set(expiresAtMillis, DateTime.toEpochMillis(now) + Duration.toMillis(ttl));
-        return yield* status;
-      }),
+    enable: Effect.fn("ServerDrainState.enable")(function* (ttl = DEFAULT_DRAIN_TTL) {
+      const now = yield* DateTime.now;
+      yield* Ref.set(expiresAtMillis, DateTime.toEpochMillis(now) + Duration.toMillis(ttl));
+      return yield* status;
+    }),
     disable: Ref.set(expiresAtMillis, null).pipe(Effect.as(notDraining)),
     report: Effect.all([status, countRuns]).pipe(
       Effect.map(([state, counts]) => ({ ...state, ...counts })),

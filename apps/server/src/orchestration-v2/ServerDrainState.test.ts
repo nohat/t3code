@@ -1,3 +1,4 @@
+import * as DocumentText from "../provider/DocumentText.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   CommandId,
@@ -69,7 +70,7 @@ const makeHarness = () => {
       },
     }),
     ServerConfig.layerTest(process.cwd(), { prefix: "t3-drain-intake-" }),
-  ).pipe(Layer.provideMerge(NodeServices.layer));
+  ).pipe(Layer.provideMerge(DocumentText.layer), Layer.provideMerge(NodeServices.layer));
   return { dispatched, launched, layer };
 };
 
