@@ -78,7 +78,7 @@ describe("workspace connection status", () => {
     });
 
     expect(workspaceConnectionStatusPresentation(state)).toEqual({
-      label: "Reconnecting to Julius’s Mac mini",
+      label: "Syncing threads...",
       showsProgress: true,
     });
   });
@@ -112,7 +112,10 @@ describe("workspace connection status", () => {
   });
 
   it("shows shell catch-up while cached threads remain visible", () => {
-    const state = workspaceState({ hasPendingShellSnapshot: true });
+    const state = workspaceState({
+      hasPendingShellSnapshot: true,
+      hasSyncingConnectedEnvironment: true,
+    });
 
     expect(workspaceConnectionStatusPresentation(state)).toEqual({
       label: "Syncing threads...",

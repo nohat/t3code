@@ -2,3 +2,8 @@
 # Regenerating the upstream lockfile replaces dependency-resolution line counts.
 pnpm-lock.yaml # upstream lockfile regenerated with fork workspace requirements
 docs/fork/delta-allow.txt # retired V2 catch-up exemptions; current-baseline feature losses are checked again
+apps/mobile/src/features/updates/app-updates.ts # upstream uses a static AppState import, avoiding the dynamic import crash without the fork workaround
+apps/web/src/components/ChatView.tsx # send guard, dispatch expiry and reconnect banner moved into extracted chat hooks; reload shortcut retained
+apps/web/src/components/chat/ChatComposer.tsx # provider model selection and footer controls moved into extracted components and hooks
+apps/web/src/components/settings/SettingsPanels.tsx # model cost setting moved with AppearanceSettingsPanel
+packages/contracts/src/orchestratorMcp.ts # pricing and recent-use fields retained with upstream's compact model schema
