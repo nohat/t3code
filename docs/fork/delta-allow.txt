@@ -7,3 +7,8 @@ apps/web/src/components/ChatView.tsx # send guard, dispatch expiry and reconnect
 apps/web/src/components/chat/ChatComposer.tsx # provider model selection and footer controls moved into extracted components and hooks
 apps/web/src/components/settings/SettingsPanels.tsx # model cost setting moved with AppearanceSettingsPanel
 packages/contracts/src/orchestratorMcp.ts # pricing and recent-use fields retained with upstream's compact model schema
+apps/mobile/src/features/threads/ThreadDetailScreen.tsx # sync-stall retry and connection guidance retained; comment and constant placement changed
+apps/server/src/orchestration-v2/ServerDrainState.ts # drain behavior retained; enable converted to Effect.fn
+apps/server/src/orchestration-v2/http.ts # drain route retained; upstream consolidated imports
+apps/web/src/components/chat/ModelPickerContent.tsx # commit validation and wider picker retained with upstream's nullable return and sizing
+packages/provider-opencode/src/server/OpenCodeServerLedger.ts # tracked count retained with upstream test-layer formatting
