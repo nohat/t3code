@@ -1,5 +1,9 @@
 import { DEFAULT_MODEL_COST_DISPLAY, type ModelCostDisplay } from "@t3tools/contracts/settings";
 import { ModelPricingDisplayControl } from "./ModelPricingDisplayControl";
+import {
+  getPromptControlledTraits,
+  getTraitSelectChange,
+} from "@t3tools/client-runtime/model-traits";
 import { SheetHeader } from "../../components/ui/SheetHeader";
 import { Toolbar } from "../../components/ui/Toolbar";
 import * as Dialog from "../../components/ui/Dialog";
@@ -260,6 +264,8 @@ type ThreadSettingsSessionProps = {
   readonly lockedProviderInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly selectedModel: ModelSelection | null;
+  readonly prompt: string;
+  readonly onPromptChange: (prompt: string) => void;
   readonly reportedModelSelection?: ModelSelection | null;
   readonly onSelectModel: (option: ModelOption) => void;
   readonly restoreSelection?: (selection: ModelSelection) => ModelSelection;
@@ -326,6 +332,7 @@ type ThreadSettingsSessionValue = {
   readonly runtimeModeChoices: ReturnType<typeof runtimeModeChoicesForSupportedModes>;
   readonly onUpdateRuntimeMode: (mode: RuntimeMode) => void;
   readonly displayedDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
+  readonly promptTraits: ReturnType<typeof getPromptControlledTraits>;
   readonly displayedModelSelection: ModelSelection | null;
   readonly reportedModelSelection: ModelSelection | null;
   readonly providerExpansionOverrides: ReadonlySet<string>;
@@ -513,6 +520,10 @@ function ThreadSettingsSessionProvider(
     () => new Set(),
   );
   const [pendingModel, setPendingModel] = useState<ModelOption | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const pendingPromptRef = useRef(pendingPrompt);
+  const promptRef = useRef(props.prompt);
+  const promptChangeRef = useRef(props.onPromptChange);
   const pendingModelRef = useRef<ModelOption | null>(null);
   const dismissGroupsRef = useRef(props.providerGroups);
   const dismissSelectRef = useRef(props.onSelectModel);
@@ -522,6 +533,9 @@ function ThreadSettingsSessionProvider(
   // staged model; only Cancel clears it. The cleanup reads the latest values
   // through refs so a gesture dismissal still commits after unmount.
   useEffect(() => {
+    pendingPromptRef.current = pendingPrompt;
+    promptRef.current = props.prompt;
+    promptChangeRef.current = props.onPromptChange;
     pendingModelRef.current = pendingModel;
     dismissGroupsRef.current = props.providerGroups;
     dismissSelectRef.current = props.onSelectModel;
@@ -538,6 +552,8 @@ function ThreadSettingsSessionProvider(
       });
       if (action.kind === "commit") {
         dismissSelectRef.current(action.option);
+        if (pendingPromptRef.current !== null && pendingPromptRef.current !== promptRef.current)
+          promptChangeRef.current(pendingPromptRef.current);
       } else if (action.kind === "unavailable") {
         Dialog.alert(
           "Model unavailable",
@@ -547,6 +563,7 @@ function ThreadSettingsSessionProvider(
     },
     [],
   );
+  const displayedPrompt = pendingModel ? (pendingPrompt ?? props.prompt) : props.prompt;
 
   const isApplied = (option: ModelOption) =>
     option.selection.instanceId === props.selectedModel?.instanceId &&
@@ -562,6 +579,7 @@ function ThreadSettingsSessionProvider(
         })
       : []
     : props.optionDescriptors;
+  const promptTraits = getPromptControlledTraits(displayedDescriptors, displayedPrompt);
   const displayedModel =
     pendingModel ??
     props.providerGroups.flatMap((group) => group.models).find((option) => isApplied(option)) ??
@@ -591,6 +609,9 @@ function ThreadSettingsSessionProvider(
       props.onSelectModel(action.option);
       pendingModelRef.current = null;
       setPendingModel(null);
+      if (pendingPrompt !== null && pendingPrompt !== props.prompt) {
+        props.onPromptChange(pendingPrompt);
+      }
     }
     return true;
   };
@@ -602,7 +623,31 @@ function ThreadSettingsSessionProvider(
   };
 
   const applyOptionChange = (id: string, value: string | boolean) => {
-    const next = applyProviderOptionSelection(displayedDescriptors, { id, value });
+    const descriptor = displayedDescriptors.find((entry) => entry.id === id);
+    const change =
+      descriptor?.type === "select" && typeof value === "string"
+        ? getTraitSelectChange(
+            { ...promptTraits, descriptors: displayedDescriptors },
+            descriptor,
+            displayedPrompt,
+            value,
+          )
+        : null;
+    if (descriptor?.type === "select") {
+      if (!change) return;
+      if (change.prompt !== displayedPrompt) {
+        if (pendingModel) {
+          setPendingPrompt(change.prompt);
+        } else {
+          props.onPromptChange(change.prompt);
+        }
+      }
+      if (!("modelOptions" in change)) return;
+    }
+    const next =
+      change && "modelOptions" in change
+        ? (change.modelOptions ?? [])
+        : applyProviderOptionSelection(displayedDescriptors, { id, value });
     if (!next) {
       return;
     }
@@ -629,6 +674,9 @@ function ThreadSettingsSessionProvider(
 
   const pressModel = (option: ModelOption) => {
     void Haptics.selectionAsync();
+    if (isApplied(option) || option.key !== pendingModel?.key) {
+      setPendingPrompt(null);
+    }
     setPendingModel((current) =>
       pendingModelAfterPress({
         current,
@@ -651,6 +699,7 @@ function ThreadSettingsSessionProvider(
     runtimeModeChoices,
     onUpdateRuntimeMode: props.onUpdateRuntimeMode,
     displayedDescriptors,
+    promptTraits,
     displayedModelSelection: pendingModel?.selection ?? props.selectedModel,
     reportedModelSelection: pendingModel ? null : (props.reportedModelSelection ?? null),
     favoriteKeys,
@@ -936,11 +985,16 @@ function ThreadSettingsOptionsItem(props: {
               >
                 <DisclosureRow
                   label={descriptor.label}
-                  value={getProviderOptionCurrentLabel(
-                    descriptor,
-                    session.displayedModelSelection,
-                    session.reportedModelSelection,
-                  )}
+                  value={
+                    session.promptTraits.ultrathinkPromptControlled &&
+                    descriptor.id === session.promptTraits.primarySelectDescriptor?.id
+                      ? "Ultrathink"
+                      : getProviderOptionCurrentLabel(
+                          descriptor,
+                          session.displayedModelSelection,
+                          session.reportedModelSelection,
+                        )
+                  }
                   onPress={() => props.onOpenSubmenu({ kind: "descriptor", id: descriptor.id })}
                 />
               </Animated.View>
@@ -1186,16 +1240,29 @@ function ThreadSettingsChoiceContent(props: {
             rows: selectableChoices(activeDescriptor).map((choice) => ({
               id: choice.id,
               label: choice.label,
-              description: undefined,
+              description: choice.description,
               selected:
                 choice.id ===
-                getProviderOptionCurrentValue(
-                  activeDescriptor,
-                  session.displayedModelSelection,
-                  session.reportedModelSelection,
-                ),
+                (session.promptTraits.ultrathinkPromptControlled &&
+                activeDescriptor.id === session.promptTraits.primarySelectDescriptor?.id
+                  ? "ultrathink"
+                  : getProviderOptionCurrentValue(
+                      activeDescriptor,
+                      session.displayedModelSelection,
+                      session.reportedModelSelection,
+                    )),
               onPress: () => {
                 void Haptics.selectionAsync();
+                if (
+                  session.promptTraits.ultrathinkInBodyText &&
+                  activeDescriptor.id === session.promptTraits.primarySelectDescriptor?.id
+                ) {
+                  Dialog.alert(
+                    "Reasoning controlled by prompt",
+                    'Your prompt contains "ultrathink" in the text. Remove it to change this option.',
+                  );
+                  return;
+                }
                 session.applyOptionChange(activeDescriptor.id, choice.id);
                 props.onSelected();
               },
@@ -1596,6 +1663,8 @@ export function NewTaskThreadSettingsRouteScreen() {
       {...(flow.selectedModel ? { providerInstanceId: flow.selectedModel.instanceId } : {})}
       providerGroups={flow.providerGroups}
       selectedModel={flow.selectedModel}
+      prompt={flow.prompt}
+      onPromptChange={flow.setPrompt}
       onSelectModel={(option) => flow.setSelectedModelKey(option.key, option.selection.options)}
       restoreSelection={withRememberedModelOptions}
       optionDescriptors={optionDescriptors}

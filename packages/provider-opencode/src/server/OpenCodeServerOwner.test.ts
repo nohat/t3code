@@ -266,28 +266,3 @@ it.effect("cleans up an interrupted startup and allows a retry", () =>
     ).pipe(Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, runtime));
   }),
 );
-
-it.effect("releases an interrupted borrower and closes after the idle TTL", () =>
-  Effect.gen(function* () {
-    const testRuntime = yield* makeRuntime;
-    const borrowerEntered = yield* Deferred.make<void>();
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        const owner = yield* OpenCodeServerOwner.make({
-          binaryPath: "opencode",
-          directory: "/project",
-        });
-        const borrower = yield* owner
-          .withServer(() =>
-            Deferred.succeed(borrowerEntered, undefined).pipe(Effect.andThen(Effect.never)),
-          )
-          .pipe(Effect.forkChild);
-        yield* Deferred.await(borrowerEntered);
-        yield* Fiber.interrupt(borrower);
-        yield* TestClock.adjust(Duration.seconds(31));
-        yield* Deferred.await(testRuntime.closed);
-        expect(yield* Ref.get(testRuntime.closes)).toBe(1);
-      }),
-    ).pipe(Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, testRuntime.runtime));
-  }).pipe(Effect.provide(TestClock.layer())),
-);

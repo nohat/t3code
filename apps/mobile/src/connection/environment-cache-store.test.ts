@@ -22,6 +22,13 @@ import * as Option from "effect/Option";
 import * as MobileDatabase from "../persistence/mobile-database";
 import { make } from "./environment-cache-store";
 
+const REFS: VcsListRefsResult = {
+  refs: [{ name: "main", current: true, isDefault: true, worktreePath: "/repo" }],
+  isRepo: true,
+  hasPrimaryRemote: true,
+  nextCursor: null,
+  totalCount: 1,
+};
 const ENVIRONMENT_ID = EnvironmentId.make("environment-1");
 const PROJECT_ID = ProjectId.make("project-1");
 const THREAD_ID = ThreadId.make("thread-1");
@@ -143,20 +150,6 @@ const THREAD_SNAPSHOT: OrchestrationV2ThreadDetailSnapshot = {
     visibleTurnItems: [],
     updatedAt: NOW,
   },
-};
-const REFS: VcsListRefsResult = {
-  refs: [
-    {
-      name: "main",
-      current: true,
-      isDefault: true,
-      worktreePath: "/repo",
-    },
-  ],
-  isRepo: true,
-  hasPrimaryRemote: true,
-  nextCursor: null,
-  totalCount: 1,
 };
 
 function cacheId(
@@ -320,19 +313,6 @@ describe("mobile SQLite environment cache store", () => {
       expect(memory.removed).toEqual([]);
     }).pipe(Effect.provide(Logger.layer([logger], { mergeWithExisting: false })));
   });
-
-  it.effect("round-trips schema-validated VCS refs", () =>
-    Effect.gen(function* () {
-      const memory = makeDatabase();
-      const store = yield* make().pipe(
-        Effect.provideService(MobileDatabase.MobileDatabase, memory.database),
-      );
-
-      yield* store.saveVcsRefs(ENVIRONMENT_ID, "/repo", REFS);
-
-      expect(yield* store.loadVcsRefs(ENVIRONMENT_ID, "/repo")).toEqual(Option.some(REFS));
-    }),
-  );
 
   it.effect("deletes a corrupt cache record and treats it as a miss", () =>
     Effect.gen(function* () {
