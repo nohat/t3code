@@ -35,15 +35,16 @@ if (!TELEMETRY_CHANNELS.includes(telemetryChannel)) {
 const forkVersionDefine =
   process.env.T3CODE_FORK_VERSION?.trim() || process.env.APP_VERSION?.trim() || undefined;
 
-// `build:exe` wraps the same bundle in a Node single-executable. tsdown's exe
-// step refuses multi-chunk output and counts the sourcemap as a chunk, and the
-// executable needs a host Node that supports `--build-sea` (25.7+), so this is
-// a separate mode rather than a second entry in the default build.
-const packExecutable = process.env.T3CODE_PACK_EXE === "1";
+// tsdown SEA needs one chunk (sourcemaps count) and Node >=25.7, so package separately.
+// TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
+// "1" builds dist-exe/t3 here; "bundle" stops at bin.mjs for scripts/cli.ts to inject (linux-arm64).
+const packMode = process.env.T3CODE_PACK_EXE;
+const packExecutable = packMode === "1" || packMode === "bundle";
+// TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
+// No linux-arm64: --build-sea output cannot load on 16/64 KiB page kernels, so it builds natively.
 const SEA_TARGETS = {
   "darwin-arm64": { platform: "darwin", arch: "arm64" },
   "darwin-x64": { platform: "darwin", arch: "x64" },
-  "linux-arm64": { platform: "linux", arch: "arm64" },
   "linux-x64": { platform: "linux", arch: "x64" },
   "win-arm64": { platform: "win", arch: "arm64" },
   "win-x64": { platform: "win", arch: "x64" },
@@ -93,7 +94,10 @@ export default mergeConfig(
       outDir: packExecutable ? "dist-exe" : "dist",
       sourcemap: !packExecutable,
       clean: true,
-      ...(packExecutable
+      // TEMPORARY one-time Node fix. Remove when fixed: https://github.com/nodejs/node/issues/67048
+      // SEA can only resolve built-ins; keep dynamic imports inside its one module.
+      ...(packExecutable ? { outputOptions: { codeSplitting: false } } : {}),
+      ...(packMode === "1"
         ? {
             exe: {
               fileName: "t3",

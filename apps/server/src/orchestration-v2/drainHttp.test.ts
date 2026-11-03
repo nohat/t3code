@@ -1,8 +1,10 @@
+import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { EnvironmentHttpApi, type AuthEnvironmentScope } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -40,6 +42,7 @@ const servicesLayer = Layer.mergeAll(
   ServerEnvironment.layerIdentity,
   ServerDrainState.layer.pipe(Layer.provide(ProjectionStore.layer)),
   EnvironmentAuth.layer.pipe(
+    Layer.provide(ManagedPolicy.layerTest()),
     Layer.provide(ServerSecretStore.layer),
     Layer.provide(ServerEnvironment.layerIdentity),
   ),
@@ -49,7 +52,7 @@ const servicesLayer = Layer.mergeAll(
   Layer.mock(ProjectEnrichmentService.ProjectEnrichmentService)({}),
 ).pipe(
   Layer.provideMerge(SqlitePersistence.layerMemory),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-drain-http-test-" })),
 );
 
@@ -64,12 +67,12 @@ const makeFixture = Effect.gen(function* () {
     Layer.provide(layerAuthenticatedAuth),
     Layer.provideMerge(
       HttpPlatform.layer.pipe(
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
         Layer.provideMerge(Etag.layerWeak),
       ),
     ),
     Layer.provide(Layer.succeedContext(services)),
-    Layer.provide(NodeServices.layer),
+    Layer.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
   );
   const web = HttpRouter.toWebHandler(routesLayer, { disableLogger: true });
   yield* Scope.addFinalizer(
@@ -79,8 +82,8 @@ const makeFixture = Effect.gen(function* () {
 
   const auth = Context.get(services, EnvironmentAuth.EnvironmentAuth);
   const sql = Context.get(services, SqlClient.SqlClient);
-  const crypto = yield* Crypto.Crypto;
-  const requestContext = Context.add(services, Crypto.Crypto, crypto);
+  const crypto = yield* Crypto.SecureRandom;
+  const requestContext = Context.add(services, Crypto.SecureRandom, crypto);
 
   const tokenWith = (scopes: ReadonlyArray<AuthEnvironmentScope>) =>
     auth.issueSession({ scopes }).pipe(Effect.map((issued) => issued.token));
@@ -172,7 +175,7 @@ it.live("reports drain state and the run counts a deploy waits on", () =>
       runningTurns: 4,
       waitingRuns: 1,
     });
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.live("requires the operate scope to read or change drain mode", () =>
@@ -190,7 +193,7 @@ it.live("requires the operate scope to read or change drain mode", () =>
     const operator = yield* tokenWith([OPERATE]);
     const status = yield* call(operator, "GET");
     assert.strictEqual(status.body.draining, false);
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );
 
 it.live("rejects a ttl outside the allowed range", () =>
@@ -204,5 +207,5 @@ it.live("rejects a ttl outside the allowed range", () =>
     }
     const status = yield* call(token, "GET");
     assert.strictEqual(status.body.draining, false);
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))),
 );

@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { type PapercutCreateInput, PapercutRecord } from "@t3tools/contracts";
@@ -19,7 +20,7 @@ const decodeRecord = Schema.decodeUnknownSync(Schema.fromJsonString(PapercutReco
 const testLayer = Papercuts.layer.pipe(
   Layer.provideMerge(SqlitePersistence.layerMemory),
   Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-papercuts-test-" })),
-  Layer.provideMerge(NodeServices.layer),
+  Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
 );
 
 const PNG_BYTES = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);

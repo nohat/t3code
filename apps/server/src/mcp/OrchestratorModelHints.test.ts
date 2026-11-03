@@ -1,3 +1,5 @@
+import * as RemoteDelegation from "../peer/RemoteDelegation.ts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
@@ -176,7 +178,8 @@ it.effect("adds pricing and recent use to orchestrator_capabilities models", () 
       issuedAt: 1,
     };
     const dependencies = Layer.mergeAll(
-      NodeServices.layer,
+      Layer.mock(RemoteDelegation.RemoteDelegation)({}),
+      Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
       Layer.mock(ThreadManagementService.ThreadManagementService)({}),
       Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([provider]) }),
       Layer.succeed(

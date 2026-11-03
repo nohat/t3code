@@ -7,7 +7,7 @@ import { type EnvironmentId, resolveEnvironmentMachineKind } from "@t3tools/cont
 import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, Platform, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
@@ -78,10 +78,8 @@ export function ConnectionEnvironmentRow(props: {
     enabled &&
     (props.environment.connectionState === "connecting" ||
       props.environment.connectionState === "reconnecting");
-  // Reconnecting disables the control and shows progress, so a press always
-  // has a visible pending state before it resolves.
   const showReconnectProgress = isRetrying;
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     const result = await props.onUpdate(props.environment.environmentId, {
       label: label.trim(),
       displayUrl: url.trim(),
@@ -95,7 +93,7 @@ export function ConnectionEnvironmentRow(props: {
       "Could not update environment",
       error instanceof Error ? error.message : "The environment could not be updated.",
     );
-  }, [label, url, props]);
+  };
 
   return (
     <Animated.View layout={LinearTransition.duration(250)} className="bg-grouped-card">
@@ -300,6 +298,10 @@ export function ConnectionEnvironmentRow(props: {
               )}
 
               <Pressable
+                accessibilityState={{
+                  disabled: !enabled || showReconnectProgress,
+                  busy: showReconnectProgress,
+                }}
                 className="h-[42px] w-[42px] items-center justify-center rounded-[14px] border border-input-border bg-input active:opacity-70 disabled:opacity-40"
                 disabled={!enabled || showReconnectProgress}
                 accessibilityLabel={
@@ -321,6 +323,8 @@ export function ConnectionEnvironmentRow(props: {
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove environment"
                 className="h-[42px] w-[42px] items-center justify-center rounded-[14px] border border-danger-border bg-danger active:opacity-70"
                 onPress={() => props.onRemove(props.environment.environmentId)}
               >

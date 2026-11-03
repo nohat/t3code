@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 // @effect-diagnostics nodeBuiltinImport:off - the CLI reads a data directory on disk.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -12,7 +13,10 @@ import { Command } from "effect/cli";
 
 import { drainCommand } from "./drain.ts";
 
-const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
+const CliRuntimeLayer = Layer.mergeAll(
+  Layer.mergeAll(NodeServices.layer, NodeCrypto.layer),
+  NetService.layer,
+);
 
 it.effect("explains that drain mode needs a running server", () =>
   Effect.gen(function* () {

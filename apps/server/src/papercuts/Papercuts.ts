@@ -23,7 +23,7 @@ import {
   type PapercutStoredScreenshot,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as Crypto from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -153,7 +153,7 @@ export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const config = yield* ServerConfig;
   const sql = yield* SqlClient.SqlClient;
-  const crypto = yield* Crypto.Crypto;
+  const crypto = yield* Crypto.SecureRandom;
   const directory = papercutsDirectory(path, config.stateDir);
 
   // Reads the orchestration V2 projections. `sessionStatus` joins the latest
@@ -264,7 +264,7 @@ export const make = Effect.gen(function* () {
   const create: Papercuts["Service"]["create"] = Effect.fn("Papercuts.create")(function* (input) {
     const now = yield* DateTime.now;
     const nowIso = DateTime.formatIso(now);
-    const uuid = yield* crypto.randomUUIDv4().pipe(Effect.mapError(storeError("generate an id")));
+    const uuid = yield* crypto.uuidV4().pipe(Effect.mapError(storeError("generate an id")));
     // Sortable by creation time, and safe as a file name.
     const id = `${nowIso.replace(/[-:.]/g, "")}-${uuid.slice(0, 8)}`;
 

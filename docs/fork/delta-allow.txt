@@ -12,3 +12,11 @@ apps/server/src/orchestration-v2/ServerDrainState.ts # drain behavior retained; 
 apps/server/src/orchestration-v2/http.ts # drain route retained; upstream consolidated imports
 apps/web/src/components/chat/ModelPickerContent.tsx # commit validation and wider picker retained with upstream's nullable return and sizing
 packages/provider-opencode/src/server/OpenCodeServerLedger.ts # tracked count retained with upstream test-layer formatting
+apps/mobile/src/features/connection/ConnectionEnvironmentRow.tsx # reconnect progress retained with upstream plain handler and consolidated accessibility props
+apps/server/vite.config.ts # fork version define retained; SEA packaging uses upstream modes and shorter comments
+apps/web/src/components/CommandPalette.tsx # papercut shortcut moved to shortcuts/commandPaletteCommands; palette actions retained
+apps/web/src/components/chat/ComposerPrimaryActions.tsx # upstream removed connecting prop; visible send reason and disconnected state retained
+apps/web/src/components/chat/ModelListRow.tsx # pricing and truncated-name reveal retained in upstream single-row layout
+apps/web/src/components/chat/providerIconUtils.ts # pricing type retained with upstream import consolidation
+packages/client-runtime/src/state/threadCommands.test.ts # duplicate RunId import removed; dispatch-expiry tests retained
+packages/contracts/src/settings.ts # model cost schema and defaults retained with upstream adjacent settings

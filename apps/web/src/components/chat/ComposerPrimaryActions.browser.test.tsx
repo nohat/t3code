@@ -35,7 +35,6 @@ it("opens implementation actions with a mouse while the composer is resting", as
           promptHasText={false}
           isSendBusy={false}
           sendDisabledReason={null}
-          isConnecting={false}
           isEnvironmentUnavailable={false}
           isEnvironmentDisconnected={false}
           isPreparingWorktree={false}
