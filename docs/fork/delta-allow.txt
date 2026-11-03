@@ -20,3 +20,5 @@ apps/web/src/components/chat/ModelListRow.tsx # pricing and truncated-name revea
 apps/web/src/components/chat/providerIconUtils.ts # pricing type retained with upstream import consolidation
 packages/client-runtime/src/state/threadCommands.test.ts # duplicate RunId import removed; dispatch-expiry tests retained
 packages/contracts/src/settings.ts # model cost schema and defaults retained with upstream adjacent settings
+apps/web/src/components/chat/ComposerPrimaryActions.browser.test.tsx # upstream removed isConnecting; behavior assertions retained
+packages/provider-opencode/src/server/OpenCodeServerOwner.test.ts # upstream removed CLI fallback methods; owned-server restart guard retained
