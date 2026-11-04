@@ -14,7 +14,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { attachModelPricing } from "../provider/modelPricing.ts";
 import * as UsageService from "../usage/UsageService.ts";
 
-export const RECENT_USE_WINDOW_DAYS = 14;
+const RECENT_USE_WINDOW_DAYS = 14;
 
 export interface ModelHints {
   readonly rates: UsageService.ModelRatesSnapshot;

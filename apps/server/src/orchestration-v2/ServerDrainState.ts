@@ -12,7 +12,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as ProjectionStore from "./ProjectionStore.ts";
 
 /** How long a drain lasts when its caller does not say. */
-export const DEFAULT_DRAIN_TTL = Duration.minutes(30);
+const DEFAULT_DRAIN_TTL = Duration.minutes(30);
 
 /**
  * Shown to the person whose message was refused. Deliberately free of the
@@ -62,14 +62,7 @@ export class ServerDrainRunCountError extends Schema.TaggedError<ServerDrainRunC
   }
 }
 
-/**
- * Whether the server is refusing new turns so a deploy can wait for running
- * ones to finish.
- *
- * The state is memory only on purpose: a restart is exactly what ends a drain,
- * and it expires on its own so a deploy that dies mid-drain cannot leave the
- * server refusing forever.
- */
+// Drain expires and resets on restart so a failed deploy cannot block sends indefinitely.
 export class ServerDrainState extends Context.Service<
   ServerDrainState,
   {
@@ -160,17 +153,7 @@ const make = Effect.gen(function* () {
 
 export const layer = Layer.effect(ServerDrainState, make);
 
-/**
- * Intake gate for `ThreadMessageIntake`. Only user sends are refused: the
- * server starts turns itself (restart continuation, wakes, scheduled tasks,
- * delegated completions) and those must keep working, and they do not pass
- * through intake. Interrupts, approvals, answers, and every other command
- * still run so running turns can finish.
- *
- * The service is optional here so intake keeps its upstream requirements. Drain
- * can only be switched on through the HTTP routes, which require it, so a
- * context without it is never draining.
- */
+// Only user intake is gated; continuations and responses must still finish existing runs.
 export const admitUserMessage = (command: OrchestrationV2Command) =>
   command.type === "message.dispatch" && command.createdBy === "user"
     ? admit({

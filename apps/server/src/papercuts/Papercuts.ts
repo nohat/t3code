@@ -1,17 +1,4 @@
-/**
- * Papercuts - stores one-tap reports of unwanted behavior.
- *
- * Each report is one JSON file under `<stateDir>/papercuts/` plus an optional
- * screenshot file beside it. Records keep evidence (ids, timestamps, state,
- * trace-span references) apart from local-only content (screenshot, message
- * text, note) so a later stage can publish the evidence alone.
- *
- * The server snapshot is read once when a report arrives and never feeds on
- * per-event bookkeeping: each field is a single indexed query or a bounded
- * trace-file scan, and a field that cannot be read cheaply is omitted.
- *
- * @module Papercuts
- */
+// Reports separate publishable evidence from local content; snapshot queries stay bounded.
 import {
   PAPERCUT_MAX_FAILED_SPANS,
   type PapercutCreateInput,
@@ -148,7 +135,7 @@ export class Papercuts extends Context.Service<
 const storeError = (detail: string) => (cause: { readonly message: string }) =>
   new PapercutStoreError({ detail: `${detail}: ${cause.message}` });
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const config = yield* ServerConfig;
@@ -329,6 +316,7 @@ export const make = Effect.gen(function* () {
 export const layer = Layer.effect(Papercuts, make);
 
 /** Accepts reports without storing them, for suites that only need the RPC surface to resolve. */
+/** @public */
 export const layerTest = Layer.succeed(
   Papercuts,
   Papercuts.of({

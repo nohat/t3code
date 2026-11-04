@@ -1,7 +1,7 @@
 import { PAPERCUT_MAX_EVENTS, type PapercutClientEvent } from "@t3tools/contracts";
 
 /** A papercut only needs the last few minutes of what the client was doing. */
-export const PAPERCUT_EVENT_WINDOW_MS = 5 * 60_000;
+const PAPERCUT_EVENT_WINDOW_MS = 5 * 60_000;
 
 const MAX_KIND_CHARS = 64;
 const MAX_ID_CHARS = 256;

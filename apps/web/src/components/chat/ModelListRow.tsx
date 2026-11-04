@@ -78,6 +78,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
           className="text-sm font-normal leading-snug"
         />
         <span className="sr-only">, {props.providerDisplayName}</span>
+        {props.isSelected ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
         {props.subProvider ? (
           <span className="min-w-0 shrink truncate text-xs text-muted-foreground/70">
             {props.subProvider}
@@ -109,7 +110,6 @@ export const ModelListRow = memo(function ModelListRow(props: {
               <Button
                 size="icon-xs"
                 variant="ghost-muted"
-                className="-mr-1 shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onToggleFavorite(props.instanceId, props.slug);
@@ -135,11 +135,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
             {props.isFavorite ? "Remove from favorites" : "Add to favorites"}
           </TooltipPopup>
         </Tooltip>
-        {/* Last, and always reserved, so stars and the check keep fixed columns. */}
-        <CheckIcon
-          className={cn("size-3.5", !props.isSelected && "invisible")}
-          aria-hidden="true"
-        />
+        {props.jumpLabel ? <Kbd>{props.jumpLabel}</Kbd> : null}
       </div>
     </ComboboxItem>
   );

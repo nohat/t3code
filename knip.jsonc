@@ -27,6 +27,7 @@
       "entry": [
         // These fixture scripts are injected into a browser page by path.
         "fixtures/*/*.js",
+        "fork/fork-deploy.ts",
         "knip-schemas.ts",
         "linux-after-pack.ts",
         "mobile-behavior/run.ts",
